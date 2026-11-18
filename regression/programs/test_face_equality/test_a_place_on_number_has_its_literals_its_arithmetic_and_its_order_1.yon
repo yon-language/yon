@@ -1,0 +1,2 @@
+fun step: Meter { return 2.25 }
+fun sum: Meter { return 1.0 + 2.0 }

@@ -1,0 +1,4 @@
+place Acc {
+  total Number
+  operation balance: Number
+}

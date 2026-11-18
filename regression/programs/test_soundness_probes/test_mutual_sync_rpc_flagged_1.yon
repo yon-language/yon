@@ -1,0 +1,6 @@
+import beta::pong from Beta
+
+place Entry {
+  fun ping(n: Number): Number { return if n <= 0 then 0 else pong(n - 1) + 1 }
+  fun main: Number { return 0 }
+}

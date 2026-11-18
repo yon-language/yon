@@ -1,0 +1,6 @@
+place Entry {
+fun round(e: Iso, x: Int64): (x ↦ e.forth ↦ e.left) = x {
+  return x ↦ e.left_law
+}
+fun two(e: Iso): Int64 { return 41 ↦ e.forth ↦ e.left }
+}

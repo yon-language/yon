@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -19,15 +20,7 @@ YONC = ROOT / "toolchain" / "yonc"
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
 _CONCAT_ALL = (
-    "fun concat_all<T uses Monoid>(xs: List<T>): T {\n"
-    "  return match xs {\n"
-    "    Nil => T.unit,\n"
-    "    Cons as (h, t) => T.op(h, concat_all<T>(t))\n"
-    "  }\n"
-    "}\n"
-    "fun three(a: Int64, b: Int64, c: Int64): List<Int64> {\n"
-    "  return List.cons(a, List.cons(b, List.cons(c, List.empty)))\n"
-    "}\n"
+    program("test_alg_hierarchy/module_1.yon")
 )
 
 
@@ -75,35 +68,22 @@ def test_concat_all_on_text_needs_no_name(tmp_path):
 
 
 def test_the_empty_list_is_the_unit_of_the_named_algebra(tmp_path):
-    top = _CONCAT_ALL + (
-        "fun none: List<Int64> { return List.empty }\n"
-        "fun sum_of_none: Int64 { return concat_all<Additive>(none) }\n"
-        "fun product_of_none: Int64 { return concat_all<Multiplicative>(none) }\n")
+    top = program("test_alg_hierarchy/test_the_empty_list_is_the_unit_of_the_named_algebra_1.yon")
     body = "  return if sum_of_none == 0 and product_of_none == 1 then 42 else 1"
     assert _exit_of(tmp_path, body, top=top) == 42
 
 
-_COUNT = ("place Count uses algebra Monoid {\n"
-          "  this > None :U Some\n"
-          "  fun op(a: Count, b: Count): Count { return match a { None => b, Some => Some } }\n"
-          "  fun unit: Count { return None }\n"
-          "}\n")
+_COUNT = (program("test_alg_hierarchy/module_2.yon"))
 
 
 def test_a_place_with_one_structure_is_its_model(tmp_path):
-    top = _CONCAT_ALL + (
-        "fun some_of(xs: List<Count>): Number {\n"
-        "  return match concat_all(xs) { None => 1, Some => 42 }\n"
-        "}\n")
+    top = program("test_alg_hierarchy/test_a_place_with_one_structure_is_its_model_1.yon")
     body = "  return some_of(List.cons(None, List.cons(Some, List.empty)))"
     assert _exit_of(tmp_path, body, {"Count": _COUNT}, top) == 42
 
 
 def test_a_word_uses_the_operator_of_the_algebra_it_names(tmp_path):
-    top = _CONCAT_ALL + (
-        "fun words(a: Word64, b: Word64): List<Word64> {\n"
-        "  return List.cons(a, List.cons(b, List.empty))\n"
-        "}\n")
+    top = program("test_alg_hierarchy/test_a_word_uses_the_operator_of_the_algebra_it_names_1.yon")
     body = ("  w := Word64.from_int64(6)\n  v := Word64.from_int64(7)\n"
             "  return if concat_all<Multiplicative>(words(w, v)) == Word64.from_int64(42)\n"
             "         and concat_all<Additive>(words(w, v)) == Word64.from_int64(13)\n"
@@ -121,8 +101,8 @@ def test_a_value_with_no_structure_is_refused(tmp_path):
 
 
 def test_a_place_that_uses_no_monoid_is_refused(tmp_path):
-    src = "place Box { x Number }\n"
-    top = _CONCAT_ALL + "fun of_boxes(xs: List<Box>): Box { return concat_all(xs) }\n"
+    src = program("test_alg_hierarchy/test_a_place_that_uses_no_monoid_is_refused_1.yon")
+    top = program("test_alg_hierarchy/test_a_place_that_uses_no_monoid_is_refused_2.yon")
     rc, out, _ = _build(tmp_path, "  return 42", {"Box": src}, top)
     assert rc != 0 and "E2001" in out, out
     assert "Box does not use Monoid" in out, out
@@ -136,7 +116,7 @@ def test_two_structures_without_a_name_are_ambiguous(tmp_path):
 
 
 def test_an_algebra_outside_the_signature_is_refused(tmp_path):
-    src = "place Flip is algebra {\n  operation flip(a: Flip): Flip\n}\n"
+    src = program("test_alg_hierarchy/test_an_algebra_outside_the_signature_is_refused_1.yon")
     rc, out, _ = _build(tmp_path, "  r := concat_all<Flip>(three(1, 2, 39))\n  return 42", {"Flip": src})
     assert rc != 0 and "E2001" in out, out
     assert "names Flip, which is no Monoid" in out, out
@@ -149,22 +129,20 @@ def test_an_algebra_the_values_are_no_model_of_is_refused(tmp_path):
 
 
 def test_a_bound_that_names_no_algebra_is_refused(tmp_path):
-    top = ("fun first<T uses Monoidd>(xs: List<T>): T {\n"
-           "  return match xs { Cons as (h, t) => h, Nil => first(xs) }\n"
-           "}\n")
+    top = (program("test_alg_hierarchy/test_a_bound_that_names_no_algebra_is_refused_1.yon"))
     rc, out, _ = _build(tmp_path, "  return first(List.cons(1, List.empty))", top=top)
     assert rc != 0 and "E2001" in out, out
     assert "Monoidd, which is no algebra" in out, out
 
 
 def test_a_member_outside_the_signature_is_refused(tmp_path):
-    top = "fun bad<T uses Semigroup>(x: T): T { return T.unit }\n"
+    top = program("test_alg_hierarchy/test_a_member_outside_the_signature_is_refused_1.yon")
     rc, out, _ = _build(tmp_path, "  return 42", top=top)
     assert rc != 0 and "E2001" in out, out
 
 
 def test_the_body_is_checked_parametric_in_the_parameter(tmp_path):
-    top = "fun bad<T uses Monoid>(x: T): Number { return T.op(x, 1) }\n"
+    top = program("test_alg_hierarchy/test_the_body_is_checked_parametric_in_the_parameter_1.yon")
     rc, out, _ = _build(tmp_path, "  return 42", top=top)
     assert rc != 0 and "E2001" in out, out
 
@@ -179,8 +157,7 @@ def test_a_comparison_is_not_read_as_type_arguments(tmp_path):
 
 
 def test_an_operation_is_named_by_its_algebra(tmp_path):
-    top = ("fun sum(a: Int64, b: Int64): Int64 { return Additive.op(a, b) }\n"
-           "fun product(a: Int64, b: Int64): Int64 { return Multiplicative.op(a, b) }\n")
+    top = (program("test_alg_hierarchy/test_an_operation_is_named_by_its_algebra_1.yon"))
     body = "  return if sum(40, 2) == 42 and product(6, 7) == 42 then 42 else 1"
     assert _exit_of(tmp_path, body, top=top) == 42
 
@@ -193,7 +170,7 @@ def test_an_operation_on_a_value_that_is_no_model_is_refused(tmp_path):
 def test_int64_keeps_its_exact_operators(tmp_path):
     src = (ROOT / "prelude" / "num64" / "Int64.yon").read_text()
     assert "uses algebra Additive, Multiplicative" in src
-    top = "fun big: Int64 { return Int64.max_value }\n"
+    top = program("test_alg_hierarchy/test_int64_keeps_its_exact_operators_1.yon")
     rc, out, exe = _build(tmp_path, "  r := big + 1\n  return if r == 0 then 1 else 2", top=top)
     assert rc == 0, out
     # the sum on Int64 is the exact one: an overflow stops the program, it does not wrap
@@ -204,7 +181,7 @@ def test_int64_keeps_its_exact_operators(tmp_path):
 
 
 def test_an_heir_takes_the_operations_of_the_signature(tmp_path):
-    src = _COUNT.replace("fun unit: Count { return None }\n", "")
+    src = program("test_alg_hierarchy/test_an_heir_takes_the_operations_of_the_signature_1.yon")
     rc, out, _ = _build(tmp_path, "  return 42", {"Count": src}, top="")
     assert rc != 0 and "does not give its operation unit" in out, out
 
@@ -217,14 +194,13 @@ def test_an_heir_takes_the_laws_of_the_signature(tmp_path):
 
 
 def test_this_under_a_name_that_is_no_algebra_is_refused(tmp_path):
-    src = "place Nope is algebra {\n  this < Number\n  operation op(a: Nope, b: Nope): Nope\n}\n"
+    src = program("test_alg_hierarchy/test_this_under_a_name_that_is_no_algebra_is_refused_1.yon")
     rc, out, _ = _build(tmp_path, "  return 42", {"Nope": src}, top="")
     assert rc != 0 and "E2001" in out and "`this < Number`, which is no algebra" in out, out
 
 
 def test_a_declared_again_operation_must_have_the_signatures_type(tmp_path):
-    src = ("place Odd {\n  this < Magma\n"
-           "  operation op(a: Odd): Odd\n}\n")
+    src = (program("test_alg_hierarchy/test_a_declared_again_operation_must_have_the_signatures_type_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 42", {"Odd": src}, top="")
     assert rc != 0 and "E2001" in out and "does not have the type it has in Magma" in out, out
 
@@ -233,11 +209,7 @@ def test_a_fun_named_concat_is_read_from_its_own_body(tmp_path):
     """On a carrier of texts only the carrier's own concatenation is the machine's:
     a fun of the house with that name and a body is that body, and here it is no
     monoid, since op(unit, a) is the unit."""
-    src = ("place Left carried by text uses algebra Monoid {\n"
-           "  fun concat(a: Left, b: Left): Left { return a }\n"
-           "  fun op(a: Left, b: Left): Left { return concat(a, b) }\n"
-           '  fun unit: Left { return "" }\n'
-           "}\n")
+    src = (program("test_alg_hierarchy/test_a_fun_named_concat_is_read_from_its_own_body_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 42", {"Left": src}, top="")
     assert rc != 0 and "E2101" in out, out
     assert "law neutral of algebra Monoid on place Left" in out, out
@@ -246,11 +218,7 @@ def test_a_fun_named_concat_is_read_from_its_own_body(tmp_path):
 def test_a_concat_with_no_body_exists_only_in_the_prelude(tmp_path):
     """The reading of a concat with no body as the concatenation of the texts is
     closed to the program: only the prelude declares a primitive."""
-    src = ("place Left carried by text uses algebra Monoid {\n"
-           "  fun concat(a: Left, b: Left): Left is given\n"
-           "  fun op(a: Left, b: Left): Left { return concat(a, b) }\n"
-           '  fun unit: Left { return "" }\n'
-           "}\n")
+    src = (program("test_alg_hierarchy/test_a_concat_with_no_body_exists_only_in_the_prelude_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 42", {"Left": src}, top="")
     assert rc != 0 and "E2007" in out, out
     assert "the primitives of the runtime are declared in the prelude only" in out, out
@@ -260,14 +228,7 @@ def test_a_concat_with_no_body_exists_only_in_the_prelude(tmp_path):
 
 # inv(unit) is not the unit, so this model fails the lemma; the axioms are what
 # it is refuted on, and no one asks it for the lemma, which the axioms imply.
-_NOT_A_GROUP = ("place Two uses algebra Group {\n"
-                "  this > Zero :U One\n"
-                "  fun op(a: Two, b: Two): Two {\n"
-                "    return match a { Zero => b, One => match b { Zero => One, One => Zero } }\n"
-                "  }\n"
-                "  fun unit: Two { return Zero }\n"
-                "  fun inv(a: Two): Two { return One }\n"
-                "}\n")
+_NOT_A_GROUP = (program("test_alg_hierarchy/module_3.yon"))
 
 
 def test_the_lemma_is_not_asked_of_a_model(tmp_path):
@@ -280,12 +241,7 @@ def test_the_lemma_is_not_asked_of_a_model(tmp_path):
 def test_the_lemma_comes_down_to_additive_proved(tmp_path):
     """A carrier the certification cannot decide: each axiom of Additive is not
     certified, by name, and the lemma the signature proved is not among them."""
-    src = ("place Sum carried by text uses algebra Additive {\n"
-           "  fun op(a: Sum, b: Sum): Sum { return Sum.other(a, b) }\n"
-           "  fun other(a: Sum, b: Sum): Sum is given\n"
-           "  fun unit: Sum { return unit }\n"
-           "  fun inv(a: Sum): Sum { return a }\n"
-           "}\n")
+    src = (program("test_alg_hierarchy/test_the_lemma_comes_down_to_additive_proved_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 42", {"Sum": src}, top="")
     assert rc != 0, out
     assert "law inverse of algebra Additive" in out, out
@@ -295,12 +251,7 @@ def test_the_lemma_comes_down_to_additive_proved(tmp_path):
 def test_without_its_axioms_the_lemma_is_an_axiom(tmp_path):
     """The proof is a real one: take away what it rests on and the same statement
     is asked of the model, and refuted."""
-    weak = ("place Weak {\n"
-            "  this < Monoid\n"
-            "  operation inv(a: Weak): Weak\n"
-            "  law inverse_of_unit inv(unit) = unit\n"
-            "}\n"
-            "place Weaker { this < Weak }\n")
+    weak = (program("test_alg_hierarchy/test_without_its_axioms_the_lemma_is_an_axiom_1.yon"))
     model = _NOT_A_GROUP.replace("uses algebra Group", "uses algebra Weak")
     rc, out, _ = _build(tmp_path, "  return 42", {"Weak": weak, "Two": model}, top="")
     assert rc != 0 and "E2101" in out and "inverse_of_unit" in out, out
@@ -309,9 +260,7 @@ def test_without_its_axioms_the_lemma_is_an_axiom(tmp_path):
 # ─── the free semigroup ────────────────────────────────────────────────────
 
 _WORDS = (
-    "fun three_words(a: Int64, b: Int64, c: Int64): (Int64, List<Int64>) {\n"
-    "  return pair(a, List.cons(b, List.cons(c, List.empty)))\n"
-    "}\n"
+    program("test_alg_hierarchy/module_4.yon")
 )
 
 
@@ -330,7 +279,7 @@ def test_normal_form_on_multiplicative(tmp_path):
 def test_normal_form_on_a_word_of_one_letter_is_the_letter(tmp_path):
     body = ("  r := List.normal_form<Additive>(one(42))\n"
             "  return if r == 42 then 42 else 1")
-    top = "fun one(a: Int64): (Int64, List<Int64>) { return pair(a, List.empty) }\n"
+    top = program("test_alg_hierarchy/test_normal_form_on_a_word_of_one_letter_is_the_letter_1.yon")
     assert _exit_of(tmp_path, body, top=top) == 42
 
 
@@ -348,10 +297,7 @@ def test_normal_form_with_two_structures_and_no_name_is_ambiguous(tmp_path):
 def test_a_word_reads_only_on_an_associative_operation(tmp_path):
     """The free semigroup holds only if the operation is associative: subtraction
     modulo 2, on the side that matters, is no model of Semigroup."""
-    minus = ("place Odd uses algebra Semigroup {\n"
-             "  this > A :U B\n"
-             "  fun op(a: Odd, b: Odd): Odd { return match a { A => B, B => match b { A => A, B => A } } }\n"
-             "}\n")
+    minus = (program("test_alg_hierarchy/test_a_word_reads_only_on_an_associative_operation_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 42", {"Odd": minus}, top="")
     assert rc != 0 and "E2101" in out, out
     assert "law associative of algebra Semigroup on place Odd is refuted" in out, out
@@ -376,7 +322,7 @@ def _in_space(tmp_path: Path, files: dict, main_body: str, top: str = ""):
         '[runtime]\nbackend = "memory"\n')
     for name, src in files.items():
         (proj / "w" / f"{name}.yon").write_text(src)
-    (proj / "w" / "Topos.yon").write_text("topos where {\n}\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_alg_hierarchy/_in_space_1.yon"))
     (proj / "Entry.yon").write_text(
         top + "place Entry {}\nfun main: Number {\n" + main_body + "\n}\n")
     exe = tmp_path / "exe"
@@ -385,22 +331,9 @@ def _in_space(tmp_path: Path, files: dict, main_body: str, top: str = ""):
     return r.returncode, r.stdout + r.stderr, exe
 
 
-_TALLY = ("place Tally {\n"
-          "  this < Monoid\n"
-          "  law idempotent ∀a : Tally, op(a, a) = a\n"
-          "}\n")
-_SEEN = ("place Seen uses algebra Tally {\n"
-         "  this > Never :U Once\n"
-         "  fun op(a: Seen, b: Seen): Seen { return match a { Never => b, Once => Once } }\n"
-         "  fun unit: Seen { return Never }\n"
-         "}\n")
-_ONLY_TALLY = ("fun all_of<T uses Tally>(xs: List<T>): T { return List.fold_left(xs, T.unit, T.op) }\n"
-               "fun seen_of(xs: List<Seen>): Number {\n"
-               "  return match all_of(xs) { Never => 1, Once => 42 }\n"
-               "}\n"
-               "fun concat_of(xs: List<Seen>): Number {\n"
-               "  return match concat_all(xs) { Never => 1, Once => 42 }\n"
-               "}\n")
+_TALLY = (program("test_alg_hierarchy/module_5.yon"))
+_SEEN = (program("test_alg_hierarchy/module_6.yon"))
+_ONLY_TALLY = (program("test_alg_hierarchy/module_7.yon"))
 _SEEN_LIST = "List.cons(Never, List.cons(Once, List.empty))"
 
 
@@ -419,17 +352,11 @@ def test_a_model_of_a_user_algebra_is_a_model_of_the_signature_above(tmp_path):
 
 
 def test_a_user_algebra_inherits_the_laws_and_adds_its_own(tmp_path):
-    not_neutral = _SEEN.replace("fun unit: Seen { return Never }", "fun unit: Seen { return Once }")
+    not_neutral = program("test_alg_hierarchy/test_a_user_algebra_inherits_the_laws_and_adds_its_own_1.yon")
     rc, out, _ = _in_space(tmp_path, {"Tally": _TALLY, "Seen": not_neutral}, "  return 42")
     assert rc != 0 and "E2101" in out and "law neutral of algebra Tally on place Seen" in out, out
     (tmp_path / "own").mkdir()
-    not_idempotent = ("place Flip uses algebra Tally {\n"
-                      "  this > Zero :U One\n"
-                      "  fun op(a: Flip, b: Flip): Flip {\n"
-                      "    return match a { Zero => b, One => match b { Zero => One, One => Zero } }\n"
-                      "  }\n"
-                      "  fun unit: Flip { return Zero }\n"
-                      "}\n")
+    not_idempotent = (program("test_alg_hierarchy/test_a_user_algebra_inherits_the_laws_and_adds_its_own_2.yon"))
     rc, out, _ = _in_space(tmp_path / "own", {"Tally": _TALLY, "Flip": not_idempotent}, "  return 42")
     assert rc != 0 and "E2101" in out and "law idempotent of algebra Tally on place Flip" in out, out
 
@@ -441,18 +368,9 @@ def test_a_model_of_the_signature_above_is_no_model_of_the_user_algebra(tmp_path
     assert rc != 0 and "E2001" in out and "Seen does not use Tally" in out, out
 
 
-_POINTED = ("place Pointed is algebra {\n"
-            "  operation point: Pointed\n"
-            "  operation step(a: Pointed): Pointed\n"
-            "  law returns ∀a : Pointed, step(step(a)) = a\n"
-            "}\n")
-_SIDE = ("place Side uses algebra Pointed {\n"
-         "  this > Left :U Right\n"
-         "  fun point: Side { return Left }\n"
-         "  fun step(a: Side): Side { return match a { Left => Right, Right => Left } }\n"
-         "}\n")
-_NEXT = ("fun next_of<T uses Pointed>(x: T): T { return T.step(x) }\n"
-         "fun answer(s: Side): Number { return match s { Left => 1, Right => 42 } }\n")
+_POINTED = (program("test_alg_hierarchy/module_8.yon"))
+_SIDE = (program("test_alg_hierarchy/module_9.yon"))
+_NEXT = (program("test_alg_hierarchy/module_10.yon"))
 
 
 def test_a_signature_of_the_user_from_nothing_is_a_bound(tmp_path):
@@ -480,9 +398,7 @@ def test_the_refusal_strikes_the_undeclared_algebra_not_the_one_in_a_space(tmp_p
 
 # ─── the laws answer Generated ─────────────────────────────────────────────
 
-_ONE = ("fun of_one(x: Int64): HashSet<Int64> { return HashSet.add(HashSet.empty, x) }\n"
-        "fun answer(b: Boolean): Number { return if b then 42 else 1 }\n"
-        "fun refused(d: DomainError): Number { return 2 }\n")
+_ONE = (program("test_alg_hierarchy/module_11.yon"))
 
 
 def test_is_associative_answers_from_the_law_with_no_closure(tmp_path):
@@ -501,15 +417,14 @@ def test_is_commutative_answers_from_the_law_with_no_closure(tmp_path):
 def test_a_law_the_instance_does_not_state_is_decided_on_the_closure(tmp_path):
     # Text is a Monoid with no law of commutativity: the question goes to the closure,
     # which on texts does not end, and the answer is the refusal past its limit
-    top = ("fun answer(b: Boolean): Number { return if b then 1 else 42 }\n"
-           "fun refused(d: DomainError): Number { return 2 }\n")
+    top = (program("test_alg_hierarchy/test_a_law_the_instance_does_not_state_is_decided_on_the_closure_1.yon"))
     body = ('  m := Generated.generated_by_instance(HashSet.add(HashSet.add(HashSet.empty, "a"), "b"))\n'
             "  return match Generated.is_commutative(m) { Boolean as b => answer(b), DomainError as d => refused(d) }")
     assert _exit_of(tmp_path, body, top=top) == 2
 
 
 def test_the_same_operation_with_no_instance_goes_to_the_closure(tmp_path):
-    top = _ONE + "fun plus(a: Int64, b: Int64): Int64 { return a + b }\n"
+    top = program("test_alg_hierarchy/test_the_same_operation_with_no_instance_goes_to_the_closure_1.yon")
     body = ("  m := Generated.generated_by(plus, of_one(1))\n"
             "  return match Generated.is_associative(m) { Boolean as b => answer(b), DomainError as d => refused(d) }")
     assert _exit_of(tmp_path, body, top=top) == 2
@@ -536,10 +451,7 @@ def test_the_free_magma_keeps_the_parentheses_and_the_order(tmp_path):
 def test_an_heir_that_states_again_a_law_of_the_signature_is_refused(tmp_path):
     # stated again, the law would replace the one of Group, and a model of the
     # weaker law would pass for a group
-    loose = ("place Loose {\n"
-             "  this < Group\n"
-             "  law inverse ∀a : Loose, a = a\n"
-             "}\n")
+    loose = (program("test_alg_hierarchy/test_an_heir_that_states_again_a_law_of_the_signature_is_refused_1.yon"))
     rc, out, _ = _in_space(tmp_path, {"Loose": loose}, "  return 42")
     assert rc != 0 and "E2001" in out, out
     assert "law inverse of Loose is a law of Group, which Loose inherits" in out, out
@@ -547,8 +459,8 @@ def test_an_heir_that_states_again_a_law_of_the_signature_is_refused(tmp_path):
 
 
 def test_a_chain_of_signatures_that_comes_back_is_refused(tmp_path):
-    a = "place A is algebra {\n  this < B\n  operation op(x: A, y: A): A\n}\n"
-    b = "place B {\n  this < A\n  operation op(x: B, y: B): B\n}\n"
+    a = program("test_alg_hierarchy/test_a_chain_of_signatures_that_comes_back_is_refused_1.yon")
+    b = program("test_alg_hierarchy/test_a_chain_of_signatures_that_comes_back_is_refused_2.yon")
     rc, out, _ = _in_space(tmp_path, {"A": a, "B": b}, "  return 42")
     assert rc != 0 and "E2001" in out, out
     assert "algebra A is `this <` itself through A < B < A" in out, out
@@ -557,16 +469,9 @@ def test_a_chain_of_signatures_that_comes_back_is_refused(tmp_path):
 def test_a_law_named_commutative_that_states_another_thing_answers_no(tmp_path):
     # the law named commutative here says op(a, a) = a: the word asks for
     # op(a, b) = op(b, a), which does not follow, and the closure decides
-    idem = ("place Idem {\n"
-            "  this < Semigroup\n"
-            "  law commutative ∀a : Idem, op(a, a) = a\n"
-            "}\n")
-    left = ("place Lp uses algebra Idem {\n"
-            "  this > Ay :U Be\n"
-            "  fun op(a: Lp, b: Lp): Lp { return a }\n"
-            "}\n")
-    top = ("fun answer(b: Boolean): Number { return if b then 1 else 42 }\n"
-           "fun refused(d: DomainError): Number { return 2 }\n")
+    idem = (program("test_alg_hierarchy/test_a_law_named_commutative_that_states_another_thing_answers_no_1.yon"))
+    left = (program("test_alg_hierarchy/test_a_law_named_commutative_that_states_another_thing_answers_no_2.yon"))
+    top = (program("test_alg_hierarchy/test_a_law_named_commutative_that_states_another_thing_answers_no_3.yon"))
     body = ("  m := Generated.generated_by_instance(HashSet.add(HashSet.add(HashSet.empty, Ay), Be))\n"
             "  return match Generated.is_commutative(m) { Boolean as b => answer(b), DomainError as d => refused(d) }")
     rc, out, exe = _in_space(tmp_path, {"Idem": idem, "Lp": left}, body, top)
@@ -576,25 +481,9 @@ def test_a_law_named_commutative_that_states_another_thing_answers_no(tmp_path):
 
 # ─── an internal instance is its carrier inside its house ──────────────────
 
-_HIDDEN = ("internal place Sum carried by i64 {\n"
-           "  this < Monoid\n"
-           '  operation op(a: Sum, b: Sum): Sum as "+"\n'
-           '  operation unit: Sum as "0"\n'
-           "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
-           "  fun make(n: Int64): Sum { return n }\n"
-           "  fun value(s: Sum): Int64 { return s }\n"
-           "  fun forty: Sum { return 40 }\n"
-           "  fun raised(s: Sum): Int64 { return s + 2 }\n"
-           "}\n")
-_WORD = ("internal place Word carried by i64 uses algebra Sum {\n"
-         "  fun make(n: Int64): Word { return n }\n"
-         "  fun value(w: Word): Int64 { return w }\n"
-         "}\n")
-_MEET = ("place Meet {\n"
-         "  fun forty(n: Int64): Sum { return n }\n"
-         "  fun raised(s: Sum): Int64 { return s + 2 }\n"
-         "  fun lit: Sum { return 3 }\n"
-         "}\n")
+_HIDDEN = (program("test_alg_hierarchy/module_12.yon"))
+_WORD = (program("test_alg_hierarchy/module_13.yon"))
+_MEET = (program("test_alg_hierarchy/module_14.yon"))
 _OUTSIDE = "is internal: outside its house its values do not convert through its carrier, and come from its funs, and from its operations for an algebra"
 
 
@@ -626,13 +515,8 @@ def test_outside_its_house_no_model_takes_the_operations_of_an_internal_instance
     assert "(Sum is internal: outside its house its carrier is opaque, and no model takes the operations from it)" in out, out
 
 
-_PASS = ("place Pass {\n"
-         "  fun twice_each(xs: List<Sum>): List<Sum> { return List.map(xs, fun(s: Sum) => s + s) }\n"
-         "}\n")
-_ADDS = ("place Adds {\n"
-         "  fun go(n: Int64): Int64 { return Sum.value(Sum.make(n) + Sum.make(2)) }\n"
-         "  fun by_op(n: Int64): Int64 { return Sum.value(Sum.op(Sum.make(n), Sum.unit)) }\n"
-         "}\n")
+_PASS = (program("test_alg_hierarchy/module_15.yon"))
+_ADDS = (program("test_alg_hierarchy/module_16.yon"))
 _HEAD = ("  doubled := Pass.twice_each(List.cons(Sum.make(21), List.empty))\n"
          "  head_value := match doubled { Nil => Sum.value(Sum.unit), Cons as (h, t) => Sum.value(h) }\n"
          "  return if Adds.go(40) == 42 and Adds.by_op(42) == 42 and head_value == 42 then 42 else 1")
@@ -656,8 +540,8 @@ def test_outside_its_house_the_values_of_an_internal_instance_come_from_its_funs
     (proj / "v" / "Pass.yon").write_text(_PASS)
     (proj / "v" / "Adds.yon").write_text(_ADDS)
     for d in ("w", "v"):
-        (proj / d / "Topos.yon").write_text("topos where {\n}\n")
-    (proj / "Entry.yon").write_text("place Entry {}\nfun main: Number {\n" + _HEAD + "\n}\n")
+        (proj / d / "Topos.yon").write_text(program("test_alg_hierarchy/test_outside_its_house_the_values_of_an_internal_instance_come_from_its_funs_and_operations_1.yon"))
+    (proj / "Entry.yon").write_text(program("test_alg_hierarchy/test_outside_its_house_the_values_of_an_internal_instance_come_from_its_funs_and_operations_2.yon"))
     exe = tmp_path / "two" / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)],
                        capture_output=True, text=True, timeout=300)
@@ -694,7 +578,7 @@ def test_a_place_below_an_algebra_is_an_algebra(tmp_path):
     # no `is algebra`: by `this < Monoid` Sum is an instance on i64, a model of
     # itself, with the funs of its house and the laws of Monoid certified on
     # the carrier
-    make = "  fun make(n: Int64): Sum { return n }\n"
+    make = program("test_alg_hierarchy/test_a_place_below_an_algebra_is_an_algebra_1.yon")
     body = "  return if Sum.op(Sum.make(40), Sum.make(2)) + Sum.unit == Sum.make(42) then 42 else 1"
     assert _exit_of(tmp_path, body, {"Sum": "internal " + _SUM64.replace("LAW", make)}) == 42
     (tmp_path / "f").mkdir()
@@ -718,7 +602,7 @@ def test_a_place_below_an_algebra_takes_is_given_on_its_carrier(tmp_path):
 
 def test_is_algebra_where_it_follows_from_this_is_refused(tmp_path):
     cases = {
-        "Odd": ("place Odd is algebra {\n  this < Monoid\n}\n",
+        "Odd": (program("test_alg_hierarchy/test_is_algebra_where_it_follows_from_this_is_refused_1.yon"),
                 "place Odd is already an algebra by `this < Monoid`: `is algebra` is written only at a root,"
                 " a signature below no algebra; write `place Odd { this < Monoid ... }`"),
         "Sum": (_SUM64.replace("LAW", "").replace("carried by i64 {", "carried by i64 is algebra {"),

@@ -1,0 +1,4 @@
+place Tally {
+  this < Monoid
+  law idempotent ∀a : Tally, op(a, a) = a
+}

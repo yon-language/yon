@@ -1,0 +1,6 @@
+place Entry { }
+fun main(): Number {
+  p := .-> DP { n 7 }
+  drop D
+  return p.n
+}

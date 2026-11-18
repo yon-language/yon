@@ -1,0 +1,4 @@
+fun mk(g: Number -> Number): Number { v := g(1)  s := produce { emit v }
+ mut t := 0
+ for every x in s { t <- t + x }
+ return t }

@@ -1,0 +1,4 @@
+place Entry {
+  fun off(x: Number): x + 1 = x { return clear x }
+  fun main: Number { return 0 }
+}

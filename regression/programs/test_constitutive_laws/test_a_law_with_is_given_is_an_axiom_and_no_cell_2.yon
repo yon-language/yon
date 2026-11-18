@@ -1,0 +1,2 @@
+fun f(s: Ax): Number { return match s { a => 42, b => 42 } }
+fun run: Number { return f(a) }

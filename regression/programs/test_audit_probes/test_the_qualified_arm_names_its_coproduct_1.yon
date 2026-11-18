@@ -1,0 +1,6 @@
+place Entry {}
+fun main: Number {
+  mut x := match Decision.Absent { Present => 1, Absent => 2, Unknown => 3 }
+  y := match (5 ↪ Lookup.Found) { Found as v => v, Absent => 20 }
+  return x * 100 + y
+}

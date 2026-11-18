@@ -1,0 +1,17 @@
+fun with_point(p: LatticePoint, k: Number): Number {
+  h := LeechHeap.put(k, p)
+  return if LeechHeap.slot(h) == LeechHeap.place_of(h)
+            and LeechHeap.segment(h) == int64(0) and LeechHeap.generation(h) == int64(0)
+            and LeechHeap.level(h) == int64(4) and LeechHeap.value(h) == k
+            and slot_number(h) == LatticePoint.index(p) then 0 else 1
+}
+/* the slot as a Number, counted up: the same bits as the index */
+fun slot_number(h: LeechHeap<Number>): Number {
+  mut n := 0
+  mut i := int64(0)
+  while i < LeechHeap.slot(h) do {
+    n <- n + 1
+    i <- i + 1
+  }
+  return n
+}

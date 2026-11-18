@@ -1,0 +1,6 @@
+place Entry {}
+fun main: Number {
+  doubled := Pass.twice_each(List.cons(Sum.make(21), List.empty))
+  head_value := match doubled { Nil => Sum.value(Sum.unit), Cons as (h, t) => Sum.value(h) }
+  return if Adds.go(40) == 42 and Adds.by_op(42) == 42 and head_value == 42 then 42 else 1
+}

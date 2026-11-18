@@ -10,13 +10,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YON = ROOT / "toolchain" / "yon"
 YONC = ROOT / "toolchain" / "yonc"
 
-GOOD = "fun main: Number { return 2 + 3 * 4 }\n"          # exits 14
-BAD = 'fun bad: Number { return "text" + 1 }\nfun main: Number { return 0 }\n'
+GOOD = program("test_yon_driver/module_1.yon")          # exits 14
+BAD = program("test_yon_driver/module_2.yon")
 
 
 def _yon(*args, **kw):

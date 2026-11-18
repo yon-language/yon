@@ -1,0 +1,4 @@
+place A is algebra {
+  this < B
+  operation op(x: A, y: A): A
+}

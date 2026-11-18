@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  h := heyting(0, 1)
+  return match decide(h =>? h) { Present => 7, Absent => 3, Unknown => 3 }
+}

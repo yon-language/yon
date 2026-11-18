@@ -1,0 +1,18 @@
+place Entry {}
+fun read(m: XRelMap<LatticePoint, Number>, p: LatticePoint): Number {
+  return match XRelMap.get(m, p) { Found as v => v, Absent => 0 }
+}
+fun no_entries: XRelMap<LatticePoint, Number> { return XRelMap.empty }
+fun two(p: LatticePoint): Number {
+  m1 := XRelMap.set(XRelMap.empty, p, 1)
+  m2 := XRelMap.set(m1, p, 2)
+  _1 := IO.print_num(read(m1, p))
+  _2 := IO.print_num(read(m2, p))
+  _3 := IO.print_num(XRelMap.size(m2))
+  _4 := IO.print_num(XRelMap.size(no_entries))
+  return 0
+}
+fun main: Number {
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => two(p), DomainError as d => 0 - 1 }
+}

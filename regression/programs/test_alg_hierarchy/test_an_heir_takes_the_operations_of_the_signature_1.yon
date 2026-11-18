@@ -1,0 +1,4 @@
+place Count uses algebra Monoid {
+  this > None :U Some
+  fun op(a: Count, b: Count): Count { return match a { None => b, Some => Some } }
+  }

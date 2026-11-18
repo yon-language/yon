@@ -1,0 +1,4 @@
+place B {
+  this < A
+  operation op(x: B, y: B): B
+}

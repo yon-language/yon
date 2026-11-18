@@ -1,0 +1,9 @@
+import svc::d_op from D
+place Entry { }
+fun main(): Number {
+  results := spawn in 1 parallel {
+    drop D
+    promote d_op(1)
+  }
+  return results.fold(0, fun(a: Number, v: Number) => a + v)
+}

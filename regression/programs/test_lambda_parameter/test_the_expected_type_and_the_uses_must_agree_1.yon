@@ -1,0 +1,4 @@
+fun app(f: Text -> Number, x: Text): Number { return f(x) }
+fun main: Number {
+  return app(fun(y) => y + 1, "a")
+}

@@ -1,0 +1,5 @@
+fun idf(g: Number -> Number): Number -> Number { return g }
+fun mk(g: Number -> Number): Number { s := produce { emit g(1) }
+ mut t := 0
+ for every x in s { t <- t + x }
+ return t }

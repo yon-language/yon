@@ -1,0 +1,6 @@
+fun h(x: Number) on error Error: Number {
+  return Number.sqrt(x)
+}
+fun main: Number {
+  return match h(9) { Number as v => v, Error as e => 7 }
+}

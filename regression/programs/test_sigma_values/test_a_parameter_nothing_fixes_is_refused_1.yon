@@ -1,0 +1,1 @@
+  fun ghost<K, V>(p: Σx : K, Number): List<V> { return List.empty }

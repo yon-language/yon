@@ -1,0 +1,1 @@
+fun same(s: Text, t: Text): Boolean { return Text.equal(Text.lower(s), t) }

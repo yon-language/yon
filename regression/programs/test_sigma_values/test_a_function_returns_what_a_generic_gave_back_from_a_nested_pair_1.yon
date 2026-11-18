@@ -1,0 +1,2 @@
+  fun first<K, V>(p: Σx : K, V): K { return fst(p) }
+  fun inner: Boolean { return fst(first(pair(pair(true, 1), 7))) }

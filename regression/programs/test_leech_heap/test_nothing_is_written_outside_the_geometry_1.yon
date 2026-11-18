@@ -1,0 +1,4 @@
+fun with_point(p: LatticePoint, k: Number): Number {
+  h := LeechHeap.put(k, p)
+  return if LeechHeap.slot(h) == LeechHeap.place_of(h) then 0 else 1
+}

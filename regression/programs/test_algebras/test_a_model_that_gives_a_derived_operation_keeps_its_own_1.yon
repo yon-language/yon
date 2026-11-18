@@ -1,0 +1,1 @@
+  fun double(a: W): W { return a }

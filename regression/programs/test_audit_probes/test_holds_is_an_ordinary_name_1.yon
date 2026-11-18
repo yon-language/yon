@@ -1,0 +1,2 @@
+fun holds(n: Number): Number { return n + 1 }
+fun main: Number { return holds(41) }

@@ -1,0 +1,9 @@
+place Entry {
+fun leggi(l: Lookup<Number>): Number {
+  return match l { Found as p => p, Absent => 2 }
+}
+fun main(): Number {
+  m := HashMap.set(HashMap.empty, 1, 40)
+  return leggi(HashMap.get(m, 1)) + leggi(HashMap.get(m, 9))
+}
+}

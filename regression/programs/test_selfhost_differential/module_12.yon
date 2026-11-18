@@ -1,0 +1,1 @@
+fun main: Number { return if 3 < 4 then 11 else 22 }

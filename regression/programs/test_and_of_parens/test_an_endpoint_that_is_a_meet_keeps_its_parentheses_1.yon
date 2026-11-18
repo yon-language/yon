@@ -1,0 +1,3 @@
+  fun f(a: Boolean, b: Boolean, q: a = (a ∧ b)): Number { return 0 }
+  fun g(a: Boolean, b: Boolean, q: (a ∧ b) = a): Number { return 0 }
+  fun h(a: Boolean, b: Boolean, q: (a = (a ∧ b)) ∧ (a = (a ∧ b))): Number { return 0 }

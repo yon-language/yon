@@ -1,0 +1,8 @@
+import svc::d_op from D
+place Entry { }
+fun helper: Number { r := d_op(9)  return r }
+fun main(): Number {
+  drop D
+  r := helper
+  return r - r
+}

@@ -1,0 +1,2 @@
+fun hello: Text { return "hel" + "lo" }
+fun none: Text { return "" }

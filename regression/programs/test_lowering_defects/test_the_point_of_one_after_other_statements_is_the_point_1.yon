@@ -1,0 +1,10 @@
+place Entry {
+fun main: Number {
+  _ := done(1)
+  return 42
+}
+fun done(n: Int64): Unit {
+  m := n + 1
+  return star
+}
+}

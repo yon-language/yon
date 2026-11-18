@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -82,9 +83,7 @@ def test_the_words_of_the_occasion_take_their_places(tmp_path):
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n"
-        "  n := SystemOs.refuse(WordOutsideRegion, Word64.from_int64(7), Word64.from_int64(5), Word64.zero)\n"
-        "  return n + 1\n}\n}\n")
+        program("test_refusals/test_the_words_of_the_occasion_take_their_places_1.yon"))
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True, text=True, timeout=180)
     assert r.returncode == 0, r.stdout + r.stderr

@@ -1,0 +1,5 @@
+fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }
+fun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }
+fun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }
+fun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }
+fun undo(n: Int64): Int64 { return n + 1 }

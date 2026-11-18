@@ -1,0 +1,2 @@
+place Entry {}
+fun ix(f: XRelFrame, p: LatticePoint): Number { return LatticePoint.index(XRelFrame.canon(f, p)) }

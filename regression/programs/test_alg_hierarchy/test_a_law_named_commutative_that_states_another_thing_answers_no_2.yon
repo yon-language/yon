@@ -1,0 +1,4 @@
+place Lp uses algebra Idem {
+  this > Ay :U Be
+  fun op(a: Lp, b: Lp): Lp { return a }
+}

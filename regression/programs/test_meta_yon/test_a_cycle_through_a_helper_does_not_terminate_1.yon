@@ -1,0 +1,2 @@
+  proof fun ping(n: Nat): Nat { return pong(n) }
+  proof fun pong(n: Nat): Nat { return ping(n) }

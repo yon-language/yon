@@ -1,0 +1,6 @@
+place Entry {}
+fun main: Number {
+  s := match decide(!? unknown) { Present => 10, Absent => 0, Unknown => 20 }
+  mut t := match decide(!? (!? unknown)) { Present => 1, Absent => 0, Unknown => 2 }
+  return s + t
+}

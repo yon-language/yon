@@ -1,0 +1,3 @@
+fun f(m: HashMap<Number, Number>): Number { return HashMap.size(m) }
+fun big: Int64 { return 5 }
+fun main: Number { return f(HashMap.set(HashMap.empty, 1, big)) }

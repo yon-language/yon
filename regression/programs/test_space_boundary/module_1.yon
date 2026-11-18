@@ -1,0 +1,31 @@
+place Q {
+  side Number
+  fun build(n: Number): HashMap<Number, Number> {
+    mut m := HashMap.empty
+    mut k := 0
+    iter n do {
+      m <- HashMap.set(m, k, k * 100)
+      k <- k + 1
+    }
+    return m
+  }
+  fun apply(f: Number -> Number, x: Number): Number { return f(x) }
+  fun peek(c: Number): Number { return c }
+  fun adder(n: Number): Number -> Number { return fun(x: Number) => x + n }
+  fun points(n: Number): XRelMap<Number, Number> {
+    mut m := XRelMap.empty
+    mut k := 0
+    iter n do {
+      m <- XRelMap.set(m, k, k + 40)
+      k <- k + 1
+    }
+    return m
+  }
+  fun len(s: Text): Number { return Text.length(s) }
+  fun flow(): Wire<Number> {
+    s := produce {
+      emit 1
+    }
+    return s
+  }
+}

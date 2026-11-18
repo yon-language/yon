@@ -1,0 +1,8 @@
+place Entry {
+  // a comment before
+  fun main: Number {
+    a := 7  -  2   /* a comment after the operation */
+    b := a*3
+    return b      // the end
+  }
+}

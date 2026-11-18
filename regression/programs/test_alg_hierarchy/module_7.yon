@@ -1,0 +1,7 @@
+fun all_of<T uses Tally>(xs: List<T>): T { return List.fold_left(xs, T.unit, T.op) }
+fun seen_of(xs: List<Seen>): Number {
+  return match all_of(xs) { Never => 1, Once => 42 }
+}
+fun concat_of(xs: List<Seen>): Number {
+  return match concat_all(xs) { Never => 1, Once => 42 }
+}

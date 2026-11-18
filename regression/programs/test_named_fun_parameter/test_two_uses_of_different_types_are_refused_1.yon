@@ -1,0 +1,4 @@
+fun n(a: Number): Number { return a }
+fun t(a: Text): Number { return 0 }
+fun f(x): Number { return n(x) + t(x) }
+fun main: Number { return f(1) }

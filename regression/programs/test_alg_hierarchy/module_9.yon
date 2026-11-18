@@ -1,0 +1,5 @@
+place Side uses algebra Pointed {
+  this > Left :U Right
+  fun point: Side { return Left }
+  fun step(a: Side): Side { return match a { Left => Right, Right => Left } }
+}

@@ -1,0 +1,13 @@
+place Entry {
+fun main: Number {
+  mut i := 0
+  mut bad := 0
+  iter 1100 do {
+    mut t := i
+    t <- 500000
+    bad <- bad + (if t == 500000 then 0 else 1)
+    i <- i + 1
+  }
+  return i
+}
+}

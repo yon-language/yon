@@ -1,0 +1,9 @@
+place Entry {
+  fun shift(input: Number): Number { return input - 5 }
+  fun mark(input: Path): Path { return clear input }
+  fun eta(input: Number): Path { return clear input }
+  morph M1 from A to B { on morphism step via shift }
+  morph M2 from A to B { on morphism step via mark }
+  nat transform Eta from M1 to M2 { for each step by eta }
+  fun main: Number { return __check_naturality_Eta__step(3) }
+}

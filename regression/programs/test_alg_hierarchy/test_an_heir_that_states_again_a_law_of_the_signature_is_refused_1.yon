@@ -1,0 +1,4 @@
+place Loose {
+  this < Group
+  law inverse ∀a : Loose, a = a
+}

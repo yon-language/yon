@@ -1,0 +1,4 @@
+place Entry {}
+fun main: Number {
+  return match LatticePoint.at_index(0) { LatticePoint as p => LatticePoint.index(p + 1), DomainError as d => 0 }
+}

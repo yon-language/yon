@@ -1,0 +1,5 @@
+fun Fam(x: Number): Type_0 { return Fam(x) }
+fun Gam(y: Number): Type_0 { return Gam(y) }
+fun useF(x: Number, p: El(Fam(x))): Number { return 0 }
+fun useG(y: Number, q: El(Gam(y))): Number { return 0 }
+fun main: Number { return 0 }

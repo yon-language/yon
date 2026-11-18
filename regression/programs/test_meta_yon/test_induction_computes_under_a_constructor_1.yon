@@ -1,0 +1,6 @@
+  proof fun zr(n: Nat): plus(n, zero) = n {
+    return match n { zero => clear, succ as m => (s_, zr(m)) ↦ ap }
+  }
+  proof fun sr(a: Nat, b: Nat): plus(a, b ↪ succ) = plus(a, b) ↪ succ {
+    return match a { zero => clear, succ as m => (s_, sr(m, b)) ↦ ap }
+  }

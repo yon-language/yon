@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -20,17 +21,7 @@ YONC = ROOT / "toolchain" / "yonc"
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
 _OTHER = (
-    "place Other {\n"
-    "  fun bump(w: Word64): Word64 { return w + Word64.one }\n"
-    "  fun next(p: LatticePoint): LatticePoint {\n"
-    "    return match LatticePoint.at_index(LatticePoint.index(p) + 1) {\n"
-    "      LatticePoint as q => q, DomainError as d => p }\n"
-    "  }\n"
-    "  fun grow(s: XRelSet<LatticePoint>, p: LatticePoint): XRelSet<LatticePoint> {\n"
-    "    return XRelSet.add(s, p)\n"
-    "  }\n"
-    "  fun keep(f: XRelFrame): XRelFrame { return f }\n"
-    "}\n")
+    program("test_internal_crossing/module_1.yon"))
 
 
 def _build(tmp_path: Path, main_body: str):
@@ -38,7 +29,7 @@ def _build(tmp_path: Path, main_body: str):
     (proj / "w").mkdir(parents=True)
     (proj / "yon.toml").write_text('[package]\nname = "cross"\n\n[world.W]\nspaces = ["w"]\n\n'
                                    '[runtime]\nbackend = "memory"\n')
-    (proj / "w" / "Topos.yon").write_text("topos where {\n}\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_internal_crossing/_build_1.yon"))
     (proj / "w" / "Other.yon").write_text(_OTHER)
     (proj / "Entry.yon").write_text("place Entry {\n  fun main: Number {\n" + main_body
                                     + "\n  }\n}\n")

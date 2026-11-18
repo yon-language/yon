@@ -1,0 +1,4 @@
+place Lista {
+  this > Vuota :U Testa Number Lista
+  law dup Vuota = Vuota
+}

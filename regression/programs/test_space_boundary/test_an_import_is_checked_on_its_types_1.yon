@@ -1,0 +1,5 @@
+import echo::twice from Echo
+
+place Entry {
+  fun main: Number { return twice("a") }
+}

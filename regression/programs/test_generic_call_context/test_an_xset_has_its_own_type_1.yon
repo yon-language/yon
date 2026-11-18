@@ -1,0 +1,2 @@
+fun two(): XSet { return XSet.add(XSet.add(XSet.empty(), 1), 2) }
+fun main: Number { return XSet.size(two()) + 40 }

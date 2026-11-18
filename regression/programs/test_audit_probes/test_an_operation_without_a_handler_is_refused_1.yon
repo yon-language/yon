@@ -1,0 +1,3 @@
+place Entry {
+  fun main: Number visits Counter { return Counter.tick(5) }
+}

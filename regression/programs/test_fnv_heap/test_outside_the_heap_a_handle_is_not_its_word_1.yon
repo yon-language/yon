@@ -1,0 +1,1 @@
+fun raw(h: FnvHeap<Number>): Int64 { return h }

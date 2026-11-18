@@ -1,0 +1,1 @@
+  fun keys<K, V>(xs: List<(K, V)>): Number { return List.length(xs) }

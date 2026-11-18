@@ -1,0 +1,5 @@
+import echo::slen from Echo
+
+place Entry {
+  fun main: Number { return slen("hello") }
+}

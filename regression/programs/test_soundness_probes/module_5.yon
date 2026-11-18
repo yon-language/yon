@@ -1,0 +1,2 @@
+fun idf(g: Number -> Number): Number -> Number { return g }
+  fun mk(): Number -> Number { mut c := 10  c <- 20  return idf(fun(y: Number) => y + c) }

@@ -1,0 +1,4 @@
+place Entry {
+  fun use_remote(g: Number -> Number): Number { return g(1) }
+  fun main: Number { return 0 }
+}

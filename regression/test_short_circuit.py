@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -31,18 +32,12 @@ def _run(tmp_path: Path, entry: str):
 
 def test_a_guard_on_the_left_of_and_keeps_the_division_out(tmp_path):
     r = _run(tmp_path, (
-        "place Entry {\n"
-        "fun main: Number { return if guarded(0) then 1 else 42 }\n"
-        "fun guarded(x: Number): Boolean { return x != 0 and 10 / x > 1 }\n"
-        "}\n"))
+        program("test_short_circuit/test_a_guard_on_the_left_of_and_keeps_the_division_out_1.yon")))
     assert r.returncode == 42, r.stderr
 
 
 _SEEN = (
-    "fun seen(b: Boolean): Boolean {\n"
-    "  _ := SystemOs.write_output(\"read\\n\")\n"
-    "  return b\n"
-    "}\n")
+    program("test_short_circuit/module_1.yon"))
 
 
 @pytest.mark.parametrize("expr,value,reads", [
@@ -64,9 +59,6 @@ def test_the_right_side_is_read_only_when_it_decides(tmp_path, expr, value, read
 
 def test_a_chain_stops_at_the_first_side_that_decides(tmp_path):
     r = _run(tmp_path, (
-        "place Entry {\n"
-        "fun main: Number {\n"
-        "  return if seen(true) and seen(false) and seen(true) then 7 else 42\n"
-        "}\n" + _SEEN + "}\n"))
+        program("test_short_circuit/test_a_chain_stops_at_the_first_side_that_decides_1.yon")))
     assert r.returncode == 42, r.stderr
     assert r.stdout.count("read") == 2, r.stdout

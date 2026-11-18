@@ -1,0 +1,3 @@
+place Note { message Text  line Number }
+
+fun describe(e: Note): Number { return Text.length(e.message) }

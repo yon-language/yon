@@ -1,0 +1,1 @@
+fun with_point(p: LatticePoint, k: Number): Number { return k }

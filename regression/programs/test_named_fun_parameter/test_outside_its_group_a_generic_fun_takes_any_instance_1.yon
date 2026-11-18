@@ -1,0 +1,7 @@
+fun h: Number {
+  a := g(1)
+  b := g("x")
+  return 42
+}
+fun g(x) { return x }
+fun main: Number { return h }

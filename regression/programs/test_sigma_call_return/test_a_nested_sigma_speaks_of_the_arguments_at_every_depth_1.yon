@@ -1,0 +1,1 @@
+  fun three(d: Number): Σa : Number, Σb : Number, (a = d) ∧ (b = d) { return pair(d, pair(d, pair(refl(d), refl(d)))) }

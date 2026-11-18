@@ -1,0 +1,1 @@
+fun storta(a: Text, b: Number): Type { return a = b }

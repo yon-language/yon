@@ -1,0 +1,2 @@
+place Node { child Leaf
+  flag Boolean }

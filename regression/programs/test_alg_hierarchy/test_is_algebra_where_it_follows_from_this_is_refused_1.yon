@@ -1,0 +1,3 @@
+place Odd is algebra {
+  this < Monoid
+}

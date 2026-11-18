@@ -1,0 +1,15 @@
+/* the handles of v for v in [1, 3000], put forward (r = 0) or backward,
+   each weighted by v: the same sum on every replica only if they share
+   the heap and its deduplication */
+fun weighted(r: Number): Word64 {
+  t := Word64.from_int64(11)
+  mut s := Word64.zero
+  mut k := int64(0)
+  while k < 3000 do {
+    v := if r == 0 then k + 1 else 3000 - k
+    h := FnvHeap.handle_word(FnvHeap.put(Word64.from_int64(v), t))
+    s <- s + h * Word64.from_int64(v)
+    k <- k + 1
+  }
+  return s
+}

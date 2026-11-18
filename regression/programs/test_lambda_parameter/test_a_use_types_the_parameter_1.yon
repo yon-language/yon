@@ -1,0 +1,4 @@
+fun main: Number {
+  k := fun(x) => x + 1
+  return k(41)
+}

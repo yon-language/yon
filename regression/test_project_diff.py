@@ -16,6 +16,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
@@ -30,10 +31,10 @@ def _base(root: Path):
     (root / "A").mkdir(parents=True)
     (root / "yon.toml").write_text(_MANIFEST_1)
     (root / "A" / "AP.yon").write_text(
-        "fun a_op(x: Number): Number { return x + 1 }\nplace AP { }\n")
-    (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
+        program("test_project_diff/_base_1.yon"))
+    (root / "A" / "Topos.yon").write_text(program("test_project_diff/_base_2.yon"))
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main: Number { return 0 }\n")
+        program("test_project_diff/_base_3.yon"))
     return root
 
 
@@ -44,21 +45,20 @@ def _mk_ok(root):
 def _mk_drop(root):
     _base(root)
     (root / "Entry.yon").write_text(
-        "import svc::a_op from A\nplace Entry { }\n"
-        "fun main(): Number { drop A  r := a_op(5)  return r - r }\n")
+        program("test_project_diff/_mk_drop_1.yon"))
     return root
 
 
 def _mk_entrypoint(root):
     _base(root)
     (root / "Entry.yon").unlink()
-    (root / "main.yon").write_text("fun main: Number { return 0 }\n")
+    (root / "main.yon").write_text(program("test_project_diff/_mk_entrypoint_1.yon"))
     return root
 
 
 def _mk_topos(root):
     _base(root)
-    (root / "A" / "Topos2.yon").write_text("topos TA2 where { }\n")  # two toposes in A
+    (root / "A" / "Topos2.yon").write_text(program("test_project_diff/_mk_topos_1.yon"))  # two toposes in A
     return root
 
 
@@ -69,9 +69,9 @@ def _mk_orphan(root):
     # (where it would be a silent no-op).
     _base(root)
     (root / "Orphan").mkdir()
-    (root / "Orphan" / "Topos.yon").write_text("topos TO where { }\n")
+    (root / "Orphan" / "Topos.yon").write_text(program("test_project_diff/_mk_orphan_1.yon"))
     (root / "Orphan" / "OP.yon").write_text(
-        "fun o_op(x: Number): Number { return x + 1 }\nplace OP { }\n")
+        program("test_project_diff/_mk_orphan_2.yon"))
     return root
 
 
@@ -82,15 +82,14 @@ def _mk_boundary(root):
         '[package]\nname="p"\n[runtime]\nbackend="separate"\n'
         '[world.W1]\nobjects=["X"]\nspaces=["A"]\n'
         '[world.W2]\nobjects=["Y"]\nspaces=["Bx"]\n')
-    (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
+    (root / "A" / "Topos.yon").write_text(program("test_project_diff/_mk_boundary_1.yon"))
     (root / "A" / "AP.yon").write_text(
-        "import svc::b_op from Bx\nplace AP { }\n"
-        "fun a_op(x: Number): Number { r := b_op(x)  return r }\n")
-    (root / "Bx" / "Topos.yon").write_text("topos TB where { }\n")
+        program("test_project_diff/_mk_boundary_2.yon"))
+    (root / "Bx" / "Topos.yon").write_text(program("test_project_diff/_mk_boundary_3.yon"))
     (root / "Bx" / "BxP.yon").write_text(
-        "fun b_op(x: Number): Number { return x + 1 }\nplace BxP { }\n")
+        program("test_project_diff/_mk_boundary_4.yon"))
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main: Number { return 0 }\n")
+        program("test_project_diff/_mk_boundary_5.yon"))
     return root
 
 

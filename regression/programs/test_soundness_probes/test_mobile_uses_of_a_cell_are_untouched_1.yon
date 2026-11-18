@@ -1,0 +1,1 @@
+fun mk: Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  return g(1) }

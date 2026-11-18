@@ -1,0 +1,3 @@
+place Flip is algebra {
+  operation flip(a: Flip): Flip
+}

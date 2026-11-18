@@ -1,0 +1,5 @@
+place Bad {
+  this > a :U b
+  law giro a = a
+  fun giro(x: Number): Number { return x }
+}

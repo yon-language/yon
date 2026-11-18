@@ -1,0 +1,4 @@
+fun f(x: Number): Number {
+  return escape Number.sqrt(x) + 1
+}
+fun main: Number { return f(4) }

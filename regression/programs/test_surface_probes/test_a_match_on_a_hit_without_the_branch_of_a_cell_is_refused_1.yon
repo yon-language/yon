@@ -1,0 +1,6 @@
+place Entry {
+fun f(s: S1): Number {
+  return match s { base => 42 }
+}
+fun main: Number { return f(S1.base) }
+}

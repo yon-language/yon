@@ -1,0 +1,8 @@
+fun mk(v: Number) on error DomainError: Pt {
+  return .-> Pt { x v }
+}
+fun g(v: Number): Number {
+  p := escape mk(v)
+  return p.x
+}
+fun main: Number { return g(3) }

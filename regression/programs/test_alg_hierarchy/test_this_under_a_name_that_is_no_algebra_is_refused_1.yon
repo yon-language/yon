@@ -1,0 +1,4 @@
+place Nope is algebra {
+  this < Number
+  operation op(a: Nope, b: Nope): Nope
+}

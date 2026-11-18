@@ -1,0 +1,9 @@
+place Box { this > Full Number :U Empty }
+place Entry {}
+fun code(b: Box): Number { return match b { Full as n => n, Empty => 0 } }
+fun main: Number {
+  v := 5 ↪ Full
+  mut acc := 0
+  acc <- code(v)
+  return acc
+}

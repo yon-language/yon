@@ -1,0 +1,3 @@
+place Kelvin carried by i16 {
+  fun from_c(c: Celsius): Kelvin { return c }
+}

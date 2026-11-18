@@ -1,0 +1,5 @@
+  fun step(t: Term): Term {
+    return match t { yes => t, no => t, var as n => t,
+      ite as (c, u, v) => match c { yes => u, no => v, var as n => t, ite as (x, y, z) => t } }
+  }
+  fun if_true(u: Term, v: Term): step((yes, u, v) ↪ ite) = v { return clear }

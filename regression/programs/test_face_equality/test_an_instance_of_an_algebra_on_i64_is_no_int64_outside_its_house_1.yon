@@ -1,0 +1,1 @@
+fun plain(a: Additive): Int64 { return a }

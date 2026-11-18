@@ -1,0 +1,3 @@
+  fun captured(w: W, u: Term): (w ↦ W.inner) = u {
+    return match w { only as u => clear }
+  }

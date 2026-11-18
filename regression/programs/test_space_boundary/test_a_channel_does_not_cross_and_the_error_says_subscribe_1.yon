@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    s := Q.flow()
+    return 0
+  }
+}

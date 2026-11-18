@@ -1,0 +1,4 @@
+place Odd {
+  this < Magma
+  operation op(a: Odd): Odd
+}

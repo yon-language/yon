@@ -1,0 +1,4 @@
+place Acc {
+  total Number
+  operation deposit(n: Number): Number
+}

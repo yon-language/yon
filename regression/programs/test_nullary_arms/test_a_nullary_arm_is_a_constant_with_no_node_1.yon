@@ -1,0 +1,4 @@
+place Entry {
+fun none(n: Number): Lookup<Number> { return Absent }
+fun main: Number { return match none(1) { Found as x => x, Absent => 42 } }
+}

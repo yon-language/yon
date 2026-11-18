@@ -1,0 +1,8 @@
+place Entry {
+  fun peek<T>(x: T): Number {
+    mut r := 0
+    when x is 5 { r <- 1 }
+    return r
+  }
+  fun main: Number { return peek(5) }
+}

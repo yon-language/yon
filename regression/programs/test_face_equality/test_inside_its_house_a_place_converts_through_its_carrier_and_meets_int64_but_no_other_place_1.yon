@@ -1,0 +1,1 @@
+  fun cold(c: Celsius): Kelvin { return c }

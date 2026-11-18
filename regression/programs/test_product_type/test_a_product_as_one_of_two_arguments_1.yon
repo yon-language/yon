@@ -1,0 +1,2 @@
+  fun plus(p: (Number, Number), z: Number): Number { return fst(p) + z }
+  fun apply(f: ((Number, Number), Number) -> Number): Number { return f(pair(40, 7), 2) }

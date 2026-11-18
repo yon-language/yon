@@ -1,0 +1,14 @@
+place Switch { this > Flag Boolean :U Off }
+place Tag { this > Named Text :U Anon }
+place Expr { this > Lit Number :U Nil }
+place Wrapped { this > Wrap Expr :U None }
+place Entry {}
+fun flag(e: Switch): Number { return match e { Flag as b => if b then 1 else 0, Off => 7 } }
+fun name(e: Tag): Number { return match e { Named as s => Text.length(s), Anon => 0 } }
+fun inner(e: Wrapped): Number {
+  return match e { Wrap as x => (match x { Lit as n => n, Nil => 0 }), None => 0 }
+}
+fun main: Number {
+  return flag((3 > 2) ↪ Flag) * 100 + name("abcde" ↪ Named) * 10
+       + inner(0.5 ↪ Lit ↪ Wrap) * 2
+}

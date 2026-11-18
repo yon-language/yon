@@ -1,0 +1,4 @@
+fun from_circle(s: S1): Suspension<Boolean> {
+  return match s { base => north,
+    loop => walk i => ((true ↦ merid) ++ inv(false ↦ merid)) @ i }
+}

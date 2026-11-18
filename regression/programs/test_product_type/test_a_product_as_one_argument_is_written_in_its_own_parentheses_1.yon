@@ -1,0 +1,2 @@
+  fun left(p: (Number, Number)): Number { return fst(p) }
+  fun apply(f: ((Number, Number)) -> Number): Number { return f(pair(42, 7)) }

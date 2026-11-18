@@ -1,0 +1,8 @@
+import echo::twice from Echo
+
+place Entry {
+  fun main: Number {
+    r := twice(21)
+    return 0
+  }
+}

@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    mut c := 7
+    return Q.apply(fun(y: Number) => y + c, 1)
+  }
+}

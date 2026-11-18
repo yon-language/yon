@@ -1,0 +1,11 @@
+place Entry {}
+fun round_trip(x: Int64): Number {
+  m := HashMap.set(HashMap.empty, 1, x)
+  s := HashSet.add(HashSet.empty, x)
+  mut a := match HashMap.get(m, 1) { Found as v => (if v == x then 1 else 0), Absent => 0 }
+  return if HashSet.contains(s, x) then a else 0
+}
+fun main: Number {
+  return round_trip(Int64.max_value) + round_trip(Int64.min_value) * 10
+       + round_trip(9007199254740993) * 100
+}

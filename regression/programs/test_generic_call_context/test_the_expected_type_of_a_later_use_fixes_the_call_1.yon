@@ -1,0 +1,4 @@
+  fun later(e: Empty): Term {
+    x := exfalso(e)
+    return x
+  }

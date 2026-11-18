@@ -1,0 +1,6 @@
+place Entry {
+  fun seven: 7 = 7 { return refl(7) }
+  fun forget: Path { return seven }
+  fun weigh(p: Path): Number { return 7 }
+  fun main: Number { q := forget  return weigh(q) + weigh(seven) }
+}

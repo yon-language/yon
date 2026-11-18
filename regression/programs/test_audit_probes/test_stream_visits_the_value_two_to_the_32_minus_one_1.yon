@@ -1,0 +1,9 @@
+place Entry {}
+fun main(): Number {
+  s := produce { emit 3 emit 4294967295 emit 7 emit 100 }
+  mut n := 0
+  for every v in s {
+    n <- n + 1
+  }
+  return n
+}

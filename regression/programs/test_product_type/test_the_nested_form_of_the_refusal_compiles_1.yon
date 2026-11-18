@@ -1,0 +1,1 @@
+  fun last(p: (Number, (Number, Number))): Number { return snd(snd(p)) }

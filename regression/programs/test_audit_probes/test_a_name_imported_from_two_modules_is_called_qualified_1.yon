@@ -1,0 +1,7 @@
+import alpha::stats from A
+import beta::stats from B
+place Entry {
+  fun main: Number {
+    return alpha::stats(1) + beta::stats(1)
+  }
+}

@@ -1,0 +1,6 @@
+place Entry {
+fun inc(y: Number): Number { return y + 1 }
+fun main(): Number {
+  return match List.head(Stream.take(Stream.iterate(inc, 10), 3)) { Found as v => v, Absent => 0 }
+}
+}

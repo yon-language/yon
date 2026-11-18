@@ -1,0 +1,2 @@
+place BP { }
+fun b_uses(n: Number): Number { return shared(n) }

@@ -1,0 +1,5 @@
+place Entry {
+  fun third(x: Number): (x * 3) / 3 = x { return clear x }
+  fun differs(x: Number): Number { return if (x * 3) / 3 == x then 0 else 1 }
+  fun main: Number { return differs(0.1) }
+}

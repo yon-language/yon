@@ -1,0 +1,6 @@
+fun main: Number {
+  mut l := List.empty
+  l <- List.cons(1, l)
+  l <- List.cons("a", l)
+  return 0
+}

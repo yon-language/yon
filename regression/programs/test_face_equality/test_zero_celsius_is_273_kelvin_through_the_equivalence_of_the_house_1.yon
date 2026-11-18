@@ -1,0 +1,2 @@
+fun up(c: Celsius): Kelvin { return Celsius.to_kelvin(c) }
+fun down(k: Kelvin): Celsius { return Celsius.from_kelvin(k) }

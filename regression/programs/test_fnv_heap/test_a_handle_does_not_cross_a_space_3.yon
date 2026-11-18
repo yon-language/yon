@@ -1,0 +1,6 @@
+place Entry {
+  fun main(): Number {
+    h := Other.keep(FnvHeap.put(40, Word64.from_int64(1)))
+    return 42
+  }
+}

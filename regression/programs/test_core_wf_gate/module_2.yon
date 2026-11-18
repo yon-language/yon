@@ -1,0 +1,3 @@
+fun bad(A: Type, B: Type, x: El(A)): El(B) { return x }
+
+fun main: Number { return 0 }

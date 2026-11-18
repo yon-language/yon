@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    f := Q.adder(3)
+    return 0
+  }
+}

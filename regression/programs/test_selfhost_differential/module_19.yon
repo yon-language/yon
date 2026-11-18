@@ -1,0 +1,3 @@
+place Box { this > Empty :U Full Number }
+fun un(o: Box): Number { return match o { Empty => 99, Full as x => x } }
+fun main: Number { return un(7 ↪ Full) }

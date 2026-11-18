@@ -1,0 +1,7 @@
+place Uso {
+  fun costante(q: Quotient<Number, Rel.qualsiasi>): Number {
+    return match q { inj as x => 5, quot as (a, b, w) => walk i => 5 }
+  }
+  fun dentro(x: Number): Quotient<Number, Rel.qualsiasi> { return x ↪ inj }
+  fun run: Number { return costante(dentro(3)) }
+}

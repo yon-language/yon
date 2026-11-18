@@ -1,0 +1,4 @@
+fun run: Number {
+  o := Account.prova
+  return Account.stato(o)
+}

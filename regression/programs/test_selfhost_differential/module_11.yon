@@ -1,0 +1,2 @@
+fun add_two(x, y): Number { return x + y }
+fun main: Number { return add_two(19, 23) }

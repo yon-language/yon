@@ -1,0 +1,6 @@
+place Bit {
+  this > Naught :U Tick
+  fun flip(a: Bit, b: Bit): Bit {
+    return match a { Naught => b, Tick => match b { Naught => Tick, Tick => Naught } }
+  }
+}

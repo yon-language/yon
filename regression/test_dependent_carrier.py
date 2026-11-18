@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = Path(
@@ -87,12 +88,7 @@ fun main: Number {{ return 0 }}
 def test_sigma_computed_codomain(tmp_path):
     """The A1 headline: Sigma with a computed-codomain second component compiles and
     matches the concrete Sigma it computes to."""
-    src = """
-fun Fam(x: Number): Type_0 { return Number }
-fun viaEl(p: Σx : Number, El(Fam(x))): Number { return 0 }
-fun direct(p: Σx : Number, Number): Number { return 0 }
-fun main: Number { return 0 }
-"""
+    src = program("test_dependent_carrier/test_sigma_computed_codomain_1.yon")
     mlir = _emit(src, tmp_path)
     se, sd = _sig(mlir, "viaEl"), _sig(mlir, "direct")
     assert sd is not None and se == sd, f"El sigma->{se!r} vs direct->{sd!r}"
@@ -101,10 +97,6 @@ fun main: Number { return 0 }
 def test_type_family_not_emitted(tmp_path):
     """A type-family function (universe codomain) is a compile-time citizen: it is
     consumed by the El conversion and must NOT reach codegen as a runtime function."""
-    src = """
-fun Fam(x: Number): Type_0 { return Number }
-fun takes(p: El(Fam(3))): Number { return 0 }
-fun main: Number { return 0 }
-"""
+    src = program("test_dependent_carrier/test_type_family_not_emitted_1.yon")
     mlir = _emit(src, tmp_path)
     assert "func.func @Fam" not in mlir, "type-family Fam leaked into runtime codegen"

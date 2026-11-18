@@ -1,0 +1,4 @@
+place Reading {
+  humidity Number
+  temp Number
+}

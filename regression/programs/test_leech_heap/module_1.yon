@@ -1,0 +1,8 @@
+fun int64(n: Int64): Int64 { return n }
+fun word64(n: Int64): Word64 { return Word64.from_int64(n) }
+/* the point of index i, the program stopped with 2 if there is none */
+fun point_at(i: Number, k: Number): Number {
+  return match LatticePoint.at_index(i) {
+    LatticePoint as p => with_point(p, k),
+    DomainError as d => 2 }
+}

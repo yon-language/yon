@@ -1,0 +1,19 @@
+place Entry {
+fun main: Number {
+  return if ends(4) == first(5) and ends(5) == first(6) and ends(6) == first(7)
+            and ends(7) == first(8) and ends(8) == first(9) and ends(9) == first(10)
+            and ends(10) == first(11) and ends(11) == first(0) and ends(0) == first(1)
+            and ends(1) == first(2) and ends(2) == first(3) and ends(3) == 196560
+            and first(4) == 0 and sfirst(1) == 97152 and sfirst(0) == 195456
+            then 42 else 1
+}
+fun first(o: Number): Number {
+  return match LatticePoint.orbit_first(o) { Number as f => f, DomainError as d => 0 - 1 }
+}
+fun ends(o: Number): Number {
+  return match LatticePoint.orbit_count(o) { Number as c => first(o) + c, DomainError as d => 0 - 1 }
+}
+fun sfirst(s: Number): Number {
+  return match LatticePoint.shape_first(s) { Number as f => f, DomainError as d => 0 - 1 }
+}
+}

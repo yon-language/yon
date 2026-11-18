@@ -1,0 +1,9 @@
+place Entry {
+  reduction Bump of Counter {
+    seed := 0
+    on tick(n: Number) {
+      return n + 1
+    }
+  }
+  fun main: Number visits Counter { return Counter.tick(5) }
+}

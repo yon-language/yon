@@ -1,0 +1,4 @@
+place Duo { this > Both Number Number }
+fun a(d: Duo): Number { return match d { Both as (x, y) => x } }
+fun b(d: Duo): Number { return match d { Both as (x, y) => y } }
+fun main: Number { return a((5, 9) ↪ Both) + b((5, 9) ↪ Both) }

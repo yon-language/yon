@@ -1,0 +1,2 @@
+  fun mk(d: Number): Σx : Number, (x = d) ∧ (x = d) { return pair(d, pair(refl(d), refl(d))) }
+  fun use(e: Number): e = e { return fst(snd(mk(e))) }

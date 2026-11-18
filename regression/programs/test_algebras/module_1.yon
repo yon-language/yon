@@ -1,0 +1,5 @@
+place Coin uses algebra BooleanOr {
+  this > Heads :U Tails
+  fun op(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }
+  fun unit: Coin { return Tails }
+}

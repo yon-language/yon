@@ -1,0 +1,1 @@
+fun mk(): Number { ch := Wire.make(4)  mut c := 10  c <- 20  g := fun(y: Number) => y + c  _s := Wire.send(ch, g(1))  return Wire.recv(ch) }

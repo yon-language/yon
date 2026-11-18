@@ -1,0 +1,12 @@
+place Entry {}
+fun fill(m: HashMap<Number, Number>, i: Number, n: Number): HashMap<Number, Number> {
+  return if i >= n then m else fill(HashMap.set(m, i, i * 2), i + 1, n)
+}
+fun main(): Number {
+  m10 := fill(HashMap.empty, 0, 10)
+  m1000 := fill(m10, 10, 1000)
+  ok10 := if HashMap.size(m10) == 10 then (if HashMap.has(m10, 500) then 0 else 1) else 0
+  v999 := match HashMap.get(m1000, 999) { Found as v => v, Absent => 0 }
+  ok1000 := if HashMap.size(m1000) == 1000 then (if v999 == 1998 then 1 else 0) else 0
+  return ok10 * 10 + ok1000
+}

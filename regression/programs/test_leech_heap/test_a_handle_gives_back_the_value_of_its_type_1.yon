@@ -1,0 +1,7 @@
+fun with_point(p: LatticePoint, k: Number): Number {
+  n := LeechHeap.value(LeechHeap.put(2.5, p))
+  i := LeechHeap.value(LeechHeap.put(int64(-7), p))
+  b := LeechHeap.value(LeechHeap.put(true, p))
+  f := LeechHeap.value(LeechHeap.put(false, p))
+  return if n == 2.5 and i == int64(-7) and b and not f then 42 else 1
+}

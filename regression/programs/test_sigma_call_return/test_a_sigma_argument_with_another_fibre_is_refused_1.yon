@@ -1,0 +1,1 @@
+  fun plain(s: Σx : Number, x = 1): Number { return fst(s) }

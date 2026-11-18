@@ -1,0 +1,5 @@
+place Box { this > Pair Number Number :U Empty }
+place Entry {
+fun mk: Box { return .-> Pair { _1 1 _2 2 } }
+fun main: Number { return 0 }
+}

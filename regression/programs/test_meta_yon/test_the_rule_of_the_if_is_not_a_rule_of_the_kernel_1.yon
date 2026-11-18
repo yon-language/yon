@@ -1,0 +1,3 @@
+  fun if_same(b: Boolean, x: Term): (if b then x else x) = x {
+    return clear
+  }

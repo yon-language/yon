@@ -1,0 +1,4 @@
+place Kelvin carried by i64 {
+  fun degrees(n: Int64): Kelvin { return n }
+  fun reading(k: Kelvin): Int64 { return k }
+}

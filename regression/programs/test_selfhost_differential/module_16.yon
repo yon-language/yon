@@ -1,0 +1,3 @@
+place Bit { this > O :U I }
+fun v(b: Bit): Number { return match b { O => 0, I => 1 } }
+fun main: Number { return v(I) }

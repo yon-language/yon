@@ -1,0 +1,9 @@
+place Entry { }
+fun peek(a: DP): Number {
+  drop D
+  return a.n
+}
+fun main: Number {
+  p := .-> DP { n 7 }
+  return peek(p)
+}

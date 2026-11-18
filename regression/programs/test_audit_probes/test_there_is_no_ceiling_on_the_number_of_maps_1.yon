@@ -1,0 +1,8 @@
+place Entry {}
+fun many(i: Number, acc: Number): Number {
+  return if i == 0 then acc
+         else many(i - 1, acc + HashMap.size(HashMap.set(HashMap.set(HashMap.empty, i, 1), 0 - i, 2)))
+}
+fun main: Number {
+  return many(1000, 0) / 1000
+}

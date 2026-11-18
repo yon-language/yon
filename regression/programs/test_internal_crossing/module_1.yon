@@ -1,0 +1,11 @@
+place Other {
+  fun bump(w: Word64): Word64 { return w + Word64.one }
+  fun next(p: LatticePoint): LatticePoint {
+    return match LatticePoint.at_index(LatticePoint.index(p) + 1) {
+      LatticePoint as q => q, DomainError as d => p }
+  }
+  fun grow(s: XRelSet<LatticePoint>, p: LatticePoint): XRelSet<LatticePoint> {
+    return XRelSet.add(s, p)
+  }
+  fun keep(f: XRelFrame): XRelFrame { return f }
+}

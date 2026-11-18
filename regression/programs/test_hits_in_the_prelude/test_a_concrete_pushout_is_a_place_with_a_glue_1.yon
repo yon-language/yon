@@ -1,0 +1,6 @@
+place Uso {
+  fun presente(p: Persona): Number {
+    return match p { inl as c => 42, inr as u => 42, glue as k => walk i => 42 }
+  }
+  fun run: Number { return presente(.-> Cliente { nome 1 } ↪ inl) }
+}

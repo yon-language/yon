@@ -1,0 +1,6 @@
+fun main: Number {
+  id := fun(x) => x
+  a := id(5)
+  b := id("h")
+  return a
+}

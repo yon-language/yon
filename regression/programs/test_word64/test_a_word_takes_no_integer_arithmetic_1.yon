@@ -1,0 +1,5 @@
+place Entry {
+fun main: Number {
+  return if Word64.one + 1 == Word64.zero then 1 else 2
+}
+}

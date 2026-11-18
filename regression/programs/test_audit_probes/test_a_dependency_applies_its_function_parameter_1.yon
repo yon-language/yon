@@ -1,0 +1,2 @@
+fun scale(x: Number): Number { return x * 100 }
+fun apply(h: Number -> Number, x: Number): Number { return h(x) }

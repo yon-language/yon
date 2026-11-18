@@ -1,0 +1,4 @@
+fun feed(): Wire<Number> {
+  s := produce { emit 1 }
+  return s
+}

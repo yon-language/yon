@@ -1,0 +1,19 @@
+place Entry {}
+fun of_ok(n: Number): Number {
+  return match LatticePoint.of_coordinate(n) { LatticePoint as p => 1, DomainError as d => 0 }
+}
+fun at_ok(i: Number): Number {
+  return match LatticePoint.at_index(i) { LatticePoint as p => 1, DomainError as d => 0 }
+}
+fun main(): Number {
+  _a := IO.print_num(of_ok(1536))
+  _b := IO.print_num(of_ok(1536.5))
+  _c := IO.print_num(of_ok(0 - 1536))
+  _d := IO.print_num(of_ok(7))
+  _e := IO.print_num(at_ok(0))
+  _f := IO.print_num(at_ok(196559))
+  _g := IO.print_num(at_ok(196560))
+  _h := IO.print_num(at_ok(0 - 1))
+  _i := IO.print_num(at_ok(0.5))
+  return 0
+}

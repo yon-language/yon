@@ -1,0 +1,7 @@
+import shifter::shift from Shifter
+place Entry {
+  fun main(): Number {
+    _p := IO.print_num(shift(0))
+    return 3
+  }
+}

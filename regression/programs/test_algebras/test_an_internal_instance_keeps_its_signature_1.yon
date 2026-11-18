@@ -1,0 +1,2 @@
+  fun op(a: W, b: W): W { return make(value(a) + value(b)) }
+  fun unit: W { return make(0) }

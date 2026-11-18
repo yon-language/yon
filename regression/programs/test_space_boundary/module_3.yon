@@ -1,0 +1,14 @@
+place Entry {
+  fun slen(s: Text): Number { return Text.length(s) }
+  fun twice(x: Number): Number { return x * 2 }
+  fun build(n: Number): HashMap<Number, Number> {
+    mut m := HashMap.empty
+    mut k := 0
+    iter n do {
+      m <- HashMap.set(m, k, k * 100)
+      k <- k + 1
+    }
+    return m
+  }
+  fun main: Number { return 0 }
+}

@@ -1,0 +1,4 @@
+internal place W carried by i64 uses algebra Additive, Multiplicative {
+  fun make(n: Int64): W { return n }
+  fun value(w: W): Int64 { return w }
+}

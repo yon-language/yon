@@ -16,6 +16,7 @@ import os
 import subprocess
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -33,53 +34,16 @@ spaces  = ["w"]
 backend = "memory"
 """
 
-_BUILD = """place Q {
-  side Number
-  fun build(n: Number): HashMap<Number, Number> {
-    mut m := HashMap.empty
-    mut k := 0
-    iter n do {
-      m <- HashMap.set(m, k, k * 100)
-      k <- k + 1
-    }
-    return m
-  }
-  fun apply(f: Number -> Number, x: Number): Number { return f(x) }
-  fun peek(c: Number): Number { return c }
-  fun adder(n: Number): Number -> Number { return fun(x: Number) => x + n }
-  fun points(n: Number): XRelMap<Number, Number> {
-    mut m := XRelMap.empty
-    mut k := 0
-    iter n do {
-      m <- XRelMap.set(m, k, k + 40)
-      k <- k + 1
-    }
-    return m
-  }
-  fun len(s: Text): Number { return Text.length(s) }
-  fun flow(): Wire<Number> {
-    s := produce {
-      emit 1
-    }
-    return s
-  }
-}
-"""
+_BUILD = program("test_space_boundary/module_1.yon")
 
-_READ_MAP = """place Entry {
-  fun main(): Number {
-    mut m := Q.build(10)
-    return HashMap.size(m) + (match HashMap.get(m, 3) { Found as v => v, Absent => 0 })
-  }
-}
-"""
+_READ_MAP = program("test_space_boundary/module_2.yon")
 
 
 def _project(tmp_path: Path, entry: str) -> Path:
     proj = tmp_path / "proj"
     (proj / "w").mkdir(parents=True)
     (proj / "yon.toml").write_text(_TOML)
-    (proj / "w" / "Topos.yon").write_text("topos WT where {\n}\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_space_boundary/_project_1.yon"))
     (proj / "w" / "Q.yon").write_text(_BUILD)
     (proj / "Entry.yon").write_text(entry)
     return proj
@@ -111,82 +75,41 @@ def test_a_map_built_in_another_space_reaches_main(tmp_path):
 
 
 def test_an_xrelmap_made_in_another_space_is_copied_to_main(tmp_path):
-    rc, out, exe = _in_binary(tmp_path, """place Entry {
-  fun main(): Number {
-    mut m := Q.points(6)
-    return XRelMap.size(m) + (match XRelMap.get(m, 5) { Found as v => v, Absent => 0 })
-  }
-}
-""")
+    rc, out, exe = _in_binary(tmp_path, program("test_space_boundary/test_an_xrelmap_made_in_another_space_is_copied_to_main_1.yon"))
     assert rc == 0, out
     assert subprocess.run([str(exe)], capture_output=True, timeout=60).returncode == 51
 
 
 def test_a_text_crosses_into_another_space(tmp_path):
-    rc, out, exe = _in_binary(tmp_path, """place Entry {
-  fun main: Number { return Q.len("seven c") }
-}
-""")
+    rc, out, exe = _in_binary(tmp_path, program("test_space_boundary/test_a_text_crosses_into_another_space_1.yon"))
     assert rc == 0, out
     assert subprocess.run([str(exe)], capture_output=True, timeout=60).returncode == 7
 
 
 def test_a_channel_does_not_cross_and_the_error_says_subscribe(tmp_path):
-    rc, out, _ = _in_binary(tmp_path, """place Entry {
-  fun main: Number {
-    s := Q.flow()
-    return 0
-  }
-}
-""")
+    rc, out, _ = _in_binary(tmp_path, program("test_space_boundary/test_a_channel_does_not_cross_and_the_error_says_subscribe_1.yon"))
     assert _refused(rc, out, "the result of Q__flow", "subscribe"), out
 
 
 def test_a_closure_does_not_cross_into_another_space(tmp_path):
-    rc, out, _ = _in_binary(tmp_path, """place Entry {
-  fun main: Number {
-    mut k := 5
-    return Q.apply(fun(x: Number) => x + k, 1)
-  }
-}
-""")
+    rc, out, _ = _in_binary(tmp_path, program("test_space_boundary/test_a_closure_does_not_cross_into_another_space_1.yon"))
     assert _refused(rc, out, "another Space", "Q__apply"), out
 
 
 def test_a_closure_does_not_come_back_from_another_space(tmp_path):
-    rc, out, _ = _in_binary(tmp_path, """place Entry {
-  fun main: Number {
-    f := Q.adder(3)
-    return 0
-  }
-}
-""")
+    rc, out, _ = _in_binary(tmp_path, program("test_space_boundary/test_a_closure_does_not_come_back_from_another_space_1.yon"))
     assert _refused(rc, out, "the result of Q__adder", "another Space"), out
 
 
 def test_a_cell_does_not_cross_into_another_space(tmp_path):
     # what mentions a cell names something that exists only here
-    rc, out, _ = _in_binary(tmp_path, """place Entry {
-  fun main: Number {
-    mut c := 7
-    return Q.apply(fun(y: Number) => y + c, 1)
-  }
-}
-""")
+    rc, out, _ = _in_binary(tmp_path, program("test_space_boundary/test_a_cell_does_not_cross_into_another_space_1.yon"))
     assert _refused(rc, out, "Q__apply", "another Space"), out
 
 
 def test_what_crosses_from_a_cell_is_the_value_read(tmp_path):
     # the control: the read is a number, and a later write does not reach the other side
-    rc, out, exe = _in_binary(tmp_path, """place Entry {
-  fun main: Number {
-    mut c := 8
-    x := Q.peek(c)
-    c <- 9
-    return x
-  }
-}
-""")
+    rc, out, exe = _in_binary(tmp_path, program("test_space_boundary/test_what_crosses_from_a_cell_is_the_value_read_1.yon"))
     assert rc == 0, out
     assert subprocess.run([str(exe)], capture_output=True, timeout=60).returncode == 8
 
@@ -214,15 +137,8 @@ def test_a_closure_returned_inside_one_space_is_a_value(tmp_path, params, args):
 
 def test_a_call_inside_one_space_is_not_a_crossing(tmp_path):
     # the same closure handed within Q's own Space is an ordinary call
-    proj = _project(tmp_path, """place Entry {
-  fun main: Number { return Q.inside(4) }
-}
-""")
-    (proj / "w" / "Q.yon").write_text(_BUILD.replace(
-        "  fun points(n: Number)",
-        "  fun inside(x: Number): Number { mut k := 1\n"
-        "    return Q.apply(fun(y: Number) => y + k, x) }\n"
-        "  fun points(n: Number)"))
+    proj = _project(tmp_path, program("test_space_boundary/test_a_call_inside_one_space_is_not_a_crossing_1.yon"))
+    (proj / "w" / "Q.yon").write_text(program("test_space_boundary/test_a_call_inside_one_space_is_not_a_crossing_2.yon"))
     exe = tmp_path / "probe.exe"
     rc, out = _yonc(proj, exe)
     assert rc == 0, out
@@ -238,7 +154,7 @@ def _note_project(tmp_path: Path, space_file: str, entry: str) -> Path:
     proj = tmp_path / "proj"
     (proj / "w").mkdir(parents=True)
     (proj / "yon.toml").write_text(_NOTE_TOML)
-    (proj / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_space_boundary/_note_project_1.yon"))
     name, text = space_file
     (proj / "w" / name).write_text(text)
     (proj / "Entry.yon").write_text(entry)
@@ -259,8 +175,7 @@ def test_a_place_with_a_text_crosses_into_another_space_and_stays_the_callers(tm
     # pinned to the Space of Note, and the region ending the call into that
     # Space emptied it under main (the read of s.line aborted)
     proj = _note_project(tmp_path, ("Note.yon",
-        "place Note { message Text  line Number }\n\n"
-        "fun describe(e: Note): Number { return Text.length(e.message) }\n"),
+        program("test_space_boundary/test_a_place_with_a_text_crosses_into_another_space_and_stays_the_callers_1.yon")),
         _NOTE_ENTRY % "Note")
     exe = tmp_path / "probe.exe"
     rc, out = _yonc(proj, exe)
@@ -272,8 +187,7 @@ def test_a_sub_object_crosses_by_its_own_frame(tmp_path):
     # describe takes the prelude's Error; the value is a SyntaxError, copied
     # by its own frame (the frame of Error does not describe it)
     proj = _note_project(tmp_path, ("SyntaxError.yon",
-        "place SyntaxError { this < Error  line Number }\n\n"
-        "fun describe(e: Error): Number { return Text.length(e.message) }\n"),
+        program("test_space_boundary/test_a_sub_object_crosses_by_its_own_frame_1.yon")),
         _NOTE_ENTRY % "SyntaxError")
     (proj / "yon.toml").write_text(_TOML.replace('objects = ["Q"]', 'objects = ["SyntaxError"]'))
     exe = tmp_path / "probe.exe"
@@ -284,21 +198,7 @@ def test_a_sub_object_crosses_by_its_own_frame(tmp_path):
 
 # ---- two processes ----
 
-_ECHO = """place Entry {
-  fun slen(s: Text): Number { return Text.length(s) }
-  fun twice(x: Number): Number { return x * 2 }
-  fun build(n: Number): HashMap<Number, Number> {
-    mut m := HashMap.empty
-    mut k := 0
-    iter n do {
-      m <- HashMap.set(m, k, k * 100)
-      k <- k + 1
-    }
-    return m
-  }
-  fun main: Number { return 0 }
-}
-"""
+_ECHO = program("test_space_boundary/module_3.yon")
 
 
 def _between_processes(tmp_path: Path, client: str):
@@ -318,12 +218,7 @@ def _run_client(tmp_path: Path) -> int:
 
 
 def test_an_import_is_checked_on_its_types(tmp_path):
-    rc, out = _between_processes(tmp_path, """import echo::twice from Echo
-
-place Entry {
-  fun main: Number { return twice("a") }
-}
-""")
+    rc, out = _between_processes(tmp_path, program("test_space_boundary/test_an_import_is_checked_on_its_types_1.yon"))
     assert _refused(rc, out, "argument 1 of twice"), out
 
 
@@ -333,17 +228,8 @@ def test_a_call_to_another_version_of_the_signature_is_refused(tmp_path):
     (tmp_path / "echo.yon").write_text(_ECHO)
     rc, out = _yonc(tmp_path / "echo.yon", tmp_path / "Echo_srv")
     assert rc == 0, out
-    (tmp_path / "echo.yon").write_text(_ECHO.replace(
-        "fun twice(x: Number): Number", "fun twice(x: Number): Int64"))
-    (tmp_path / "client.yon").write_text("""import echo::twice from Echo
-
-place Entry {
-  fun main: Number {
-    r := twice(21)
-    return 0
-  }
-}
-""")
+    (tmp_path / "echo.yon").write_text(program("test_space_boundary/test_a_call_to_another_version_of_the_signature_is_refused_1.yon"))
+    (tmp_path / "client.yon").write_text(program("test_space_boundary/test_a_call_to_another_version_of_the_signature_is_refused_2.yon"))
     rc, out = _yonc(tmp_path / "client.yon", tmp_path / "client")
     assert rc == 0, out
     env = dict(os.environ, YON_WORLD="v%03x" % (os.getpid() % 4096))
@@ -354,37 +240,19 @@ place Entry {
 
 
 def test_a_number_still_crosses_between_processes(tmp_path):
-    rc, out = _between_processes(tmp_path, """import echo::twice from Echo
-
-place Entry {
-  fun main: Number { return twice(21) }
-}
-""")
+    rc, out = _between_processes(tmp_path, program("test_space_boundary/test_a_number_still_crosses_between_processes_1.yon"))
     assert rc == 0, out
     assert _run_client(tmp_path) == 42
 
 
 def test_a_text_crosses_between_processes(tmp_path):
-    rc, out = _between_processes(tmp_path, """import echo::slen from Echo
-
-place Entry {
-  fun main: Number { return slen("hello") }
-}
-""")
+    rc, out = _between_processes(tmp_path, program("test_space_boundary/test_a_text_crosses_between_processes_1.yon"))
     assert rc == 0, out
     assert _run_client(tmp_path) == 5
 
 
 def test_a_map_crosses_between_processes(tmp_path):
-    rc, out = _between_processes(tmp_path, """import echo::build from Echo
-
-place Entry {
-  fun main(): Number {
-    mut m := build(10)
-    return HashMap.size(m) + (match HashMap.get(m, 3) { Found as v => v, Absent => 0 })
-  }
-}
-""")
+    rc, out = _between_processes(tmp_path, program("test_space_boundary/test_a_map_crosses_between_processes_1.yon"))
     assert rc == 0, out
     assert _run_client(tmp_path) == 54
 
@@ -446,18 +314,15 @@ def test_a_place_with_a_text_crosses_between_processes(tmp_path):
     for p, spaces in (("svc", '["w"]'), ("client", '["w", "Notes"]')):
         (tmp_path / p / "w").mkdir(parents=True)
         (tmp_path / p / "yon.toml").write_text(_NOTES_TOML % (p, spaces))
-        (tmp_path / p / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
-        (tmp_path / p / "w" / "Note.yon").write_text("place Note { message Text  line Number }\n")
+        (tmp_path / p / "w" / "Topos.yon").write_text(program("test_space_boundary/test_a_place_with_a_text_crosses_between_processes_1.yon"))
+        (tmp_path / p / "w" / "Note.yon").write_text(program("test_space_boundary/test_a_place_with_a_text_crosses_between_processes_2.yon"))
     (tmp_path / "svc" / "Entry.yon").write_text(
-        "place Entry {\n  fun describe(e: Note): Number { return Text.length(e.message) + e.line }\n"
-        "  fun main: Number { return 0 }\n}\n")
+        program("test_space_boundary/test_a_place_with_a_text_crosses_between_processes_3.yon"))
     mods = tmp_path / "client" / "yon_modules" / "notes"
     mods.mkdir(parents=True)
-    (mods / "notes.yon").write_text("fun describe(e: Note): Number { return 0 }\n")
+    (mods / "notes.yon").write_text(program("test_space_boundary/test_a_place_with_a_text_crosses_between_processes_4.yon"))
     (tmp_path / "client" / "Entry.yon").write_text(
-        "import notes::describe from Notes\n\nplace Entry {\n  fun main: Number {\n"
-        "    n := .-> Note { message \"unexpected }\" line 30 }\n"
-        "    return describe(n)\n  }\n}\n")
+        program("test_space_boundary/test_a_place_with_a_text_crosses_between_processes_5.yon"))
     rc, out = _yonc(tmp_path / "svc", tmp_path / "Notes_srv")
     assert rc == 0, out
     rc, out = _yonc(tmp_path / "client", tmp_path / "client.exe")

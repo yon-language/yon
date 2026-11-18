@@ -1,0 +1,1 @@
+  fun apply(f: Number -> Number, x: Number): Number { return f(x) }

@@ -1,0 +1,5 @@
+place Frecce {
+  fun uno(x: Number): Number { return x + 1 }
+  fun ancora_uno(x: Number): Number { return x + 1 }
+  fun due(x: Number): Number { return x + 2 }
+}

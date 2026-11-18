@@ -1,0 +1,21 @@
+place Entry {
+fun main: Number {
+  mut b := true
+  mut n := 0
+  while n < 3 do {
+    b <- not b
+    n <- n + 1
+  }
+  return if b then 1 else other + flag(false)
+}
+fun flag(x: Boolean): Number {
+  mut c := x
+  c <- c or true
+  return if c then 2 else 0
+}
+fun other: Number {
+  mut b := 40
+  b <- b + 0
+  return b
+}
+}

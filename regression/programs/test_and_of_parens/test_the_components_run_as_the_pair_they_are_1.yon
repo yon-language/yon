@@ -1,0 +1,9 @@
+place Entry {
+  fun witness(a: Number): Σp : Number, (p = a) ∧ (p = a) {
+    return pair(a, pair(refl(a), refl(a)))
+  }
+  fun main: Number {
+    w := witness(42)
+    return fst(w)
+  }
+}

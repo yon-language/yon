@@ -1,0 +1,11 @@
+fun with_point(p: LatticePoint, k: Number): Number {
+  a := LeechHeap.put(40, p)
+  b := LeechHeap.put(41, p)
+  c := LeechHeap.put(42, p)
+  return if LeechHeap.generation(a) == int64(0) and LeechHeap.generation(b) == int64(1)
+            and LeechHeap.generation(c) == int64(2)
+            and LeechHeap.segment(c) == int64(2) and LeechHeap.slot(c) == LeechHeap.slot(a)
+            and LeechHeap.next_generation(4, int64(123456)) == int64(3)
+            and LeechHeap.value(a) == 40 and LeechHeap.value(b) == 41
+            then LeechHeap.value(c) else 1
+}

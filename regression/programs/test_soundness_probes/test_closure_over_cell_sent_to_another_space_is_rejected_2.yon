@@ -1,0 +1,9 @@
+import echo::use_remote from Echo
+
+place Entry {
+  fun main: Number {
+    mut k := 10
+    k <- 20
+    return use_remote(fun(y: Number) => y + k)
+  }
+}

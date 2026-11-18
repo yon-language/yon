@@ -1,0 +1,5 @@
+fun inc(y: Number): Number { return y + 4 }
+fun mk(g: Number -> Number): Number { s := produce { emit g(1) }
+ mut t := 0
+ for every x in s { t <- t + x }
+ return t }

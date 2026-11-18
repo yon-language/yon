@@ -1,0 +1,2 @@
+fun dbl(x): Number { return x + x }
+fun main: Number { return dbl(21) }

@@ -1,0 +1,4 @@
+place Entry {}
+fun main: Number {
+  return LatticePoint.orbit(1536)
+}

@@ -1,0 +1,6 @@
+place Sum carried by text uses algebra Additive {
+  fun op(a: Sum, b: Sum): Sum { return Sum.other(a, b) }
+  fun other(a: Sum, b: Sum): Sum is given
+  fun unit: Sum { return unit }
+  fun inv(a: Sum): Sum { return a }
+}

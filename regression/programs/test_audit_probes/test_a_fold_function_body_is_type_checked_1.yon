@@ -1,0 +1,10 @@
+place Entry {
+fun main(): Number {
+  s := produce {
+    emit 41
+    emit 1
+  }
+  total := s.fold(0, fun(a: Number, v: Number) => a + "zz")
+  return total
+}
+}

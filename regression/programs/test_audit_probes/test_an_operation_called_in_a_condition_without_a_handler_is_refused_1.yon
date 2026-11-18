@@ -1,0 +1,7 @@
+place Entry {
+  fun main: Number visits Counter {
+    mut r := 0
+    when Counter.tick(5) > 0 { r <- 1 }
+    return r
+  }
+}

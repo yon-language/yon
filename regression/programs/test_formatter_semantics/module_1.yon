@@ -1,0 +1,6 @@
+place Entry { }
+fun main: Number {
+  mut x := 1
+  x <- x + 41
+  return x
+}

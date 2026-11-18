@@ -1,0 +1,2 @@
+fun mk(n: Number, g: Number -> Number): Number { s := produce { emit g(n) }
+ return 0 }

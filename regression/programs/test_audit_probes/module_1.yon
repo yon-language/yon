@@ -1,0 +1,1 @@
+fun launder(p: Path): 0 = 1 { return p }

@@ -1,0 +1,4 @@
+place Entry {
+fun bad(a: Number): a = a + 1 { return clear }
+fun main: Number { return 0 }
+}

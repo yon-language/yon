@@ -1,0 +1,5 @@
+place Entry {
+fun tick: Int64 { return SystemOs.monotonic_ns() }
+fun main(): Number { _t := tick()
+  return 42 }
+}

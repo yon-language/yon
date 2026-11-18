@@ -1,0 +1,22 @@
+place Entry {}
+fun k(p: LatticePoint): LatticePoint { return XRelFrame.canon(XRelFrame.curtis, p) }
+fun three(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number {
+  a := XRelMap.set(XRelMap.empty, k(p), 100)
+  _1 := IO.print_num(match XRelMap.get(a, k(m)) { Found as v => v, Absent => 0 })
+  _2 := IO.print_num(match XRelMap.get(a, k(q)) { Found as v => v, Absent => 0 })
+  s := XRelSet.add(XRelSet.add(XRelSet.add(XRelSet.empty, k(p)), k(m)), k(q))
+  _3 := IO.print_num(XRelSet.size(s))
+  return 0
+}
+fun with_q(p: LatticePoint, q: LatticePoint): Number {
+  return match LatticePoint.of_coordinate(16778752) {
+    LatticePoint as m => three(p, q, m), DomainError as d => 0 - 1 }
+}
+fun at_p(p: LatticePoint): Number {
+  return match LatticePoint.of_coordinate(1280) {
+    LatticePoint as q => with_q(p, q), DomainError as d => 0 - 1 }
+}
+fun main: Number {
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => at_p(p), DomainError as d => 0 - 1 }
+}

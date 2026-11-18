@@ -1,0 +1,5 @@
+place Entry {
+  fun main: Number {
+    return if Int64.shift_right(8, 1) == 4 then 1 else 0
+  }
+}

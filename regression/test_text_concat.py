@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -28,7 +29,7 @@ def _exit(tmp_path: Path, top: str, body: str, places: dict | None = None) -> in
     return subprocess.run([str(exe)], capture_output=True, timeout=30).returncode
 
 
-_HELLO = 'fun hello: Text { return "hel" + "lo" }\n'
+_HELLO = program("test_text_concat/module_1.yon")
 
 
 def test_the_sum_of_two_strings_known_only_at_run_time_is_their_concatenation(tmp_path):
@@ -37,7 +38,7 @@ def test_the_sum_of_two_strings_known_only_at_run_time_is_their_concatenation(tm
 
 
 def test_the_empty_string_is_the_unit_of_the_concatenation(tmp_path):
-    top = _HELLO + 'fun none: Text { return "" }\n'
+    top = program("test_text_concat/test_the_empty_string_is_the_unit_of_the_concatenation_1.yon")
     body = ('  a := none + hello\n'
             '  b := hello + none\n'
             '  c := none + none\n'
@@ -48,8 +49,7 @@ def test_the_empty_string_is_the_unit_of_the_concatenation(tmp_path):
 
 def test_a_long_string_concatenates_whole(tmp_path):
     # two thousand characters, built by doubling at run time
-    top = ("fun doubled(s: Text, k: Number): Text {\n"
-           "  return if k == 0 then s else doubled(s + s, k - 1)\n}\n")
+    top = (program("test_text_concat/test_a_long_string_concatenates_whole_1.yon"))
     body = ('  long := doubled("abcdefghij", 7)\n'
             '  both := long + long\n'
             '  return if Text.length(long) == 1280 and Text.length(both) == 2560'
@@ -75,8 +75,8 @@ def test_a_lambda_whose_parameter_is_text_by_its_use_concatenates(tmp_path):
 
 
 def test_a_lambda_on_a_place_of_text_concatenates(tmp_path):
-    name = {"Name": "place Name carried by text {\n  fun spelled(n: Name): Text { return n }\n}\n"}
-    top = 'fun hello: Name { return "hel" + "lo" }\n'
+    name = {"Name": program("test_text_concat/test_a_lambda_on_a_place_of_text_concatenates_1.yon")}
+    top = program("test_text_concat/test_a_lambda_on_a_place_of_text_concatenates_2.yon")
     body = ('  twice := fun(a) => a + a\n'
             '  return if Text.equal(Name.spelled(twice(hello)), "hellohello") then 42 else 1')
     assert _exit(tmp_path, top, body, name) == 42

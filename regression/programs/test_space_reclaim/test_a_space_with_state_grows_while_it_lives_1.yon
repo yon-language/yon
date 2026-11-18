@@ -1,0 +1,9 @@
+place Entry {
+  fun main: Number {
+    mut t := 0
+    iter 8 do {
+      t <- t + Q.work(20000)
+    }
+    return t / 40000
+  }
+}

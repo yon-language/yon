@@ -1,0 +1,1 @@
+  fun loopy(k: Number): Number { return if k > 100 then k else loopy(k + 1) }

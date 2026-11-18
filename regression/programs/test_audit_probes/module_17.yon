@@ -1,0 +1,1 @@
+fun declares(s: (Box(Number) | Empty)): Number { return 0 }

@@ -1,0 +1,5 @@
+place Entry {
+  fun inc(n: Number): Number { return n + 1 }
+  fun k(inc: Number -> Number): Number { return inc(0) }
+  fun main: Number { return k(fun(x: Number) => x + 42) }
+}

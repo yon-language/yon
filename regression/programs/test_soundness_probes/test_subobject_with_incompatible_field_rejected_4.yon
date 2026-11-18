@@ -1,0 +1,3 @@
+place A { this < B
+  value Text
+}

@@ -1,0 +1,2 @@
+fun bad: Number { return "text" + 1 }
+fun main: Number { return 0 }

@@ -1,0 +1,3 @@
+place Other {
+  fun keep(h: LeechHeap<Word64>): LeechHeap<Word64> { return h }
+}

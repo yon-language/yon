@@ -1,0 +1,1 @@
+  fun of_sub(s: { a : Number where Πx : Number, Πy : Number, x = y }): Πx : Number, Πy : Number, x = y { return snd(s) }

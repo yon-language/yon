@@ -1,0 +1,13 @@
+place Entry {
+fun h: Number {
+  mut c := .-> P { x 1 }
+  c <- .-> P { x 2 }
+  return c.x
+}
+fun main(): Number {
+  mut k := IO.print_num(h)
+  mut c := 0
+  c <- 7
+  return c
+}
+}

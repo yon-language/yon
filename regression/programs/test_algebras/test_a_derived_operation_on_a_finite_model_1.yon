@@ -1,0 +1,5 @@
+place Lub is algebra {
+  operation join(a: Lub, b: Lub): Lub
+  law idempotent ∀a : Lub, join(a, a) = a
+  fun join3(a: Lub, b: Lub, c: Lub): Lub { return join(join(a, b), c) }
+}

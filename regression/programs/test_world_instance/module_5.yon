@@ -1,0 +1,9 @@
+place Entry {
+  fun main(): Number {
+    c := Wire.make_shm(7, 1)
+    a := Wire.produce_shm(7, 10)
+    b := Wire.produce_shm(7, 32)
+    e := Wire.close_shm(7)
+    return 0
+  }
+}

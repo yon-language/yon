@@ -1,0 +1,3 @@
+place Entry {
+  fun main: Number { mut k := fun(y: Number) => y  k <- fun(y: Number) => y + 1  return k(1) }
+}

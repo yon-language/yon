@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -45,13 +46,11 @@ def _refused(tmp_path, body):
 
 def test_the_rule_of_the_if_is_not_a_rule_of_the_kernel(tmp_path):
     # without the match on b the kernel has nothing to compute: the proof is the two cases
-    _refused(tmp_path, "  fun if_same(b: Boolean, x: Term): (if b then x else x) = x {\n"
-                       "    return clear\n  }\n")
+    _refused(tmp_path, program("test_meta_yon/test_the_rule_of_the_if_is_not_a_rule_of_the_kernel_1.yon"))
 
 
 def test_the_two_cases_do_not_prove_a_false_statement(tmp_path):
-    _refused(tmp_path, "  fun if_left(b: Boolean, x: Term, y: Term): (if b then x else y) = x {\n"
-                       "    return match b { true => clear, false => clear }\n  }\n")
+    _refused(tmp_path, program("test_meta_yon/test_the_two_cases_do_not_prove_a_false_statement_1.yon"))
 
 
 def _nat(tmp_path, proofs):
@@ -61,8 +60,8 @@ def _nat(tmp_path, proofs):
                                    '[world.W]\nobjects = ["Nat"]\nspaces = ["w"]\n\n'
                                    '[runtime]\nbackend = "memory"\n')
     (proj / "w").mkdir()
-    (proj / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
-    (proj / "w" / "Nat.yon").write_text("place Nat { this > zero :U succ Nat }\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_meta_yon/_nat_1.yon"))
+    (proj / "w" / "Nat.yon").write_text(program("test_meta_yon/_nat_2.yon"))
     (proj / "Entry.yon").write_text(
         "place Entry {\n"
         "  fun plus(a: Nat, b: Nat): Nat {\n"
@@ -73,37 +72,28 @@ def _nat(tmp_path, proofs):
                           capture_output=True, text=True, timeout=300)
 
 
-STEP = ("  fun step(t: Term): Term {\n"
-        "    return match t { yes => t, no => t, var as n => t,\n"
-        "      ite as (c, u, v) => match c { yes => u, no => v, var as n => t, ite as (x, y, z) => t } }\n"
-        "  }\n")
+STEP = (program("test_meta_yon/module_1.yon"))
 
 
 def test_a_step_computes_on_the_term_it_is_given(tmp_path):
-    r = _compile(_with_proofs(tmp_path, STEP +
-                 "  fun if_true(u: Term, v: Term): step((yes, u, v) ↪ ite) = u { return clear }\n"),
+    r = _compile(_with_proofs(tmp_path, program("test_meta_yon/test_a_step_computes_on_the_term_it_is_given_1.yon")),
                  tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_a_step_does_not_compute_to_the_other_branch(tmp_path):
-    _refused(tmp_path, STEP +
-             "  fun if_true(u: Term, v: Term): step((yes, u, v) ↪ ite) = v { return clear }\n")
+    _refused(tmp_path, program("test_meta_yon/test_a_step_does_not_compute_to_the_other_branch_1.yon"))
 
 
 def test_induction_computes_under_a_constructor(tmp_path):
     r = _nat(tmp_path,
-             "  proof fun zr(n: Nat): plus(n, zero) = n {\n"
-             "    return match n { zero => clear, succ as m => (s_, zr(m)) ↦ ap }\n  }\n"
-             "  proof fun sr(a: Nat, b: Nat): plus(a, b ↪ succ) = plus(a, b) ↪ succ {\n"
-             "    return match a { zero => clear, succ as m => (s_, sr(m, b)) ↦ ap }\n  }\n")
+             program("test_meta_yon/test_induction_computes_under_a_constructor_1.yon"))
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_induction_does_not_prove_a_false_statement(tmp_path):
     r = _nat(tmp_path,
-             "  proof fun bad(n: Nat): plus(n, zero) = zero {\n"
-             "    return match n { zero => clear, succ as m => (s_, bad(m)) ↦ ap }\n  }\n")
+             program("test_meta_yon/test_induction_does_not_prove_a_false_statement_1.yon"))
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "mismatch" in out, out
 
@@ -117,40 +107,37 @@ def _rule(tmp_path, body, *words):
 
 
 def test_a_proof_fun_that_does_not_terminate_is_refused(tmp_path):
-    _rule(tmp_path, "  proof fun giro(n: Nat): Nat { return giro(n) }\n",
+    _rule(tmp_path, program("test_meta_yon/test_a_proof_fun_that_does_not_terminate_is_refused_1.yon"),
           "proof fun giro", "termination check")
 
 
 def test_a_proof_fun_that_is_given_is_refused(tmp_path):
     # outside the prelude no fun is given, a proof fun neither: the refusal comes first, as E2007
-    r = _nat(tmp_path, "  proof fun assioma(n: Nat): n = n is given\n")
+    r = _nat(tmp_path, program("test_meta_yon/test_a_proof_fun_that_is_given_is_refused_1.yon"))
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2007" in out and "fun assioma is given" in out, out
 
 
 def test_a_proof_fun_with_forever_is_refused(tmp_path):
-    _rule(tmp_path, "  proof fun gira: Number {\n    forever { x := 1 }\n    return 0\n  }\n",
+    _rule(tmp_path, program("test_meta_yon/test_a_proof_fun_with_forever_is_refused_1.yon"),
           "proof fun gira", "forever is refused: a proof terminates")
 
 
 def test_a_proof_fun_with_while_is_refused(tmp_path):
-    _rule(tmp_path, "  proof fun gira: Number {\n    while true do { x := 1 }\n    return 0\n  }\n",
+    _rule(tmp_path, program("test_meta_yon/test_a_proof_fun_with_while_is_refused_1.yon"),
           "proof fun gira", "while is refused: a proof terminates")
 
 
 def test_a_proof_fun_calls_only_certified_funs(tmp_path):
     # giro is a fun like any other and compiles, but it does not terminate: a proof that rests
     # on it would prove anything
-    _rule(tmp_path, "  fun giro(n: Nat): Nat { return giro(n) }\n"
-                    "  proof fun usa(n: Nat): Nat { return giro(n) }\n",
+    _rule(tmp_path, program("test_meta_yon/test_a_proof_fun_calls_only_certified_funs_1.yon"),
           "proof fun usa", "it calls giro,",
           "the termination check (SCT) does not certify")
 
 
 def test_a_proof_fun_is_not_called_by_code_that_runs(tmp_path):
-    _rule(tmp_path, "  proof fun zr(n: Nat): plus(n, zero) = n {\n"
-                    "    return match n { zero => clear, succ as m => (s_, zr(m)) ↦ ap }\n  }\n"
-                    "  fun usa: Number {\n    w := zr(zero)\n    return 0\n  }\n",
+    _rule(tmp_path, program("test_meta_yon/test_a_proof_fun_is_not_called_by_code_that_runs_1.yon"),
           "fun usa calls proof fun zr", "a proof has no run time")
 
 
@@ -161,13 +148,7 @@ def test_a_proof_fun_named_in_by_is_not_a_call_of_code_that_runs(tmp_path):
     proj = tmp_path / "eq"
     proj.mkdir()
     (proj / "Entry.yon").write_text(
-        "place Bool { this > tt :U ff }\nplace Bit { this > one :U zero }\nplace Entry {\n"
-        "  fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }\n"
-        "  fun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }\n"
-        "  proof fun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }\n"
-        "  proof fun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }\n"
-        "  fun main: Number {\n    bridge := b2bit <=> bit2b by eta, eps\n"
-        "    y := tt ↦ bridge\n    return match y { one => 1, zero => 0 }\n  }\n}\n")
+        program("test_meta_yon/test_a_proof_fun_named_in_by_is_not_a_call_of_code_that_runs_1.yon"))
     r = _compile(proj, tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
     assert subprocess.run([str(tmp_path / "exe")]).returncode == 1
@@ -198,8 +179,7 @@ def test_a_fun_that_is_not_a_proof_keeps_what_a_proof_refuses(tmp_path):
     proj = tmp_path / "free"
     proj.mkdir()
     (proj / "Entry.yon").write_text(
-        "place Entry {\n  fun giro(n: Number): Number { return giro(n) }\n"
-        "  fun main: Number { return 0 }\n}\n")
+        program("test_meta_yon/test_a_fun_that_is_not_a_proof_keeps_what_a_proof_refuses_1.yon"))
     r = _compile(proj, tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -262,9 +242,7 @@ def test_an_unannotated_parameter_does_not_prove_the_false(tmp_path):
     # the lambda's q is read by ite_injective at (yes, u, v) = (no, u, v): the q of bad is another
     # path, and one parameter has one type, so yes = no does not follow
     r = _compile(_with_theorem(tmp_path,
-        "  fun bad(u: Term, v: Term, d2: Step, q: (yes, u, v) ↪ ite = (d2 ↦ Step.src)): Term.yes = Term.no {\n"
-        "    k := fun(q) => ite_injective(yes, u, v, no, u, v, q)\n"
-        "    return k(q)\n  }\n"), tmp_path)
+        program("test_meta_yon/test_an_unannotated_parameter_does_not_prove_the_false_1.yon")), tmp_path)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "annotate the lambda parameter" in out, out
 
@@ -281,7 +259,7 @@ SRC_OF_ARM = {
     "inV": ("c{i}, u{i}, e{i}", "c{i}, u{i}, e{i} ↦ Step.src"),
 }
 TWO_STEPS = "d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.src)"
-FORGET = "  fun forget(a: Term, b: Term, p: a = b): Number { return 0 }\n"
+FORGET = program("test_meta_yon/module_2.yon")
 
 
 def _proof_rejected(tmp_path, theorem, *words):
@@ -328,21 +306,12 @@ def test_a_branch_does_not_read_q_at_the_arm_of_another(tmp_path):
 
 
 def test_q_is_not_specialized_before_the_match(tmp_path):
-    _proof_rejected(tmp_path, FORGET +
-        f"  proof fun early(u: Term, v: Term, u2: Term, v2: Term, {TWO_STEPS}): Number {{\n"
-        "    x := forget(yes, no, ite_injective(yes, u, v, no, u2, v2, q))\n"
-        "    return match d1 { ifTrue as (a, b) => x, ifFalse as (a, b) => x, ifSame as (a, b) => x,\n"
-        "      inC as (a, b, c) => x, inU as (a, b, c) => x, inV as (a, b, c) => x }\n  }\n",
+    _proof_rejected(tmp_path, program("test_meta_yon/test_q_is_not_specialized_before_the_match_1.yon"),
         "E2001", "parameter p expects", "Step__src(d1)")
 
 
 def test_a_scrutinee_that_is_not_a_variable_refines_nothing(tmp_path):
-    _proof_rejected(tmp_path, FORGET +
-        "  fun same(d: Step): Step { return d }\n"
-        f"  proof fun not_var({TWO_STEPS}, u: Term, v: Term, u2: Term, v2: Term): Number {{\n"
-        "    return match same(d1) { ifTrue as (a, b) => forget(yes, no, ite_injective(yes, a, b, no, u2, v2, q)),\n"
-        "      ifFalse as (a, b) => 0, ifSame as (a, b) => 0,\n"
-        "      inC as (a, b, c) => 0, inU as (a, b, c) => 0, inV as (a, b, c) => 0 }\n  }\n",
+    _proof_rejected(tmp_path, program("test_meta_yon/test_a_scrutinee_that_is_not_a_variable_refines_nothing_1.yon"),
         "E2001", "parameter p expects", "Step__src(d1)")
 
 
@@ -372,15 +341,12 @@ def test_recursion_on_the_same_step_does_not_terminate(tmp_path):
 
 def test_a_cycle_through_a_helper_does_not_terminate(tmp_path):
     # peak_of recurses through peak_of_in_c/u/v: a cycle through a helper must not pass the check
-    _rule(tmp_path, "  proof fun ping(n: Nat): Nat { return pong(n) }\n"
-                    "  proof fun pong(n: Nat): Nat { return ping(n) }\n", "termination check")
+    _rule(tmp_path, program("test_meta_yon/test_a_cycle_through_a_helper_does_not_terminate_1.yon"), "termination check")
 
 
 def test_a_path_over_a_boolean_is_read_at_the_branch(tmp_path):
     r = _compile(_with_theorem(tmp_path,
-        "  fun gone(e: Empty): Number { return 0 }\n"
-        "  proof fun at_true(b: Boolean, q: b = true): Number {\n"
-        "    return match b { true => 1, false => gone(absurd(inv(q))) }\n  }\n"), tmp_path)
+        program("test_meta_yon/test_a_path_over_a_boolean_is_read_at_the_branch_1.yon")), tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
 
 
@@ -389,15 +355,14 @@ def _with_one_arm(tmp_path, theorem):
     toml = proj / "yon.toml"
     toml.write_text(toml.read_text().replace('objects = [', 'objects = ["W", ', 1))
     (proj / "kernel" / "W.yon").write_text(
-        "place W {\n  this > only Term\n  fun inner(w: W): Term { return match w { only as t => t } }\n}\n")
+        program("test_meta_yon/_with_one_arm_1.yon"))
     return proj
 
 
 def test_a_binder_does_not_capture_a_name_of_the_statement(tmp_path):
     # the u of the statement is the outer one: this would prove that every term is every other
     r = _compile(_with_one_arm(tmp_path,
-        "  fun captured(w: W, u: Term): (w ↦ W.inner) = u {\n"
-        "    return match w { only as u => clear }\n  }\n"), tmp_path)
+        program("test_meta_yon/test_a_binder_does_not_capture_a_name_of_the_statement_1.yon")), tmp_path)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "mismatch" in out, out
 
@@ -405,16 +370,14 @@ def test_a_binder_does_not_capture_a_name_of_the_statement(tmp_path):
 def test_a_binder_does_not_capture_a_name_in_the_context(tmp_path):
     # the u of q is the outer one, and it stays so in the branch that hides it
     r = _compile(_with_one_arm(tmp_path,
-        "  fun captured(w: W, u: Term, q: (w ↦ W.inner) = u): u = u {\n"
-        "    return match w { only as u => inv(q) }\n  }\n"), tmp_path)
+        program("test_meta_yon/test_a_binder_does_not_capture_a_name_in_the_context_1.yon")), tmp_path)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "mismatch" in out, out
 
 
 def test_a_binder_that_hides_a_name_leaves_a_true_statement_true(tmp_path):
     r = _compile(_with_one_arm(tmp_path,
-        "  fun kept(w: W, u: Term, q: (w ↦ W.inner) = u): (w ↦ W.inner) = u {\n"
-        "    return match w { only as u => q }\n  }\n"), tmp_path)
+        program("test_meta_yon/test_a_binder_that_hides_a_name_leaves_a_true_statement_true_1.yon")), tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
 
 
@@ -425,8 +388,8 @@ def _empty(tmp_path, funs):
                                     '[world.W]\nobjects = ["Empty"]\nspaces = ["w"]\n\n'
                                     '[runtime]\nbackend = "memory"\n')
     (proj / "w").mkdir()
-    (proj / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
-    (proj / "w" / "Empty.yon").write_text("place Empty { this > nessuno Empty }\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_meta_yon/_empty_1.yon"))
+    (proj / "w" / "Empty.yon").write_text(program("test_meta_yon/_empty_2.yon"))
     (proj / "Entry.yon").write_text("place Entry {\n" + funs + "  fun main: Number { return 0 }\n}\n")
     return subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                           capture_output=True, text=True, timeout=300), proj
@@ -435,14 +398,14 @@ def _empty(tmp_path, funs):
 def test_exfalso_is_elimination_by_structural_recursion(tmp_path):
     # Empty has no base case: elimination recurses on the subterm carried by nessuno
     r, _ = _empty(tmp_path,
-                  "  proof fun exfalso<T>(e: Empty): T { return match e { nessuno as x => x ↦ exfalso } }\n")
+                  program("test_meta_yon/test_exfalso_is_elimination_by_structural_recursion_1.yon"))
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_exfalso_must_recurse_on_the_subterm(tmp_path):
     # a version that recurses on e instead of the subterm x does not terminate
     r, proj = _empty(tmp_path,
-                     "  proof fun exfalso<T>(e: Empty): T { return match e { nessuno as x => e ↦ exfalso } }\n")
+                     program("test_meta_yon/test_exfalso_must_recurse_on_the_subterm_1.yon"))
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2010" in out and "termination" in out and "exfalso" in out, out
     # fn_loc usa $startpos di una regola che comincia con boption(INTERNAL): riporta la riga del
@@ -499,8 +462,7 @@ def test_peak_of_refuses_a_path_between_different_terms(tmp_path):
     # peak_of asks q to link the two sources: a q from the source of d1 to the target of d2
     # is a different equality, and the call is refused before any peak is built
     out, proj = _proof_rejected(tmp_path,
-        "  fun bad(d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.tgt)): Peak {\n"
-        "    return peak_of(d1, d2, q)\n  }\n",
+        program("test_meta_yon/test_peak_of_refuses_a_path_between_different_terms_1.yon"),
         "E2001", "Proofs__peak_of", "parameter q expects", "Step__src(d2)")
     line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "return peak_of(d1, d2, q)")
     assert f"[line {line}," in out, out

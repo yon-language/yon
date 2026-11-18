@@ -1,0 +1,3 @@
+place Entry {
+fun main: Number { return match (42 ↪ Lookup.Found) { Found as v => v, Absent => 0 } }
+}

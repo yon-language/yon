@@ -1,0 +1,1 @@
+fun bad<T uses Monoid>(x: T): Number { return T.op(x, 1) }

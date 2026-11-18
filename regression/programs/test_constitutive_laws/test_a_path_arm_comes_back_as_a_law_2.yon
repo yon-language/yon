@@ -1,0 +1,4 @@
+fun f(l: Lista): Number {
+  return match l { Vuota => 42, Testa as (h, t) => 42, dup => walk i => 42 }
+}
+fun run: Number { return f(Vuota) }

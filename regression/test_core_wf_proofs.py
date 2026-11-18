@@ -38,6 +38,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = Path(
@@ -203,7 +204,7 @@ def test_a_path_between_paths_is_certified(tmp_path):
         '[package]\nname = "quadrato"\n\n[world.W]\nobjects = ["Bool"]\n\n'
         '[runtime]\nbackend = "memory"\n')
     (proj / "Entry.yon").write_text(
-        'place Bool { this > tt :U ff }\nplace Entry {\nproof fun quadrato(a: Bool, p: a = a): p = p { return clear p }\nfun main(): Number {\n  return 1\n}\n}\n')
+        program("test_core_wf_proofs/test_a_path_between_paths_is_certified_1.yon"))
     rc, err = _compile(proj)
     assert rc == 0, err[-800:]
     certified, _ = _kernel_names(err)

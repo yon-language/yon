@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    q := .-> Q { n 3 name "ab" }
+    return Text.length(q.name) * 10 + q.n
+  }
+}

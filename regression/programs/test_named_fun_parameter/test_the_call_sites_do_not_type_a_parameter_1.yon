@@ -1,0 +1,6 @@
+fun f(x) { return 42 }
+fun main: Number {
+  a := f(1)
+  b := f("a")
+  return a
+}

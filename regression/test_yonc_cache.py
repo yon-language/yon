@@ -14,6 +14,7 @@ import shutil
 import subprocess
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -78,8 +79,8 @@ def test_two_files_of_one_directory_are_two_compilations(tmp_path):
     # both read the same directory (the signatures of their imports): the key
     # says which one is compiled
     cache = tmp_path / "cache"
-    (tmp_path / "one.yon").write_text("place Entry {\n  fun main: Number { return 11 }\n}\n")
-    (tmp_path / "two.yon").write_text("place Entry {\n  fun main: Number { return 22 }\n}\n")
+    (tmp_path / "one.yon").write_text(program("test_yonc_cache/test_two_files_of_one_directory_are_two_compilations_1.yon"))
+    (tmp_path / "two.yon").write_text(program("test_yonc_cache/test_two_files_of_one_directory_are_two_compilations_2.yon"))
     assert _yonc(tmp_path / "one.yon", tmp_path / "o1", cache).returncode == 0
     assert _yonc(tmp_path / "two.yon", tmp_path / "o2", cache).returncode == 0
     assert _verdict(tmp_path / "o1")[0] == 11 and _verdict(tmp_path / "o2")[0] == 22

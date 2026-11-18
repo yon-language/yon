@@ -1,0 +1,7 @@
+place Entry {}
+fun main(): Number {
+  m := HashMap.set(HashMap.empty, Text.concat("ab", "c"), 7)
+  m2 := HashMap.set(m, Text.concat("a", "bc"), 9)
+  got := match HashMap.get(m2, "abc") { Found as v => v, Absent => 0 }
+  return HashMap.size(m2) * 10 + got
+}

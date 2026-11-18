@@ -1,0 +1,6 @@
+place Entry {
+  fun Fam(x: Number): Type_0 { return number }
+  fun Gam(x: Number): Type_0 { return text }
+  fun cast(e: El(Fam(7))): El(Gam(7)) { return e }
+  fun main: Number { return 0 }
+}

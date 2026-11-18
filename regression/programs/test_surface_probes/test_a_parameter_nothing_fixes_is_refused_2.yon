@@ -1,0 +1,6 @@
+place Entry {
+fun main: Number {
+  x := 1 ↪ Full
+  return 0
+}
+}

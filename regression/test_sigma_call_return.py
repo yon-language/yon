@@ -14,14 +14,15 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
 
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
-MK = "  fun mk(d: Number): Σx : Number, (x = d) ∧ (x = d) { return pair(d, pair(refl(d), refl(d))) }\n"
-WIT = "  fun wit(d: Number): Σr : Number, r = d { return pair(d, refl(d)) }\n"
+MK = program("test_sigma_call_return/module_1.yon")
+WIT = program("test_sigma_call_return/module_2.yon")
 PAIR = "(Number, Number)"
 
 
@@ -63,38 +64,37 @@ def _refused(tmp_path, body, where, *words, reason="type mismatch"):
 # the proof read from the result of a call is a proof on the arguments
 
 def test_the_proof_read_from_a_call_is_on_the_argument(tmp_path):
-    _accepted(tmp_path, MK + "  fun use(e: Number): e = e { return fst(snd(mk(e))) }\n")
+    _accepted(tmp_path, program("test_sigma_call_return/test_the_proof_read_from_a_call_is_on_the_argument_1.yon"))
 
 
 def test_the_proof_used_on_another_argument_is_refused(tmp_path):
-    _refused(tmp_path, MK + "  fun use(e: Number, f: Number): e = f { return fst(snd(mk(e))) }\n",
+    _refused(tmp_path, program("test_sigma_call_return/test_the_proof_used_on_another_argument_is_refused_1.yon"),
              "fun use", "expected Id_Number(e, f)")
 
 
 def test_a_proof_on_the_names_of_the_parameters_proves_nothing_about_the_caller(tmp_path):
     # the hole: with the names of the callee left free, x and d were variables of this function,
     # and any two numbers were equal
-    _refused(tmp_path, MK + "  fun bad(x: Number, d: Number): x = d { return fst(snd(mk(0))) }\n",
+    _refused(tmp_path, program("test_sigma_call_return/test_a_proof_on_the_names_of_the_parameters_proves_nothing_about_the_caller_1.yon"),
              "fun bad", "Id_Number(x, d)")
 
 
 def test_the_second_proof_speaks_of_the_first_component_of_the_call(tmp_path):
-    _accepted(tmp_path, MK + "  fun use(e: Number): fst(mk(e)) = e { return snd(snd(mk(e))) }\n")
-    _refused(tmp_path, MK + "  fun use(e: Number, f: Number): fst(mk(f)) = e { return snd(snd(mk(e))) }\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_the_second_proof_speaks_of_the_first_component_of_the_call_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_the_second_proof_speaks_of_the_first_component_of_the_call_2.yon"),
              "fun use")
 
 
 def test_the_arguments_stand_all_at_once(tmp_path):
     # an argument may name another parameter: a and b are swapped, not collapsed
-    two = "  fun two(a: Number, b: Number, q: a = b): Σx : Number, (a = b) ∧ (a = b) { return pair(a, pair(q, q)) }\n"
+    two = program("test_sigma_call_return/test_the_arguments_stand_all_at_once_1.yon")
     _accepted(tmp_path, two + "  fun use(a: Number, b: Number, q: b = a): b = a { return fst(snd(two(b, a, q))) }\n")
     _refused(tmp_path, two + "  fun use(a: Number, b: Number, q: b = a): a = b { return fst(snd(two(b, a, q))) }\n",
              "fun use", "Id_Number(a, b)", "Id_Number(b, a)")
 
 
 def test_a_nested_sigma_speaks_of_the_arguments_at_every_depth(tmp_path):
-    three = ("  fun three(d: Number): Σa : Number, Σb : Number, (a = d) ∧ (b = d) "
-             "{ return pair(d, pair(d, pair(refl(d), refl(d)))) }\n")
+    three = (program("test_sigma_call_return/test_a_nested_sigma_speaks_of_the_arguments_at_every_depth_1.yon"))
     _accepted(tmp_path, three + "  fun use(e: Number): e = e { return fst(snd(snd(three(e)))) }\n"
                                 "  fun other(e: Number): fst(snd(three(e))) = e { return snd(snd(snd(three(e)))) }\n")
     _refused(tmp_path, three + "  fun bad(a: Number, d: Number): a = d { return fst(snd(snd(three(0)))) }\n",
@@ -104,8 +104,8 @@ def test_a_nested_sigma_speaks_of_the_arguments_at_every_depth(tmp_path):
 
 
 def test_a_call_flows_into_a_sigma_on_the_arguments(tmp_path):
-    _accepted(tmp_path, WIT + "  fun same(e: Number): Σw : Number, w = e { return wit(e) }\n")
-    _refused(tmp_path, WIT + "  fun other(e: Number, f: Number): Σw : Number, w = f { return wit(e) }\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_a_call_flows_into_a_sigma_on_the_arguments_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_a_call_flows_into_a_sigma_on_the_arguments_2.yon"),
              "fun other")
 
 
@@ -115,24 +115,24 @@ DECLARES = "declares return type"
 
 
 def test_a_binding_in_tail_position_flows_on_the_arguments(tmp_path):
-    _accepted(tmp_path, WIT + "  fun keeps(e: Number): Σw : Number, w = e { r := wit(e) }\n")
-    _refused(tmp_path, WIT + "  fun bad(e: Number, f: Number): Σw : Number, w = f { r := wit(e) }\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_a_binding_in_tail_position_flows_on_the_arguments_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_a_binding_in_tail_position_flows_on_the_arguments_2.yon"),
              "fun bad", reason=DECLARES)
 
 
 def test_a_call_in_tail_position_flows_on_the_arguments(tmp_path):
-    _accepted(tmp_path, WIT + "  fun keeps(e: Number): Σw : Number, w = e { wit(e) }\n")
-    _refused(tmp_path, WIT + "  fun bad(e: Number, f: Number): Σw : Number, w = f { wit(e) }\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_a_call_in_tail_position_flows_on_the_arguments_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_a_call_in_tail_position_flows_on_the_arguments_2.yon"),
              "fun bad", reason=DECLARES)
 
 
 def test_the_expected_binder_does_not_capture_in_tail_position(tmp_path):
-    _refused(tmp_path, W2 + "  fun bad(x: Number, q: x = 1): Σx : Number, (x = 0) ∧ (x = 1) { w2(x, q) }\n",
+    _refused(tmp_path, program("test_sigma_call_return/test_the_expected_binder_does_not_capture_in_tail_position_1.yon"),
              "fun bad", reason=DECLARES)
 
 
 def test_a_parameter_of_sigma_type_is_on_the_arguments(tmp_path):
-    takes = "  fun takes(d: Number, s: Σx : Number, x = d): Number { return fst(s) }\n"
+    takes = program("test_sigma_call_return/test_a_parameter_of_sigma_type_is_on_the_arguments_1.yon")
     _accepted(tmp_path, WIT + takes + "  fun use(e: Number): Number { return takes(e, wit(e)) }\n")
     _refused(tmp_path, WIT + takes + "  fun use(e: Number, f: Number): Number { return takes(e, wit(f)) }\n",
              "fun use", "parameter s", reason="takes")
@@ -140,7 +140,7 @@ def test_a_parameter_of_sigma_type_is_on_the_arguments(tmp_path):
 
 def test_a_pair_written_at_the_call_is_checked_against_the_sigma(tmp_path):
     # the fibre at the first component of the pair
-    wants = "  fun wants(d: Number, s: Σx : Number, (x = d) ∧ (x = d)): Number { return fst(s) }\n"
+    wants = program("test_sigma_call_return/test_a_pair_written_at_the_call_is_checked_against_the_sigma_1.yon")
     _accepted(tmp_path, wants + "  fun use(e: Number): Number { return wants(e, pair(e, pair(refl(e), refl(e)))) }\n")
     _refused(tmp_path, wants + "  fun use(e: Number, f: Number): Number "
                                "{ return wants(e, pair(f, pair(refl(f), refl(f)))) }\n",
@@ -149,7 +149,7 @@ def test_a_pair_written_at_the_call_is_checked_against_the_sigma(tmp_path):
 
 def test_a_sigma_argument_with_another_fibre_is_refused(tmp_path):
     # two products with the same components have the same fibre only if their paths are the same
-    plain = "  fun plain(s: Σx : Number, x = 1): Number { return fst(s) }\n"
+    plain = program("test_sigma_call_return/test_a_sigma_argument_with_another_fibre_is_refused_1.yon")
     _accepted(tmp_path, plain + "  fun use(s: Σr : Number, r = 1): Number { return plain(s) }\n")
     _refused(tmp_path, plain + "  fun use(s: Σr : Number, r = 2): Number { return plain(s) }\n",
              "fun use", "parameter s", reason="plain")
@@ -159,50 +159,47 @@ def test_a_sigma_argument_with_another_fibre_is_refused(tmp_path):
 
 def test_an_argument_named_as_the_binder_stays_the_argument(tmp_path):
     # with the capture the call would have the type Σr : Number, r = r
-    _accepted(tmp_path, WIT + "  fun keeps(r: Number): Σw : Number, w = r { return wit(r) }\n")
-    _refused(tmp_path, WIT + "  fun loses(r: Number): Σw : Number, w = w { return wit(r) }\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_an_argument_named_as_the_binder_stays_the_argument_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_an_argument_named_as_the_binder_stays_the_argument_2.yon"),
              "fun loses")
 
 
 def test_the_proof_read_with_an_argument_named_as_the_binder(tmp_path):
-    _accepted(tmp_path, MK + "  fun use(x: Number): x = x { return fst(snd(mk(x))) }\n")
-    _refused(tmp_path, MK + "  fun bad(x: Number, y: Number): y = x { return fst(snd(mk(x))) }\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_the_proof_read_with_an_argument_named_as_the_binder_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_the_proof_read_with_an_argument_named_as_the_binder_2.yon"),
              "fun bad", "Id_Number(y, x)")
 
 
 def test_an_argument_inside_an_expression_named_as_the_binder(tmp_path):
     # the name of the binder is inside the argument, not the whole of it
-    _accepted(tmp_path, WIT + "  fun keeps(r: Number): Σw : Number, w = r + 1 { return wit(r + 1) }\n")
-    _refused(tmp_path, WIT + "  fun loses(r: Number): Σw : Number, w = w + 1 { return wit(r + 1) }\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_an_argument_inside_an_expression_named_as_the_binder_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_an_argument_inside_an_expression_named_as_the_binder_2.yon"),
              "fun loses")
 
 
 def test_an_argument_named_as_an_inner_binder_stays_the_argument(tmp_path):
-    inner = ("  fun inner(d: Number): Σa : Number, Σb : Number, b = d "
-             "{ return pair(d, pair(d, refl(d))) }\n")
+    inner = (program("test_sigma_call_return/test_an_argument_named_as_an_inner_binder_stays_the_argument_1.yon"))
     _accepted(tmp_path, inner + "  fun keeps(b: Number): Σw : Number, Σz : Number, z = b { return inner(b) }\n")
     _refused(tmp_path, inner + "  fun loses(b: Number): Σw : Number, Σz : Number, z = z { return inner(b) }\n",
              "fun loses")
 
 
-W2 = "  fun w2(d: Number, q: d = 1): Σr : Number, (r = 0) ∧ (d = 1) { return pair(0, pair(refl(0), q)) }\n"
+W2 = program("test_sigma_call_return/module_3.yon")
 
 
 def test_the_expected_binder_does_not_capture_the_argument_of_a_call(tmp_path):
     # with the capture bad would say that one number is equal to 0 and to 1
-    _refused(tmp_path, W2 + "  fun bad(x: Number, q: x = 1): Σx : Number, (x = 0) ∧ (x = 1) { return w2(x, q) }\n",
+    _refused(tmp_path, program("test_sigma_call_return/test_the_expected_binder_does_not_capture_the_argument_of_a_call_1.yon"),
              "fun bad")
 
 
 def test_the_call_flows_into_an_expected_binder_with_another_name(tmp_path):
-    _accepted(tmp_path, W2 + "  fun keeps(x: Number, q: x = 1): Σw : Number, (w = 0) ∧ (x = 1) { return w2(x, q) }\n")
+    _accepted(tmp_path, program("test_sigma_call_return/test_the_call_flows_into_an_expected_binder_with_another_name_1.yon"))
 
 
 def test_the_expected_binder_does_not_capture_a_variable_in_a_pair_in_a_variable(tmp_path):
     # the type of p has no binder of its own: the x of its fibre is the parameter
-    _refused(tmp_path, "  fun bad(x: Number, q: x = 1): Σx : Number, x = 1 {\n"
-                       "    p := pair(0, q)\n"
-                       "    return p\n  }\n",
+    _refused(tmp_path, program("test_sigma_call_return/test_the_expected_binder_does_not_capture_a_variable_in_a_pair_in_a_variable_1.yon"),
              "return p")
 
 
@@ -219,7 +216,7 @@ def test_the_pair_built_with_a_first_component_named_as_a_binder(tmp_path):
 
 def test_a_parameter_named_as_the_binder_is_hidden_by_it(tmp_path):
     # the binder hides the parameter of its name: the fibre speaks of the binder
-    hid = "  fun hid(x: Number): Σx : Number, x = x { return pair(x, refl(x)) }\n"
+    hid = program("test_sigma_call_return/test_a_parameter_named_as_the_binder_is_hidden_by_it_1.yon")
     _accepted(tmp_path, hid + "  fun use(e: Number): Number { return fst(hid(e)) }\n"
                               "  fun read(e: Number): fst(hid(e)) = fst(hid(e)) { return snd(hid(e)) }\n")
 
@@ -227,8 +224,7 @@ def test_a_parameter_named_as_the_binder_is_hidden_by_it(tmp_path):
 # a fibre that reads the binder or a parameter through fst and snd
 
 def test_the_binder_under_a_projection_in_the_fibre(tmp_path):
-    fib = (f"  fun fib(d: Number): Σp : {PAIR}, fst(p) = d "
-           "{ return pair(pair(d, 0), refl(d)) }\n")
+    fib = (program("test_sigma_call_return/test_the_binder_under_a_projection_in_the_fibre_1.yon"))
     _accepted(tmp_path, fib + "  fun use(e: Number): e = e { return snd(fib(e)) }\n")
     _refused(tmp_path, fib + f"  fun bad(p: {PAIR}, d: Number): fst(p) = d {{ return snd(fib(0)) }}\n",
              "fun bad")
@@ -236,7 +232,7 @@ def test_the_binder_under_a_projection_in_the_fibre(tmp_path):
 
 def test_a_parameter_under_a_projection_in_the_result(tmp_path):
     # the argument is the pair (7, 0), not a pair of the caller that bears the name of the parameter
-    k = f"  fun k(s: {PAIR}, q: s = pair(7, 0)): fst(s) = 7 {{ return k(s, q) }}\n"
+    k = program("test_sigma_call_return/test_a_parameter_under_a_projection_in_the_result_1.yon")
     _accepted(tmp_path, k + "  fun use: 7 = 7 { return k(pair(7, 0), refl(pair(7, 0))) }\n")
     _refused(tmp_path, k + f"  fun bad(s: {PAIR}): fst(s) = 7 {{ return k(pair(7, 0), refl(pair(7, 0))) }}\n",
              "fun bad")
@@ -245,29 +241,27 @@ def test_a_parameter_under_a_projection_in_the_result(tmp_path):
 def test_two_products_with_other_binders_under_a_projection(tmp_path):
     # the name of the binder does not tell two products apart, under fst either
     _accepted(tmp_path,
-              f"  fun left(d: Number, s: Σp : {PAIR}, fst(p) = d): Σq : {PAIR}, fst(q) = d {{ return s }}\n")
+              program("test_sigma_call_return/test_two_products_with_other_binders_under_a_projection_1.yon"))
     _refused(tmp_path,
-             f"  fun bad(d: Number, s: Σp : {PAIR}, fst(p) = d): Σq : {PAIR}, snd(q) = d {{ return s }}\n",
+             program("test_sigma_call_return/test_two_products_with_other_binders_under_a_projection_2.yon"),
              "fun bad")
 
 
 # a parameter that is a function, called in the type of the result
 
-INC = "  fun inc(n: Number): Number { return n + 1 }\n"
-CALLS = "  fun k(g: Number -> Number, q: g = inc): g(0) = 1 { return k(g, q) }\n"
+INC = program("test_sigma_call_return/module_4.yon")
+CALLS = program("test_sigma_call_return/module_5.yon")
 
 
 def test_a_called_parameter_is_the_argument(tmp_path):
-    _accepted(tmp_path, INC + CALLS + "  fun use: inc(0) = 1 { return k(inc, refl(inc)) }\n")
-    _refused(tmp_path, INC + CALLS + "  fun bad(g: Number -> Number): g(0) = 1 { return k(inc, refl(inc)) }\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_a_called_parameter_is_the_argument_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_a_called_parameter_is_the_argument_2.yon"),
              "fun bad")
 
 
 def test_a_parameter_named_as_a_fun_is_the_parameter(tmp_path):
     # what the substitution relies on: a name called is the parameter first, then the fun
-    r, exe = _compile(tmp_path, "place Entry {\n" + INC +
-                      "  fun k(inc: Number -> Number): Number { return inc(0) }\n"
-                      "  fun main: Number { return k(fun(x: Number) => x + 42) }\n}\n")
+    r, exe = _compile(tmp_path, program("test_sigma_call_return/test_a_parameter_named_as_a_fun_is_the_parameter_1.yon"))
     assert r.returncode == 0, r.stdout + r.stderr
     assert subprocess.run([str(exe)], capture_output=True, text=True, timeout=30).returncode == 42
 
@@ -275,25 +269,22 @@ def test_a_parameter_named_as_a_fun_is_the_parameter(tmp_path):
 # a cell: its type does not change, so a proof read from it stays true
 
 def test_a_cell_keeps_the_statement_of_its_first_value(tmp_path):
-    _refused(tmp_path, WIT + "  fun bad: Number {\n"
-                             "    mut c := wit(1)\n"
-                             "    c <- wit(2)\n"
-                             "    return fst(c)\n  }\n",
+    _refused(tmp_path, program("test_sigma_call_return/test_a_cell_keeps_the_statement_of_its_first_value_1.yon"),
              "c <- wit(2)")
 
 
 # a value in a variable: the proof speaks of that value
 
 def test_the_proof_read_from_a_variable_speaks_of_the_variable(tmp_path):
-    _accepted(tmp_path, f"  fun read(d: Number, s: Σx : Number, x = d): fst(s) = d {{ return snd(s) }}\n")
-    _refused(tmp_path, f"  fun bad(x: Number, d: Number, s: Σx : Number, x = d): x = d {{ return snd(s) }}\n",
+    _accepted(tmp_path, program("test_sigma_call_return/test_the_proof_read_from_a_variable_speaks_of_the_variable_1.yon"))
+    _refused(tmp_path, program("test_sigma_call_return/test_the_proof_read_from_a_variable_speaks_of_the_variable_2.yon"),
              "fun bad", "Id_Number(x, d)")
 
 
 def test_the_proof_of_a_comprehension_speaks_of_its_element(tmp_path):
-    _accepted(tmp_path, "  fun elem(a: Number, s: { x : Number where x = a }): fst(s) = a { return snd(s) }\n")
+    _accepted(tmp_path, program("test_sigma_call_return/test_the_proof_of_a_comprehension_speaks_of_its_element_1.yon"))
     _refused(tmp_path,
-             "  fun bad(x: Number, a: Number, s: { x : Number where x = a }): x = a { return snd(s) }\n",
+             program("test_sigma_call_return/test_the_proof_of_a_comprehension_speaks_of_its_element_2.yon"),
              "fun bad", "Id_Number(x, a)")
 
 
@@ -314,11 +305,7 @@ def _on_the_kernel(tmp_path, body):
 # what peak_of asks of it: the proofs of a recursive call, whose result does not compute. The
 # project of the kernel is a project of proofs: a proof reaches no native code
 
-SAME = ("  proof fun same(n: Nat): Σm : Nat, m = n {\n"
-        "    return match n {\n"
-        "      zero => pair(zero, refl(zero)),\n"
-        "      succ as k => pair(fst(same(k)) ↪ succ, (fun(x: Nat) => x ↪ succ, snd(same(k))) ↦ ap)\n"
-        "    }\n  }\n")
+SAME = (program("test_sigma_call_return/module_6.yon"))
 
 
 def _kernel_refusal(r, body, where):
@@ -343,55 +330,43 @@ def test_the_proof_of_the_recursive_call_says_only_its_argument(tmp_path):
 
 
 def test_a_recursive_proof_used_on_another_number_is_refused(tmp_path):
-    body = SAME + "  proof fun bad(n: Nat, k: Nat): fst(same(k)) = n { return snd(same(k)) }\n"
+    body = program("test_sigma_call_return/test_a_recursive_proof_used_on_another_number_is_refused_1.yon")
     _kernel_refusal(_on_the_kernel(tmp_path, body), body, "fun bad")
 
 
 # the binder of a branch inside an endpoint does not capture an argument either
 
-PICK = ("  proof fun pick(d: Nat, n: Nat): (match n { zero => d, succ as k => d }) = d {\n"
-        "    return match n { zero => refl(d), succ as k => refl(d) }\n  }\n")
+PICK = (program("test_sigma_call_return/module_7.yon"))
 
 
 def test_an_argument_named_as_the_binder_of_a_branch_stays_the_argument(tmp_path):
     # with the capture the endpoint would compute to the payload, zero, and not to k
-    r = _on_the_kernel(tmp_path, PICK + "  proof fun use(k: Nat): k = k { return pick(k, zero ↪ succ) }\n")
+    r = _on_the_kernel(tmp_path, program("test_sigma_call_return/test_an_argument_named_as_the_binder_of_a_branch_stays_the_argument_1.yon"))
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_the_argument_in_a_branch_is_not_the_payload(tmp_path):
-    body = PICK + "  proof fun bad(k: Nat): zero = k { return pick(k, zero ↪ succ) }\n"
+    body = program("test_sigma_call_return/test_the_argument_in_a_branch_is_not_the_payload_1.yon")
     _kernel_refusal(_on_the_kernel(tmp_path, body), body, "fun bad")
 
 
 STATED = "Σp : Peak, (p ↦ Peak.left = d1) ∧ (p ↦ Peak.right = d2)"
-READ = (f"  proof fun left_of(d1: Step, d2: Step, s: {STATED}): fst(s) ↦ Peak.left = d1 {{\n"
-        "    return fst(snd(s))\n  }\n"
-        f"  proof fun right_of(d1: Step, d2: Step, s: {STATED}): fst(s) ↦ Peak.right = d2 {{\n"
-        "    return snd(snd(s))\n  }\n")
+READ = (program("test_sigma_call_return/module_8.yon"))
 AT_ARGS = "s: Σr : Peak, (r ↦ Peak.left = e) ∧ (r ↦ Peak.right = f)"
 
 
 def test_the_statement_of_peak_of_is_read_on_the_arguments_in_the_kernel(tmp_path):
-    r = _on_the_kernel(tmp_path, READ +
-                       f"  proof fun read(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = e {{\n"
-                       "    return left_of(e, f, s)\n  }\n"
-                       f"  proof fun read_right(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.right = f {{\n"
-                       "    return right_of(e, f, s)\n  }\n")
+    r = _on_the_kernel(tmp_path, program("test_sigma_call_return/test_the_statement_of_peak_of_is_read_on_the_arguments_in_the_kernel_1.yon"))
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_the_statement_of_peak_of_on_the_other_step_is_refused_in_the_kernel(tmp_path):
-    r = _on_the_kernel(tmp_path, READ +
-                       f"  proof fun wrong(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = f {{\n"
-                       "    return left_of(e, f, s)\n  }\n")
+    r = _on_the_kernel(tmp_path, program("test_sigma_call_return/test_the_statement_of_peak_of_on_the_other_step_is_refused_in_the_kernel_1.yon"))
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "type mismatch" in out, out
 
 
 def test_the_statement_of_peak_of_with_its_steps_swapped_is_refused_in_the_kernel(tmp_path):
-    r = _on_the_kernel(tmp_path, READ +
-                       f"  proof fun swapped(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = e {{\n"
-                       "    return left_of(f, e, s)\n  }\n")
+    r = _on_the_kernel(tmp_path, program("test_sigma_call_return/test_the_statement_of_peak_of_with_its_steps_swapped_is_refused_in_the_kernel_1.yon"))
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "left_of" in out and "parameter s" in out, out

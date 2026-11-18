@@ -1,0 +1,3 @@
+place Rel {
+  fun qualsiasi(a: Number, b: Number): Type { return Number }
+}

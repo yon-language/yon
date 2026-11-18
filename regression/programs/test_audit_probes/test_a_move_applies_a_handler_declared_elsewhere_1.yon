@@ -1,0 +1,4 @@
+place Celsius {
+  degrees Number
+  fun halve(c: Number): Number { return c / 2 }
+}

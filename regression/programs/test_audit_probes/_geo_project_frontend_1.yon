@@ -1,0 +1,5 @@
+import "x/geo"
+place Entry { }
+fun main: Number {
+  return geo::apply(fun(y: Number) => y + 1, 1)
+}

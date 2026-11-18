@@ -1,0 +1,6 @@
+place Entry {
+  fun main(): Number {
+    mut m := Q.build(10)
+    return HashMap.size(m) + (match HashMap.get(m, 3) { Found as v => v, Absent => 0 })
+  }
+}

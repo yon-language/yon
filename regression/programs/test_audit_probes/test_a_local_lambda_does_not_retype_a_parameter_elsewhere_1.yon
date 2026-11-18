@@ -1,0 +1,8 @@
+place Entry {
+fun a: Number {
+  g := fun(x: Number) => x + 1
+  return g(1)
+}
+fun b(g: Number): Number { return g + 40 }
+fun main: Number { return a + b(0) }
+}

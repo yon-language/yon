@@ -1,0 +1,8 @@
+place Entry {
+fun ident(y: Number): Number { return y }
+fun twice(f: Number -> Number, x: Number): Number { return f(x) + f(x) }
+fun main(): Number {
+  mut d := twice(ident, IO.print_num(5))
+  return 3
+}
+}

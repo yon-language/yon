@@ -1,0 +1,6 @@
+place Weak {
+  this < Monoid
+  operation inv(a: Weak): Weak
+  law inverse_of_unit inv(unit) = unit
+}
+place Weaker { this < Weak }

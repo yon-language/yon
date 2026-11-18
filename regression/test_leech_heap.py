@@ -20,6 +20,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -28,14 +29,7 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missin
 
 _TOML = '[package]\nname = "probe"\n\n[runtime]\nbackend = "memory"\n'
 _HELPERS = (
-    "fun int64(n: Int64): Int64 { return n }\n"
-    "fun word64(n: Int64): Word64 { return Word64.from_int64(n) }\n"
-    "/* the point of index i, the program stopped with 2 if there is none */\n"
-    "fun point_at(i: Number, k: Number): Number {\n"
-    "  return match LatticePoint.at_index(i) {\n"
-    "    LatticePoint as p => with_point(p, k),\n"
-    "    DomainError as d => 2 }\n"
-    "}\n")
+    program("test_leech_heap/module_1.yon"))
 
 
 def _build(tmp_path: Path, main_body: str, extra: str = ""):
@@ -61,25 +55,14 @@ def _value(tmp_path, body, extra="", env=None):
     return _run(tmp_path, body, extra, env).returncode
 
 
-_NO_POINT = "fun with_point(p: LatticePoint, k: Number): Number { return k }\n"
+_NO_POINT = program("test_leech_heap/module_2.yon")
 
 
 def test_the_slot_of_a_value_is_the_index_of_its_point(tmp_path):
     # across the shell, every 997th index and the last: the value put at the
     # point is at generation 0, segment 0, slot = the MPHF index of the point
     extra = (
-        "fun with_point(p: LatticePoint, k: Number): Number {\n"
-        "  h := LeechHeap.put(k, p)\n"
-        "  return if LeechHeap.slot(h) == LeechHeap.place_of(h)\n"
-        "            and LeechHeap.segment(h) == int64(0) and LeechHeap.generation(h) == int64(0)\n"
-        "            and LeechHeap.level(h) == int64(4) and LeechHeap.value(h) == k\n"
-        "            and slot_number(h) == LatticePoint.index(p) then 0 else 1\n"
-        "}\n"
-        "/* the slot as a Number, counted up: the same bits as the index */\n"
-        "fun slot_number(h: LeechHeap<Number>): Number {\n"
-        "  mut n := 0\n  mut i := int64(0)\n"
-        "  while i < LeechHeap.slot(h) do {\n    n <- n + 1\n    i <- i + 1\n  }\n"
-        "  return n\n}\n")
+        program("test_leech_heap/test_the_slot_of_a_value_is_the_index_of_its_point_1.yon"))
     body = ("  mut bad := 0\n  mut i := 0\n"
             "  while i < 196560 do {\n"
             "    bad <- bad + point_at(i, i)\n"
@@ -92,29 +75,13 @@ def test_the_slot_of_a_value_is_the_index_of_its_point(tmp_path):
 def test_a_point_already_written_takes_the_next_generation(tmp_path):
     # the first value stays where it was: write-once, nothing overwritten
     extra = (
-        "fun with_point(p: LatticePoint, k: Number): Number {\n"
-        "  a := LeechHeap.put(40, p)\n"
-        "  b := LeechHeap.put(41, p)\n"
-        "  c := LeechHeap.put(42, p)\n"
-        "  return if LeechHeap.generation(a) == int64(0) and LeechHeap.generation(b) == int64(1)\n"
-        "            and LeechHeap.generation(c) == int64(2)\n"
-        "            and LeechHeap.segment(c) == int64(2) and LeechHeap.slot(c) == LeechHeap.slot(a)\n"
-        "            and LeechHeap.next_generation(4, int64(123456)) == int64(3)\n"
-        "            and LeechHeap.value(a) == 40 and LeechHeap.value(b) == 41\n"
-        "            then LeechHeap.value(c) else 1\n"
-        "}\n")
+        program("test_leech_heap/test_a_point_already_written_takes_the_next_generation_1.yon"))
     assert _value(tmp_path, "  return point_at(123456, 0)\n", extra) == 42
 
 
 def test_a_handle_gives_back_the_value_of_its_type(tmp_path):
     extra = (
-        "fun with_point(p: LatticePoint, k: Number): Number {\n"
-        "  n := LeechHeap.value(LeechHeap.put(2.5, p))\n"
-        "  i := LeechHeap.value(LeechHeap.put(int64(-7), p))\n"
-        "  b := LeechHeap.value(LeechHeap.put(true, p))\n"
-        "  f := LeechHeap.value(LeechHeap.put(false, p))\n"
-        "  return if n == 2.5 and i == int64(-7) and b and not f then 42 else 1\n"
-        "}\n")
+        program("test_leech_heap/test_a_handle_gives_back_the_value_of_its_type_1.yon"))
     assert _value(tmp_path, "  return point_at(5, 0)\n", extra) == 42
 
 
@@ -124,10 +91,7 @@ def test_a_node_above_the_points_is_placed_by_its_level_and_its_interval(tmp_pat
     # places, so generation 31 of place 3 is segment 1, slot 3, and
     # generation 30 is segment 0, slot 30 * 6,143 + 3
     extra = (
-        "fun make_node(level: Int64, i: Int64, n: Int64): LeechHeap<Word64> {\n"
-        "  mut k := int64(0)\n"
-        "  while k < n do {\n    _ := LeechHeap.stage(word64(level * 100 + k))\n    k <- k + 1\n  }\n"
-        "  return LeechHeap.commit(level, i, n)\n}\n")
+        program("test_leech_heap/test_a_node_above_the_points_is_placed_by_its_level_and_its_interval_1.yon"))
     body = ("  r := make_node(0, 100, 24)\n"
             "  one := make_node(1, 40000, 3)\n"
             "  mut i := int64(0)\n"
@@ -173,10 +137,7 @@ def test_nothing_is_written_outside_the_geometry(tmp_path):
     # a level never written has no segment; the name of every handle is where
     # it is: slot = (generation mod per segment) * places + place
     extra = (
-        "fun with_point(p: LatticePoint, k: Number): Number {\n"
-        "  h := LeechHeap.put(k, p)\n"
-        "  return if LeechHeap.slot(h) == LeechHeap.place_of(h) then 0 else 1\n"
-        "}\n")
+        program("test_leech_heap/test_nothing_is_written_outside_the_geometry_1.yon"))
     body = ("  mut bad := 0\n  mut i := 0\n"
             "  while i < 1000 do {\n    bad <- bad + point_at(i * 196, i)\n    i <- i + 1\n  }\n"
             "  _ := LeechHeap.stage(word64(1))\n"
@@ -203,19 +164,7 @@ def test_a_node_born_while_its_child_is_born_keeps_its_words(tmp_path):
 
 
 _REPLICAS = (
-    "/* 2,000 values at the point of index 777: the sum of the generations\n"
-    "   this replica took, each value read back from its handle */\n"
-    "fun with_point(p: LatticePoint, k: Number): Number {\n"
-    "  mut s := 0\n  mut j := 0\n"
-    "  while j < 2000 do {\n"
-    "    h := LeechHeap.put(j, p)\n"
-    "    s <- s + (if LeechHeap.value(h) == j then generation_number(h) else 0 - 1000000000)\n"
-    "    j <- j + 1\n  }\n"
-    "  return s\n}\n"
-    "fun generation_number(h: LeechHeap<Number>): Number {\n"
-    "  mut n := 0\n  mut i := int64(0)\n"
-    "  while i < LeechHeap.generation(h) do {\n    n <- n + 1\n    i <- i + 1\n  }\n"
-    "  return n\n}\n")
+    program("test_leech_heap/module_3.yon"))
 _REPLICAS_MAIN = (
     "  sums := spawn in 2 parallel {\n    promote point_at(777, spawn_index)\n  }\n"
     "  total := sums.fold(0, fun(a: Number, v: Number) => a + v)\n"
@@ -237,8 +186,7 @@ def test_two_replicas_writing_one_point_at_once_take_distinct_generations(tmp_pa
 
 
 def test_a_word_past_a_slot_is_refused(tmp_path):
-    extra = ("fun with_point(p: LatticePoint, k: Number): Number {\n"
-             "  x := LeechHeap.word(LeechHeap.put(40, p), 5)\n  return 1\n}\n")
+    extra = (program("test_leech_heap/test_a_word_past_a_slot_is_refused_1.yon"))
     r = _run(tmp_path, "  return point_at(3, 0)\n", extra)
     assert r.returncode == 3, r.stderr
     assert "error: heap: word 5 of a value of 40 bytes" in r.stderr, r.stderr
@@ -272,14 +220,14 @@ def test_a_node_off_the_tree_is_refused(tmp_path, level, index):
 
 def test_a_handle_of_one_type_is_not_a_handle_of_another(tmp_path):
     rc, out, _ = _build(tmp_path, "  return 1\n",
-                        _NO_POINT + "fun wrong(h: LeechHeap<Number>): LeechHeap<Boolean> { return h }\n")
+                        program("test_leech_heap/test_a_handle_of_one_type_is_not_a_handle_of_another_1.yon"))
     assert rc != 0 and "E2001" in out, out
     assert "type mismatch: expected LeechHeap<Boolean>, got LeechHeap<Number>" in out, out
 
 
 def test_outside_the_heap_a_handle_is_not_its_word(tmp_path):
     rc, out, _ = _build(tmp_path, "  return 1\n",
-                        _NO_POINT + "fun raw(h: LeechHeap<Number>): Int64 { return h }\n")
+                        program("test_leech_heap/test_outside_the_heap_a_handle_is_not_its_word_1.yon"))
     assert rc != 0 and "E2001" in out, out
     assert "type mismatch: expected Int64, got LeechHeap<Number>" in out, out
 
@@ -289,13 +237,11 @@ def test_a_handle_does_not_cross_a_space(tmp_path):
     (proj / "w").mkdir(parents=True)
     (proj / "yon.toml").write_text('[package]\nname = "cross"\n\n[world.W]\nspaces = ["w"]\n\n'
                                    '[runtime]\nbackend = "memory"\n')
-    (proj / "w" / "Topos.yon").write_text("topos where {\n}\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_leech_heap/test_a_handle_does_not_cross_a_space_1.yon"))
     (proj / "w" / "Other.yon").write_text(
-        "place Other {\n  fun keep(h: LeechHeap<Word64>): LeechHeap<Word64> { return h }\n}\n")
+        program("test_leech_heap/test_a_handle_does_not_cross_a_space_2.yon"))
     (proj / "Entry.yon").write_text(
-        "place Entry {\n  fun main(): Number {\n"
-        "    _ := LeechHeap.stage(Word64.from_int64(1))\n"
-        "    h := Other.keep(LeechHeap.commit(0, 0, 1))\n    return 42\n  }\n}\n")
+        program("test_leech_heap/test_a_handle_does_not_cross_a_space_3.yon"))
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=300)
     out = r.stdout + r.stderr

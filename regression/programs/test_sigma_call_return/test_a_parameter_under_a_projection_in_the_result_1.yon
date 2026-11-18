@@ -1,0 +1,1 @@
+  fun k(s: (Number, Number), q: s = pair(7, 0)): fst(s) = 7 { return k(s, q) }

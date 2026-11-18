@@ -1,0 +1,8 @@
+place Entry {}
+fun d: Decision { return Absent }
+fun l: Lookup<Number> { return Absent }
+fun main: Number {
+  mut x := match d { Present => 1, Absent => 2, Unknown => 3 }
+  y := match l { Found as v => 10, Absent => 20 }
+  return x * 100 + y
+}

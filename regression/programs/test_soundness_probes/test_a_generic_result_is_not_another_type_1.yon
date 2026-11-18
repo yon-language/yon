@@ -1,0 +1,4 @@
+place Entry {
+  fun identity<T>(x: T): T { return x }
+  fun main: Number { return Text.length(identity(5)) }
+}

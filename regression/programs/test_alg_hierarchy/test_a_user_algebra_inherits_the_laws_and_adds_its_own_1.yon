@@ -1,0 +1,5 @@
+place Seen uses algebra Tally {
+  this > Never :U Once
+  fun op(a: Seen, b: Seen): Seen { return match a { Never => b, Once => Once } }
+  fun unit: Seen { return Once }
+}

@@ -1,0 +1,1 @@
+  fun make(n: Int64): Sum { return n }

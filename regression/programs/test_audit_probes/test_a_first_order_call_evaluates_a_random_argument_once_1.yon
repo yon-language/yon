@@ -1,0 +1,1 @@
+fun twice(x: Number): Number { return ident(x) - ident(x) }

@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -32,15 +33,9 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not pr
 # The canonical block form: `place X { this > A :U B }`. Each arm is nullary,
 # carries a payload, or recurs into the type. (name, source, expected exit).
 BLOCK_FORMS = [
-    ("nullary", "place Bit { this > one :U zero }\n"
-                "fun v(b: Bit): Number { return match b { one => 1, zero => 0 } }\n"
-                "fun main: Number { return v(one) }", 1),
-    ("payload", "place Val { this > Lit Number }\n"
-                "fun get(v: Val): Number { return match v { Lit as n => n } }\n"
-                "fun main: Number { return get(42 ↪ Lit) }", 42),
-    ("recursive", "place Term { this > Leaf Number :U Node Term }\n"
-                  "fun d(t: Term): Number { return match t { Leaf as n => n, Node as m => d(m) } }\n"
-                  "fun main: Number { return d(7 ↪ Leaf ↪ Node ↪ Node) }", 7),
+    ("nullary", program("test_place_as_object/module_1.yon"), 1),
+    ("payload", program("test_place_as_object/module_2.yon"), 42),
+    ("recursive", program("test_place_as_object/module_3.yon"), 7),
 ]
 
 
@@ -53,8 +48,7 @@ def test_block_form_declares_a_type(tmp_path, name, src, expected):
 # carry a `place Entry` so the program is otherwise valid.
 _INDUCTIVE = ("inductive Bit = O | I\n"
               "place Entry {\n  fun main: Number { return 0 }\n}\n")
-_PLACE_TWIN = ("place Bit { this > O :U I }\n"
-               "place Entry {\n  fun main: Number { return 0 }\n}\n")
+_PLACE_TWIN = (program("test_place_as_object/module_4.yon"))
 
 
 def test_inductive_keyword_is_gone(tmp_path):

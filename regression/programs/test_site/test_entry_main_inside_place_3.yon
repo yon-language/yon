@@ -1,0 +1,4 @@
+place Entry {
+  fun helper(x: Number): Number { return x + 1 }
+  fun main: Number { return helper(41) }
+}

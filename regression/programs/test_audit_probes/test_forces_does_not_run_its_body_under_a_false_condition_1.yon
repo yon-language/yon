@@ -1,0 +1,8 @@
+place Entry {}
+fun main(): Number {
+  mut acc := 0
+  forces Stage 1 == 2 {
+    acc <- acc + 5
+  }
+  return acc
+}

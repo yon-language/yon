@@ -1,0 +1,4 @@
+fun undo(n: Int64): Int64 {
+  _ := Text.print("undone")
+  return n + 1
+}

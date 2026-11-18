@@ -1,0 +1,4 @@
+place Codice { n Number
+  fun cliente_di(c: Codice): Cliente { return .-> Cliente { nome c.n } }
+  fun utente_di(c: Codice): Utente { return .-> Utente { nome c.n } }
+}

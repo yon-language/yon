@@ -1,0 +1,1 @@
+  fun bad(x: Number, a: Number, s: { x : Number where x = a }): x = a { return snd(s) }

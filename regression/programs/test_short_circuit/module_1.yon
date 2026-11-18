@@ -1,0 +1,4 @@
+fun seen(b: Boolean): Boolean {
+  _ := SystemOs.write_output("read\n")
+  return b
+}

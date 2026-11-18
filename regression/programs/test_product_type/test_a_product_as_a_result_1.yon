@@ -1,0 +1,1 @@
+  fun twin(x: Number): (Number, Number) { return pair(x, x + 1) }

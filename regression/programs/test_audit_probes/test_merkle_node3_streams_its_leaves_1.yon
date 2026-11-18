@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  mut n := MerkleTree.node3(9, MerkleTree.leaf(11), MerkleTree.leaf(22), MerkleTree.leaf(33))
+  return List.length(MerkleTree.to_stream(n))
+}

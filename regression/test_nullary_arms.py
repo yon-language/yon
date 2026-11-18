@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -25,7 +26,7 @@ def _build(tmp_path: Path, entry: str):
     proj = tmp_path / "proj"
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
-    (proj / "Chain.yon").write_text("place Chain<V> { this > Nil :U Link V Chain<V> }\n")
+    (proj / "Chain.yon").write_text(program("test_nullary_arms/_build_1.yon"))
     (proj / "Entry.yon").write_text(entry)
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)],
@@ -42,7 +43,7 @@ def _emit(tmp_path, entry):
     proj = tmp_path / "mproj"
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
-    (proj / "Chain.yon").write_text("place Chain<V> { this > Nil :U Link V Chain<V> }\n")
+    (proj / "Chain.yon").write_text(program("test_nullary_arms/_emit_1.yon"))
     (proj / "Entry.yon").write_text(entry)
     out = tmp_path / "m"
     out.mkdir()
@@ -52,23 +53,12 @@ def _emit(tmp_path, entry):
 
 
 def test_a_nullary_arm_and_a_payload_arm_are_told_apart(tmp_path):
-    entry = """place Entry {
-fun none(n: Number): Lookup<Number> { return Absent }
-fun some(n: Number): Lookup<Number> { return n ↪ Found }
-fun main: Number {
-  return match none(1) { Found as x => x, Absent => 40 } + match some(2) { Found as x => x, Absent => 0 }
-}
-}
-"""
+    entry = program("test_nullary_arms/test_a_nullary_arm_and_a_payload_arm_are_told_apart_1.yon")
     assert _value(tmp_path, entry) == 42
 
 
 def test_a_nullary_arm_is_a_constant_with_no_node(tmp_path):
-    entry = """place Entry {
-fun none(n: Number): Lookup<Number> { return Absent }
-fun main: Number { return match none(1) { Found as x => x, Absent => 42 } }
-}
-"""
+    entry = program("test_nullary_arms/test_a_nullary_arm_is_a_constant_with_no_node_1.yon")
     mlir = _emit(tmp_path, entry)
     body = mlir[mlir.index("func.func @none"):]
     body = body[:body.index("\n  }")]
@@ -76,42 +66,15 @@ fun main: Number { return match none(1) { Found as x => x, Absent => 42 } }
 
 
 def test_a_constant_inside_a_payload_comes_back(tmp_path):
-    entry = """place Entry {
-fun inner(n: Number): Lookup<Number> { return if n > 0 then n ↪ Found else Absent }
-fun outer(n: Number): Lookup<Lookup<Number>> { return inner(n) ↪ Found }
-fun main: Number {
-  a := match outer(0) { Found as l => (match l { Found as x => x, Absent => 40 }), Absent => 0 }
-  b := match outer(2) { Found as l => (match l { Found as x => x, Absent => 0 }), Absent => 0 }
-  return a + b
-}
-}
-"""
+    entry = program("test_nullary_arms/test_a_constant_inside_a_payload_comes_back_1.yon")
     assert _value(tmp_path, entry) == 42
 
 
 def test_a_recursive_chain_ends_in_its_nullary_arm(tmp_path):
-    entry = """place Entry {
-fun len(c: Chain<Number>): Number {
-  return match c { Nil => 0, Link as (x, rest) => 1 + len(rest) }
-}
-fun total(c: Chain<Number>): Number {
-  return match c { Nil => 0, Link as (x, rest) => x + total(rest) }
-}
-fun main: Number {
-  c := (7, (8, (24, Chain.Nil) ↪ Link) ↪ Link) ↪ Link
-  return len(c) * 0 + total(c) + 3
-}
-}
-"""
+    entry = program("test_nullary_arms/test_a_recursive_chain_ends_in_its_nullary_arm_1.yon")
     assert _value(tmp_path, entry) == 42
 
 
 def test_a_wildcard_branch_after_a_nullary_arm(tmp_path):
-    entry = """place Entry {
-fun pick(n: Number): Lookup<Number> { return if n > 0 then n ↪ Found else Absent }
-fun main: Number {
-  return match pick(0) { Absent => 42, _ => 1 }
-}
-}
-"""
+    entry = program("test_nullary_arms/test_a_wildcard_branch_after_a_nullary_arm_1.yon")
     assert _value(tmp_path, entry) == 42

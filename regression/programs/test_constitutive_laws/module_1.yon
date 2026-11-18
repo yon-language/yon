@@ -1,0 +1,1 @@
+place Cerchio { this > punto  law giro punto = punto }

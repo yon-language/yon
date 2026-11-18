@@ -1,0 +1,4 @@
+place Entry {
+  fun m: Int64 { return 9223372036854775808 }
+  fun main: Number { return 0 }
+}

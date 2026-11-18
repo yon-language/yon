@@ -1,0 +1,1 @@
+place Bag { label Text  counts HashMap<Number, Number> }

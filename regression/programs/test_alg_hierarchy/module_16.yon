@@ -1,0 +1,4 @@
+place Adds {
+  fun go(n: Int64): Int64 { return Sum.value(Sum.make(n) + Sum.make(2)) }
+  fun by_op(n: Int64): Int64 { return Sum.value(Sum.op(Sum.make(n), Sum.unit)) }
+}

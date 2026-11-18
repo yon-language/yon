@@ -1,0 +1,4 @@
+  fun loose(e: Empty): Number {
+    x := exfalso(e)
+    return 0
+  }

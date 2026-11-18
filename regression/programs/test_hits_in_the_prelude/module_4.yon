@@ -1,0 +1,2 @@
+place Persona { this > inl Cliente :U inr Utente
+  law glue ∀c : Codice, c ↦ Codice.cliente_di ↪ inl = c ↦ Codice.utente_di ↪ inr }

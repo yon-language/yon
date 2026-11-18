@@ -1,0 +1,5 @@
+place Entry {
+  fun main: Number {
+    w := spawn { mut i := 1  produce { i <- 2  emit i }  promote 1 }
+    return 0 }
+}

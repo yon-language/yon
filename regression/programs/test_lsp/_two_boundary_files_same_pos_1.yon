@@ -1,0 +1,2 @@
+fun fx(x: Number): Number { return x }
+place XP { }

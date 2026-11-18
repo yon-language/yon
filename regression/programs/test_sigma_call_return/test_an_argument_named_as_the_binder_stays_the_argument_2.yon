@@ -1,0 +1,2 @@
+  fun wit(d: Number): Σr : Number, r = d { return pair(d, refl(d)) }
+  fun loses(r: Number): Σw : Number, w = w { return wit(r) }

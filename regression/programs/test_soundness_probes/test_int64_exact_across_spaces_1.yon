@@ -1,0 +1,4 @@
+place Entry {
+  fun odd_remote(x: Int64): Number { return if Int64.is_odd(x) then 1 else 0 }
+  fun main: Number { return 0 }
+}

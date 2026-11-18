@@ -1,0 +1,5 @@
+place Folder<V> {
+  step (V, V) -> V
+  fun with_step<V>(s: (V, V) -> V): Folder<V> { return .-> Folder { step s } }
+  fun twice<V>(f: Folder<V>, x: V): V { g := f.step  return g(x, x) }
+}

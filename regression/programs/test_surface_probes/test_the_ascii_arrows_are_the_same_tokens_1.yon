@@ -1,0 +1,6 @@
+place Box { this > Full Number :U Empty }
+place Entry {
+fun inc(x: Number): Number { return x + 1 }
+fun get(b: Box): Number { return match b { Full as p => p, Empty => 0 } }
+fun main: Number { return 41 |-> inc >-> Full |-> get }
+}

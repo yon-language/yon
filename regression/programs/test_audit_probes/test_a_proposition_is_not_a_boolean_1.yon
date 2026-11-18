@@ -1,0 +1,5 @@
+place Entry {
+  fun f(b: Boolean): Number { return if b then 1 else 2 }
+  fun g(p: proposition): Number { return f(p) }
+  fun main: Number { return g(unknown) }
+}

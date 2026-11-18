@@ -1,0 +1,5 @@
+fun f(x: Number): Number {
+  y := Number.sqrt(x)
+  return match y { Number as v => v, DomainError as d => 50 }
+}
+fun main: Number { return f(0 - 4) }

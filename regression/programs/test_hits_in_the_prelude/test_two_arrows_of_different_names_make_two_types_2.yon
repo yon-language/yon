@@ -1,0 +1,4 @@
+place Uso {
+  fun f(p: Pushout<Codice, Cliente, Utente, Codice.cliente_di, Codice.utente_di>): Number { return 0 }
+  fun g(p: Pushout<Codice, Cliente, Utente, Altro.cliente_di, Codice.utente_di>): Number { return f(p) }
+}

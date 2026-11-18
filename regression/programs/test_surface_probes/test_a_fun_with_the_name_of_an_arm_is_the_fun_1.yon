@@ -1,0 +1,5 @@
+place Box { this > Full Number :U Empty }
+place Entry {
+fun main: Number { return 2 ↦ dbl }
+fun dbl(x: Number): Number { return x * 21 }
+}

@@ -1,0 +1,1 @@
+  fun second_of<T>(a: T, b: T): T { return b }

@@ -1,0 +1,3 @@
+place Entry {
+  fun main: Number { return Q.len("seven c") }
+}

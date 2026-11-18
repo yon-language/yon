@@ -1,0 +1,2 @@
+  fun up(p: (Number, Number)): Σx : Number, Number { return p }
+  fun down(p: Σx : Number, Number): (Number, Number) { return p }

@@ -1,0 +1,8 @@
+fun make_node(level: Int64, i: Int64, n: Int64): LeechHeap<Word64> {
+  mut k := int64(0)
+  while k < n do {
+    _ := LeechHeap.stage(word64(level * 100 + k))
+    k <- k + 1
+  }
+  return LeechHeap.commit(level, i, n)
+}

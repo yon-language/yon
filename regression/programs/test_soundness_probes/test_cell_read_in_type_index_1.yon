@@ -1,0 +1,10 @@
+place Entry {
+  fun main: Number {
+    mut c := 5
+    p := clear c
+    c <- 6
+    q := clear c
+    j := p ++ q
+    return (j @ I0) * 10 + (j @ I1)
+  }
+}

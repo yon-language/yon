@@ -1,0 +1,2 @@
+fun next_of<T uses Pointed>(x: T): T { return T.step(x) }
+fun answer(s: Side): Number { return match s { Left => 1, Right => 42 } }

@@ -1,0 +1,6 @@
+  proof fun same(n: Nat): Σm : Nat, m = n {
+    return match n {
+      zero => pair(zero, refl(zero)),
+      succ as k => pair(fst(same(k)) ↪ succ, (fun(x: Nat) => x ↪ succ, snd(same(k))) ↦ ap)
+    }
+  }

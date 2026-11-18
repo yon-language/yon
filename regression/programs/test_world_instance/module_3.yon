@@ -1,0 +1,8 @@
+place Entry {
+  fun main(): Number {
+    a := Wire.make_shm(5, 1)
+    b := Wire.make_shm(6, 1)
+    mut v := Wire.await_shm(6)
+    return if v == 7 then 0 else 1
+  }
+}

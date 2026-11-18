@@ -1,0 +1,5 @@
+place Box { v Number }
+place Entry {
+  fun mk { return .-> Box { v 1 } }
+  fun main: Number { mut n := mk + 1  return n }
+}

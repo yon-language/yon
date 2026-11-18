@@ -1,0 +1,1 @@
+  fun takes(d1: Number, d2: Number, s: Σp : Peak, (p ↦ Peak.left = d1) ∧ (p ↦ Peak.right = d2)): Number { return 0 }

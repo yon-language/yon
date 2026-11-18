@@ -1,0 +1,12 @@
+place NumList { this > Nil :U Cons Number NumList }
+place Entry { }
+fun sum(xs: NumList): Number {
+  return match xs {
+    Nil => 0,
+    Cons as (h, t) => h + sum(t)
+  }
+}
+fun main: Number {
+  xs := (5, ((37, NumList.Nil) ↪ NumList.Cons)) ↪ NumList.Cons
+  return sum(xs)
+}

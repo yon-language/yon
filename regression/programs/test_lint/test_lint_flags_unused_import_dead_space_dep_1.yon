@@ -1,0 +1,3 @@
+import svc::used_op from A
+import svc::dead_op from B
+fun main: Number { a := used_op(5)  return a }

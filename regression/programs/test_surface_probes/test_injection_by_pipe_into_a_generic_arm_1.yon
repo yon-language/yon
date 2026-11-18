@@ -1,0 +1,8 @@
+place Entry {
+fun concreto(x: Number): Lookup<Number> { return x ↪ Found }
+fun generico<V>(x: V): Lookup<V> { return x ↪ Found }
+fun leggi(l: Lookup<Number>): Number {
+  return match l { Found as p => p, Absent => 0 }
+}
+fun main: Number { return leggi(concreto(40)) + leggi(generico(2)) }
+}

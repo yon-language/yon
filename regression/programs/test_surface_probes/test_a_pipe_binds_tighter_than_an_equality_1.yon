@@ -1,0 +1,6 @@
+place Entry {
+fun inc(x: Number): Number { return x + 1 }
+fun add(a: Number, b: Number): Number { return a + b }
+fun add3(a: Number, b: Number, c: Number): Number { return a + b + c }
+fun main: Number { return if 1 ↦ inc == 2 ↦ inc then 1 else 42 }
+}

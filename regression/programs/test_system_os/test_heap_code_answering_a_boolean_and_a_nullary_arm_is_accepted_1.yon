@@ -1,0 +1,2 @@
+  fun is_zero(r: Region, i: Int64): Boolean { return read_word(r, i) == Word64.zero }
+  fun probe_first(r: Region): Lookup<Word64> { return Absent }

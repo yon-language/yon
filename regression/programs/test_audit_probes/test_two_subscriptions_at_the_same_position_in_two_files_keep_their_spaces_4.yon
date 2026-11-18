@@ -1,0 +1,4 @@
+fun pb(): Wire<Number> {
+  s := produce { emit 2 }
+  return s
+}

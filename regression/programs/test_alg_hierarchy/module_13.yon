@@ -1,0 +1,4 @@
+internal place Word carried by i64 uses algebra Sum {
+  fun make(n: Int64): Word { return n }
+  fun value(w: Word): Int64 { return w }
+}

@@ -1,0 +1,4 @@
+place Odd uses algebra Semigroup {
+  this > A :U B
+  fun op(a: Odd, b: Odd): Odd { return match a { A => B, B => match b { A => A, B => A } } }
+}

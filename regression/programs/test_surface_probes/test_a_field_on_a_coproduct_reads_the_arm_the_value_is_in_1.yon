@@ -1,0 +1,4 @@
+fun apri: Account { return .-> Opened { initial 1 balance 2 } }
+fun chiudi: Account { return .-> Closed { moment 3 balance 4 } }
+fun b(a: Account): Number { return a.balance }
+fun run: Number { return b(apri) * 10 + b(chiudi) }

@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  sq := fun(x: Number) => x * x
+  return sq(3)
+}

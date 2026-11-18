@@ -18,6 +18,7 @@ import shutil
 import subprocess
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -47,9 +48,9 @@ def test_the_same_version_connects_as_before(tmp_path):
 
 
 @pytest.mark.parametrize("reading", [
-    "place Reading {\n  humidity Number\n  temp Number\n}\n",       # fields swapped
-    "place Reading {\n  temp Number\n  moisture Number\n}\n",       # a field renamed
-    "place Reading {\n  temp Number\n  humidity Int64\n}\n",        # Number -> Int64
+    program("test_wire_type_root/test_another_version_is_refused_at_the_connection_1.yon"),       # fields swapped
+    program("test_wire_type_root/test_another_version_is_refused_at_the_connection_2.yon"),       # a field renamed
+    program("test_wire_type_root/test_another_version_is_refused_at_the_connection_3.yon"),        # Number -> Int64
 ], ids=["swapped", "renamed", "number-to-int64"])
 def test_another_version_is_refused_at_the_connection(tmp_path, reading):
     rc, err = _connect(tmp_path, reading)
@@ -64,7 +65,7 @@ def test_a_type_the_wire_does_not_carry_is_refused_at_compile_time(tmp_path):
     for p in ("meteo_svc", "meteo_sub"):
         shutil.copytree(SCEN / p, tmp_path / p)
     (tmp_path / "meteo_sub" / "w" / "Reading.yon").write_text(
-        "place Reading {\n  temp Number\n  humidity Boolean\n}\n")
+        program("test_wire_type_root/test_a_type_the_wire_does_not_carry_is_refused_at_compile_time_1.yon"))
     c = subprocess.run([str(YONC), "meteo_sub", "-o", "sub"], cwd=str(tmp_path),
                        capture_output=True, text=True, timeout=180)
     out = c.stdout + c.stderr

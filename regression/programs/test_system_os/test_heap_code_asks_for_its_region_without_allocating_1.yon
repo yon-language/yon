@@ -1,0 +1,1 @@
+  fun probe_first(): Word64 { return read_word(SystemOs.fnv_heap_region, 0) }

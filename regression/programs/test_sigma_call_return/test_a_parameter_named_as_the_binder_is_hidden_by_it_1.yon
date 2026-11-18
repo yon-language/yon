@@ -1,0 +1,1 @@
+  fun hid(x: Number): Σx : Number, x = x { return pair(x, refl(x)) }

@@ -1,0 +1,2 @@
+fun sum(a: Int64, b: Int64): Int64 { return Additive.op(a, b) }
+fun product(a: Int64, b: Int64): Int64 { return Multiplicative.op(a, b) }

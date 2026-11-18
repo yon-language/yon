@@ -1,0 +1,2 @@
+fun f(dead: Number): Number { return 1 }
+fun main: Number { return f(0) }

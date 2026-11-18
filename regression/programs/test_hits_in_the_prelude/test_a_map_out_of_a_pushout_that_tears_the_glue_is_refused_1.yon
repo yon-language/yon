@@ -1,0 +1,5 @@
+place Uso {
+  fun presente(p: Persona): Number {
+    return match p { inl as c => 42, inr as u => 41, glue as k => walk i => 42 }
+  }
+}

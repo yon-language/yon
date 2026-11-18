@@ -1,0 +1,1 @@
+fun f(s: S1): Number { return match s { base => 42, loop => walk i => 42 } }

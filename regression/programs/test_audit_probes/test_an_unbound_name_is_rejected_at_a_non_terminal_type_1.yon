@@ -1,0 +1,4 @@
+place Entry {
+  fun f: Number { return no_such_name + "x" }
+  fun main: Number { return 7 }
+}

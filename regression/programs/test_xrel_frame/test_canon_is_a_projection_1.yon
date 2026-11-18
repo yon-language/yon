@@ -1,0 +1,17 @@
+place Entry {}
+fun ix(f: XRelFrame, p: LatticePoint): Number { return LatticePoint.index(XRelFrame.canon(f, p)) }
+fun idem(f: XRelFrame, p: LatticePoint): Number {
+  return if ix(f, XRelFrame.canon(f, p)) == ix(f, p) then 1 else 0
+}
+fun all_frames(p: LatticePoint): Number {
+  fb := XRelFrame.refine(XRelFrame.whole, p)
+  _1 := IO.print_num(idem(XRelFrame.discrete, p))
+  _2 := IO.print_num(idem(XRelFrame.whole, p))
+  _3 := IO.print_num(idem(XRelFrame.curtis, p))
+  _4 := IO.print_num(idem(fb, p))
+  return 0
+}
+fun main: Number {
+  return match LatticePoint.of_coordinate(1280) {
+    LatticePoint as p => all_frames(p), DomainError as d => 0 - 1 }
+}

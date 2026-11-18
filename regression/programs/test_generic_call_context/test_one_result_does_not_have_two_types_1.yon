@@ -1,0 +1,6 @@
+  fun as_term(t: Term): Number { return 0 }
+  fun as_nat(n: Nat): Number { return 0 }
+  fun twice(e: Empty): Number {
+    x := exfalso(e)
+    return as_term(x) + as_nat(x)
+  }

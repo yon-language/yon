@@ -1,0 +1,10 @@
+place Plus is algebra {
+  operation plus(a: Plus, b: Plus): Plus as "+"
+  law c ∀a : Plus, a = a &&? (a = a =>? a = a) ||? !?(a = a)
+}
+place Box { this > Full Number :U Empty }
+place Entry {
+  fun i(x: Number): Number { return x }
+  fun mk: Box { return 1 >-> Full }
+  fun main: Number { return 1 |-> i }
+}

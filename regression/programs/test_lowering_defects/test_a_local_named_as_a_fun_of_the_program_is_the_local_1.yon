@@ -1,0 +1,8 @@
+place Entry {
+fun main: Number { return twice(21) }
+fun twice(n: Number): Number {
+  w := n * 2
+  return w
+}
+fun w: Number { return 1 }
+}

@@ -1,0 +1,5 @@
+place Meet {
+  fun forty(n: Int64): Sum { return n }
+  fun raised(s: Sum): Int64 { return s + 2 }
+  fun lit: Sum { return 3 }
+}

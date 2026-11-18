@@ -1,0 +1,1 @@
+  fun forget(a: Term, b: Term, p: a = b): Number { return 0 }

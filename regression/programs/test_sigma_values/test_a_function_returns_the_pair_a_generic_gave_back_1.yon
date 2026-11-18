@@ -1,0 +1,2 @@
+  fun same<T>(x: T): T { return x }
+  fun made: Σx : Number, Number { return same(pair(42, 7)) }

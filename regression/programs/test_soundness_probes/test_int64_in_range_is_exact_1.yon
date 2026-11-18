@@ -1,0 +1,8 @@
+place Entry {
+  fun main: Number {
+    a := if Int64.max_value - 1 + 1 == Int64.max_value then 1 else 0
+    b := if Int64.min_value + 1 - 1 == Int64.min_value then 10 else 0
+    mut c := if Int64.ipow_ok(2, 62) - 1 + Int64.ipow_ok(2, 62) == Int64.max_value then 100 else 0
+    return a + b + c
+  }
+}

@@ -1,0 +1,1 @@
+  fun inner(d: Number): Σa : Number, Σb : Number, b = d { return pair(d, pair(d, refl(d))) }

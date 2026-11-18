@@ -1,0 +1,2 @@
+fun mk(g: Number -> Number): Number { s := produce { scope { emit g(1) } }
+ return 0 }

@@ -1,0 +1,12 @@
+
+place Peak {
+  this > mk Number Number
+
+  fun left(p: Peak): Number {
+    return match p { mk as (l, r) => l }
+  }
+
+  fun right(p: Peak): Number {
+    return match p { mk as (l, r) => r }
+  }
+}

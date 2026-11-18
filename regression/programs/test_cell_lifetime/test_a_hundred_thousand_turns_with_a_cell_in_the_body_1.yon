@@ -1,0 +1,13 @@
+place Entry {
+fun main: Number {
+  mut i := 0
+  mut bad := 0
+  while i < 100000 do {
+    mut t := i * 2
+    t <- t + 1
+    bad <- bad + (if t == i * 2 + 1 then 0 else 1)
+    i <- i + 1
+  }
+  return if i == 100000 and bad == 0 then 42 else 1
+}
+}

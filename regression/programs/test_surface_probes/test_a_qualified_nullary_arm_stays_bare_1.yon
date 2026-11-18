@@ -1,0 +1,3 @@
+place Entry {
+fun main: Number { return match Decision.Absent { Present => 1, Absent => 42, Unknown => 3 } }
+}

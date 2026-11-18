@@ -1,0 +1,9 @@
+place Entry {
+  fun twice_then(f: Number -> Number, g: Number -> Number, x: Number): Number {
+    h := compose f with g
+    return h(x)
+  }
+  fun inc(x: Number): Number { return x + 3 }
+  fun dbl(y: Number): Number { return y * 2 }
+  fun main: Number { return twice_then(inc, dbl, 1) }
+}

@@ -1,0 +1,1 @@
+fun mk(): Number -> Number { mut c := 10  c <- 20  when c > 0 { g := fun(y: Number) => y + c } otherwise { mut h := fun(y: Number) => y + c } }

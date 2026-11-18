@@ -1,0 +1,1 @@
+  fun left(d: Number, s: Σp : (Number, Number), fst(p) = d): Σq : (Number, Number), fst(q) = d { return s }

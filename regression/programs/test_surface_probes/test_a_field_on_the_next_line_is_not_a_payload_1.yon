@@ -1,0 +1,6 @@
+place Account {
+  this > Opened :U Closed
+  balance Number
+  fun saldo(a: Opened): Number { return a.balance }
+  fun prova: Opened { return .-> Opened { initial 1 balance 2 } }
+}

@@ -1,0 +1,4 @@
+place Entry {
+  fun take(a: Number, b: Number): Number { return a + b }
+  fun main: Number { return take(40, 2) }
+}

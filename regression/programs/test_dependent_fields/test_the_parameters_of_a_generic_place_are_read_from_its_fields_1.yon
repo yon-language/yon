@@ -1,0 +1,4 @@
+fun succ(n: Int64): Int64 { return n + 1 }
+fun pred(n: Int64): Int64 { return n - 1 }
+fun eta(x: Int64): pred(succ(x)) = x { return clear }
+fun keep(e: Iso<Int64, Int64>): Iso<Int64, Int64> { return e }

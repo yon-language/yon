@@ -1,0 +1,2 @@
+fun size(s): Number { return Text.length(s) }
+fun main: Number { return size("abcd") }

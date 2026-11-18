@@ -1,0 +1,3 @@
+place Val { this > Lit Number }
+fun get(v: Val): Number { return match v { Lit as n => n } }
+fun main: Number { return get(42 ↪ Lit) }

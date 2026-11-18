@@ -1,0 +1,4 @@
+fun mk2(n: Number): Number { f := 5
+ k := fun(y: Number) => y + f
+ produce { mut f := 1  f <- 2  emit f }
+ return k(n) }

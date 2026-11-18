@@ -1,0 +1,10 @@
+place Entry {
+fun main(): Number {
+  results := spawn in 2 parallel {
+    promote spawn_index + 1
+    promote "abc"
+  }
+  total := results.fold(0, fun(a: Number, v: Number) => a + v)
+  return total
+}
+}

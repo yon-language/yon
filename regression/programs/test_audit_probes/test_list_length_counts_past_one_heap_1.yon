@@ -1,0 +1,5 @@
+place Entry {}
+fun main(): Number {
+  _a := IO.print_num(List.length(Sequence.range(200000)))
+  return 0
+}

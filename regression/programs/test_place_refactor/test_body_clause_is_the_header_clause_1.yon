@@ -1,0 +1,4 @@
+place QueryInsert {
+  on error QueryError
+  sql Number
+}

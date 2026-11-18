@@ -1,0 +1,7 @@
+place Entry {}
+fun main: Number {
+  mut a := "ab"
+  mut b := "cde"
+  s := Text.concat(a, b)
+  return Text.length(s)
+}

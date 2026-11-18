@@ -1,0 +1,12 @@
+place Entry {}
+fun at1(m: HashMap<Number, Number>): Number {
+  return match HashMap.get(m, 1) { Found as v => v, Absent => 0 }
+}
+fun look(m: HashMap<Number, Number>): Number { return at1(m) }
+fun main: Number {
+  m := HashMap.set(HashMap.empty, 1, 5)
+  mut t := HashMap.set(m, 1, 9)
+  mut b := at1(m)
+  mut c := look(m)
+  return b * 10 + c
+}

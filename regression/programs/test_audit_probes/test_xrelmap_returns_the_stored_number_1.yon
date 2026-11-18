@@ -1,0 +1,9 @@
+place Entry {}
+fun held(x: Number): Number {
+  return match XRelMap.get(XRelMap.set(XRelMap.empty, 1536, x), 1536) { Found as v => v, Absent => 0 }
+}
+fun main(): Number {
+  _a := IO.print_num(held(2.5))
+  _b := IO.print_num(held(0 - 3))
+  return 0
+}

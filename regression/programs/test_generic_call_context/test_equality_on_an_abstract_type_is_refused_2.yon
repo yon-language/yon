@@ -1,0 +1,1 @@
+fun same<T>(x: T, y: T): Boolean { return x == y }

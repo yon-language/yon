@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -18,16 +19,7 @@ YONC = ROOT / "toolchain" / "yonc"
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
 _OPS = (
-    "fun plus(a: Number, b: Number): Number { return a + b }\n"
-    "fun minus(a: Number, b: Number): Number { return a - b }\n"
-    "fun lub(a: Number, b: Number): Number { return if a > b then a else b }\n"
-    "fun minus5(a: Number, b: Number): Number { return Math.modulo(a - b + 5, 5) }\n"
-    "fun left(a: Number, b: Number): Number { return a }\n"
-    "fun is3(a: Number): Boolean { return a == 3 }\n"
-    "fun is5(a: Number): Boolean { return a == 5 }\n"
-    "fun report(d: DomainError): Number {\n"
-    '  return if d.message == "the closure holds more than 512 elements" then 2 else 3\n'
-    "}\n"
+    program("test_magma_laws/module_1.yon")
 )
 
 
@@ -131,12 +123,7 @@ def test_subtraction_on_three_has_no_finite_closure(tmp_path):
     assert _value(tmp_path, _refusal("closure", _on("minus", 3), "Value as c")) == 2
 
 
-_BIT = ("place Bit {\n"
-        "  this > Naught :U Tick\n"
-        "  fun flip(a: Bit, b: Bit): Bit {\n"
-        "    return match a { Naught => b, Tick => match b { Naught => Tick, Tick => Naught } }\n"
-        "  }\n"
-        "}\n")
+_BIT = (program("test_magma_laws/module_2.yon"))
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError,
@@ -243,11 +230,7 @@ def test_no_witness_where_the_target_is_not_reached(tmp_path):
 # --- a generic field through an applied type and a product domain ----------------------
 
 
-_BOX = ("place Box<V> {\n"
-        "  items List<V>\n"
-        "  fun make<V>(items: List<V>): Box<V> { return .-> Box { items items } }\n"
-        "  fun first<V>(b: Box<V>): Lookup<V> { return List.head(b.items) }\n"
-        "}\n")
+_BOX = (program("test_magma_laws/module_3.yon"))
 
 
 def test_a_field_of_an_applied_type_is_instantiated(tmp_path):
@@ -267,11 +250,7 @@ def test_a_field_of_an_applied_type_refuses_another_argument(tmp_path):
     assert "Lookup<Number>" in out, out
 
 
-_FOLDER = ("place Folder<V> {\n"
-           "  step (V, V) -> V\n"
-           "  fun with_step<V>(s: (V, V) -> V): Folder<V> { return .-> Folder { step s } }\n"
-           "  fun twice<V>(f: Folder<V>, x: V): V { g := f.step  return g(x, x) }\n"
-           "}\n")
+_FOLDER = (program("test_magma_laws/module_4.yon"))
 
 
 def test_a_field_of_a_product_domain_is_instantiated(tmp_path):

@@ -1,0 +1,3 @@
+place AP { }
+fun shared(n: Number): Number { return n + 1 }
+fun truly_dead(n: Number): Number { return n }

@@ -1,0 +1,1 @@
+place AppError { this < Error  code Number }

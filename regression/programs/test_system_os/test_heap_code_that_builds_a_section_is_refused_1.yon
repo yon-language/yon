@@ -1,0 +1,3 @@
+  fun fail(r: Region) on error DomainError: Int64 {
+    return .-> DomainError { message "no" }
+  }

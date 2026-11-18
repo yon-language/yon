@@ -1,0 +1,1 @@
+fun same(c: Celsius): Kelvin { return c }

@@ -1,0 +1,8 @@
+place Entry {
+fun no_numbers: HashSet<Number> { return HashSet.empty }
+fun main(): Number {
+  s := no_numbers
+  v := Vec.empty()
+  return 42
+}
+}

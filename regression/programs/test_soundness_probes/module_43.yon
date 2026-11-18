@@ -1,0 +1,4 @@
+fun em(n: Number): Number { s := produce { emit n }
+ mut t := 0
+ for every x in s { t <- t + x }
+ return t }

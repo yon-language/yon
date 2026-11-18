@@ -1,0 +1,1 @@
+fun one(a: Int64): (Int64, List<Int64>) { return pair(a, List.empty) }

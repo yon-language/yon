@@ -1,0 +1,1 @@
+  fun some_term(e: Empty): Term { return exfalso(e) }

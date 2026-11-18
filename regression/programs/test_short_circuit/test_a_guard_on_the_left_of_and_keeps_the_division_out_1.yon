@@ -1,0 +1,4 @@
+place Entry {
+fun main: Number { return if guarded(0) then 1 else 42 }
+fun guarded(x: Number): Boolean { return x != 0 and 10 / x > 1 }
+}

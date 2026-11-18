@@ -1,0 +1,1 @@
+  fun pick(b: Boolean): Number { return if b then 42 else 0 }

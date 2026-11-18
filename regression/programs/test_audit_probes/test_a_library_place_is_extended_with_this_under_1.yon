@@ -1,0 +1,6 @@
+place Entry {}
+fun handle(e: Error): Number { return Text.length(e.message) }
+fun main: Number {
+  mut a := .-> AppError { message "boom" code 38 }
+  return handle(a) + a.code
+}

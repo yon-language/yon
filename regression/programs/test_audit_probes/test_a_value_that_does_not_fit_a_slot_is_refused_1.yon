@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  mut a := XRelMap.set(XRelMap.empty, 1536, true)
+  return 0
+}

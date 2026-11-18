@@ -1,0 +1,7 @@
+fun h(x: Number) on error Error: Number {
+  y := escape Number.sqrt(x)
+  return y + 1
+}
+fun main: Number {
+  return match h(0 - 4) { Number as v => v, Error as e => Text.length(e.message) }
+}

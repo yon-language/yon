@@ -1,0 +1,5 @@
+fun main: Number {
+  ci := .-> Circle { r 2 }
+  t := .-> Tri { base 5 }
+  return ci.radius() + t.base
+}

@@ -1,0 +1,8 @@
+place Entry {
+  fun big: Int64 { return Int64.ipow_ok(2, 53) + 1 }
+  fun first(xs: List<Int64>): Int64 { return match List.head(xs) { Found as v => v, Absent => 0 } }
+  fun main: Number {
+    xs := List.cons(big, List.empty)
+    return if Int64.is_odd(first(xs)) then 1 else 0
+  }
+}

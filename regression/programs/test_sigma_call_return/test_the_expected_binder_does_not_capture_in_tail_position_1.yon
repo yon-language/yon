@@ -1,0 +1,2 @@
+  fun w2(d: Number, q: d = 1): Σr : Number, (r = 0) ∧ (d = 1) { return pair(0, pair(refl(0), q)) }
+  fun bad(x: Number, q: x = 1): Σx : Number, (x = 0) ∧ (x = 1) { w2(x, q) }

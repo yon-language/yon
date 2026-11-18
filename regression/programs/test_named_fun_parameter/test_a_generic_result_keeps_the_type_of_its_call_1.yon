@@ -1,0 +1,2 @@
+fun id(x) { return x }
+fun main: Number { return id("h") }

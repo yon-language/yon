@@ -1,0 +1,4 @@
+place Entry {
+fun use(p: 1 = 1): Number { return 42 }
+fun main: Number { return 42 }
+}

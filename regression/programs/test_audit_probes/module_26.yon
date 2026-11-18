@@ -1,0 +1,13 @@
+import pa::pa from Alpha
+import pb::pb from Beta
+place Entry {
+fun main: Number {
+  return fa() + Other.fb()
+}
+fun fa(): Number {
+  w := wire to space Alpha
+  sub := w.awaits(pa)
+  s := sub.stream
+  return s.fold(0, fun(a: Number, r: Number) => a + r)
+}
+}

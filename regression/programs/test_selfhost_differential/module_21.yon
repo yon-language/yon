@@ -1,0 +1,4 @@
+place Term { this > Lit Number :U Neg Term }
+fun ev(t: Term): Number { return match t { Lit as n => n, Neg as m => 0 - ev(m) } }
+fun build(k: Number): Term { return if k == 0 then 7 ↪ Lit else build(k - 1) ↪ Neg }
+fun main: Number { return ev(build(3)) }

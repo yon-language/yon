@@ -1,0 +1,1 @@
+  fun second<K, V>(p: Σx : K, V): V { return snd(p) }

@@ -1,0 +1,4 @@
+place Entry {}
+fun main: Number {
+  return Text.length(Text.concat(Text.substring("ab", 5, 1), "x"))
+}

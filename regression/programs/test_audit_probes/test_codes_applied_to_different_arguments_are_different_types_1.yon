@@ -1,0 +1,5 @@
+place Entry {
+  fun Fam(x: Number): Type_0 { return if x > 7 then text else number }
+  fun cast(e: El(Fam(7))): El(Fam(8)) { return e }
+  fun main: Number { return 0 }
+}

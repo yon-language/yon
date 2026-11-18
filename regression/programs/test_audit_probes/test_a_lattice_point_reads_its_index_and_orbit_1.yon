@@ -1,0 +1,13 @@
+place Entry {}
+fun idx(i: Number): Number {
+  return match LatticePoint.at_index(i) { LatticePoint as p => LatticePoint.index(p), DomainError as d => 0 - 1 }
+}
+fun orb(n: Number): Number {
+  return match LatticePoint.of_coordinate(n) { LatticePoint as p => LatticePoint.orbit(p), DomainError as d => 0 - 1 }
+}
+fun main(): Number {
+  _a := IO.print_num(idx(5))
+  _b := IO.print_num(idx(196559))
+  _c := IO.print_num(if orb(1536) == orb(1280) then 1 else 0)
+  return 0
+}

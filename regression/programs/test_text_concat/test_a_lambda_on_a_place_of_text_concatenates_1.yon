@@ -1,0 +1,3 @@
+place Name carried by text {
+  fun spelled(n: Name): Text { return n }
+}

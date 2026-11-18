@@ -1,0 +1,6 @@
+place Entry {}
+fun main: Number {
+  sq := fun(x: Number) => x * x
+  return match (3 ↪ Box) { Box as v => sq(v), Empty => 0 }
+}
+fun declares(s: (Box(Number) | Empty)): Number { return 0 }

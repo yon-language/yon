@@ -1,0 +1,6 @@
+  fun plus(n: Number): Number { return n + 0 }
+  fun forget(s: { a : Number where Πx : Number, Πy : Number, x = y }): Number { return plus(s) }
+  fun read(s: { a : Number where Πx : Number, Πy : Number, x = y }): Number { return fst(s) }
+  fun made(p: Πx : Number, Πy : Number, x = y): { a : Number where Πx : Number, Πy : Number, x = y } { return pair(42, p) }
+  fun from_pair(p: Πx : Number, Πy : Number, x = y): Number { return plus(made(p)) }
+  fun read_pair(p: Πx : Number, Πy : Number, x = y): Number { return read(made(p)) }

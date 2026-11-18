@@ -16,6 +16,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -80,15 +81,7 @@ def _verdict(ok: bool, msg: str):
 
 # --- strict positivity ---------------------------------------------------------
 
-_BAD = """\
-place Bad { f Bad -> Number }
-place Entry {
-  fun omega(b: Bad): Number { g := b.f  return g(b) }
-  fun boom(n: Number): Number { return omega(.-> Bad { f omega }) }
-  fun force(n: Number): boom(n) = 0 { return clear }
-  fun main: Number { return 0 }
-}
-"""
+_BAD = program("test_soundness_probes/module_1.yon")
 
 
 def test_checker_terminates_on_negative_place(tmp_path):
@@ -109,7 +102,7 @@ def test_checker_terminates_on_negative_place(tmp_path):
 @pytest.mark.xfail(strict=True, reason="a place that occurs negatively in its own "
                    "fields, `place Bad { f Bad -> Number }`, is not strictly positive")
 def test_negative_place_rejected(tmp_path):
-    entry = "place Bad { f Bad -> Number }\nplace Entry { fun main: Number { return 0 } }\n"
+    entry = program("test_soundness_probes/test_negative_place_rejected_1.yon")
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'Bad'), out
@@ -118,12 +111,7 @@ def test_negative_place_rejected(tmp_path):
 # --- parametricity of generics ------------------------------------------------
 
 def test_no_field_access_on_abstract_t(tmp_path):
-    entry = """\
-place Entry {
-  fun bad<T>(x: T): Number { return x.foo }
-  fun main: Number { return 0 }
-}
-"""
+    entry = program("test_soundness_probes/test_no_field_access_on_abstract_t_1.yon")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'the abstract type T admits no operation'), out
 
@@ -163,16 +151,7 @@ place Entry {{
 
 def test_an_abstract_t_admits_no_literal_test(tmp_path):
     """A test against a literal would reveal T: refused."""
-    entry = """\
-place Entry {
-  fun peek<T>(x: T): Number {
-    mut r := 0
-    when x is 5 { r <- 1 }
-    return r
-  }
-  fun main: Number { return peek(5) }
-}
-"""
+    entry = program("test_soundness_probes/test_an_abstract_t_admits_no_literal_test_1.yon")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'pattern literal of type Number', 'scrutinee type T'), out
 
@@ -180,27 +159,13 @@ place Entry {
 def test_a_generic_call_is_typed_at_its_instance(tmp_path):
     """identity(41) is a Number, first("ok", 0) a Text; a generic function
     passed as a value fits the arrow it is passed to."""
-    entry = """\
-place Entry {
-  fun identity<T>(x: T): T { return x }
-  fun first<A, B>(x: A, y: B): A { return x }
-  fun apply(f: Number -> Number, x: Number): Number { return f(x) }
-  fun main: Number {
-    return identity(40) + Text.length(first("ok", 0)) + apply(identity, 0)
-  }
-}
-"""
+    entry = program("test_soundness_probes/test_a_generic_call_is_typed_at_its_instance_1.yon")
     assert _compile_and_run(tmp_path, entry) == 42
 
 
 def test_a_generic_result_is_not_another_type(tmp_path):
     """The instance chosen by the arguments is the type of the result."""
-    entry = """\
-place Entry {
-  fun identity<T>(x: T): T { return x }
-  fun main: Number { return Text.length(identity(5)) }
-}
-"""
+    entry = program("test_soundness_probes/test_a_generic_result_is_not_another_type_1.yon")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'Text__length: parameter s expects Text, got Number'), out
 
@@ -208,40 +173,15 @@ place Entry {
 # --- Int64 precision -----------------------------------------------------------
 
 def test_int64_exact_past_2_53_through_list(tmp_path):
-    entry = """\
-place Entry {
-  fun big: Int64 { return Int64.ipow_ok(2, 53) + 1 }
-  fun first(xs: List<Int64>): Int64 { return match List.head(xs) { Found as v => v, Absent => 0 } }
-  fun main: Number {
-    xs := List.cons(big, List.empty)
-    return if Int64.is_odd(first(xs)) then 1 else 0
-  }
-}
-"""
+    entry = program("test_soundness_probes/test_int64_exact_past_2_53_through_list_1.yon")
     rc = _compile_and_run(tmp_path, entry)
     _verdict(rc == 1, f"2^53+1 came back even (exit {rc}, expected 1)")
 
 
 @pytest.mark.slow
 def test_int64_exact_across_spaces(tmp_path):
-    (tmp_path / "echo.yon").write_text("""\
-place Entry {
-  fun odd_remote(x: Int64): Number { return if Int64.is_odd(x) then 1 else 0 }
-  fun main: Number { return 0 }
-}
-""")
-    (tmp_path / "client.yon").write_text("""\
-import echo::odd_remote from Echo
-
-place Entry {
-  fun main: Number {
-    a := odd_remote(Int64.ipow_ok(2, 40) + 1)
-    b := odd_remote(Int64.ipow_ok(2, 52) + 1)
-    mut c := odd_remote(Int64.ipow_ok(2, 53) + 1)
-    return a + 2 * b + 4 * c
-  }
-}
-""")
+    (tmp_path / "echo.yon").write_text(program("test_soundness_probes/test_int64_exact_across_spaces_1.yon"))
+    (tmp_path / "client.yon").write_text(program("test_soundness_probes/test_int64_exact_across_spaces_2.yon"))
     rc, out = _compile(tmp_path / "echo.yon", tmp_path / "Echo_srv", cwd=tmp_path)
     assert rc == 0, out
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
@@ -253,13 +193,7 @@ place Entry {
 # --- Int64 is Z/2^64 at runtime, as the ring laws prove it ------------------------
 
 def test_int64_is_exact_past_2_53(tmp_path):
-    entry = """\
-place Entry {
-  fun big: Int64 { return 9007199254740992 + 1 }
-  fun base: Int64 { return 9007199254740992 }
-  fun main: Number { return if big - base == 1 then 1 else 0 }
-}
-"""
+    entry = program("test_soundness_probes/test_int64_is_exact_past_2_53_1.yon")
     assert _compile_and_run(tmp_path, entry) == 1
 
 
@@ -284,41 +218,14 @@ def test_int64_overflow_is_a_declared_refusal(tmp_path):
 
 
 def test_int64_in_range_is_exact(tmp_path):
-    entry = """\
-place Entry {
-  fun main: Number {
-    a := if Int64.max_value - 1 + 1 == Int64.max_value then 1 else 0
-    b := if Int64.min_value + 1 - 1 == Int64.min_value then 10 else 0
-    mut c := if Int64.ipow_ok(2, 62) - 1 + Int64.ipow_ok(2, 62) == Int64.max_value then 100 else 0
-    return a + b + c
-  }
-}
-"""
+    entry = program("test_soundness_probes/test_int64_in_range_is_exact_1.yon")
     assert _compile_and_run(tmp_path, entry) == 111
 
 
 def test_int64_crosses_every_uniform_slot_bit_for_bit(tmp_path):
     """Int64.MAX, Int64.MIN and 2^53+1 come back equal through a List, a
     coproduct payload and a closure capture."""
-    entry = """\
-place IntExpr { this > Lit Int64 :U Nil }
-place Entry {
-  fun via_list(x: Int64): Int64 { return match List.head(List.cons(x, List.empty)) { Found as v => v, Absent => 0 } }
-  fun wrap(x: Int64): IntExpr { return x ↪ Lit }
-  fun unwrap(e: IntExpr): Int64 { return match e { Lit as n => n, Nil => 0 } }
-  fun adder(k: Int64): Int64 -> Int64 { return fun(y: Int64) => k + y }
-  fun same(x: Int64): Number {
-    f := adder(x)
-    a := if via_list(x) == x then 1 else 0
-    mut c := if unwrap(wrap(x)) == x then a else 0
-    return if f(0) == x then c else 0
-  }
-  fun main: Number {
-    return same(Int64.max_value) + same(Int64.min_value) * 10
-         + same(9007199254740992 + 1) * 100
-  }
-}
-"""
+    entry = program("test_soundness_probes/test_int64_crosses_every_uniform_slot_bit_for_bit_1.yon")
     rc = _compile_and_run(tmp_path, entry, '\n[world.W]\nobjects = ["IntExpr"]\n')
     assert rc == 111, f"Int64 through the slots: {rc}"
 
@@ -326,16 +233,7 @@ place Entry {
 def test_an_integer_literal_past_2_53_is_exact(tmp_path):
     """9007199254740993 at Int64 is that integer (odd), and the largest
     literal is Int64.MAX."""
-    entry = """\
-place Entry {
-  fun odd: Int64 { return 9007199254740993 }
-  fun top: Int64 { return 9223372036854775807 }
-  fun main: Number {
-    a := if Int64.is_odd(odd) then 1 else 0
-    return if top == Int64.max_value then a + 10 else a
-  }
-}
-"""
+    entry = program("test_soundness_probes/test_an_integer_literal_past_2_53_is_exact_1.yon")
     assert _compile_and_run(tmp_path, entry) == 11
 
 
@@ -343,23 +241,13 @@ place Entry {
                    "does not fit an Int64, and the refusal names it (today it falls back "
                    "to a Number and the refusal is a type mismatch)")
 def test_an_integer_literal_past_int64_max_is_refused_by_its_range(tmp_path):
-    over = "place Entry {\n  fun m: Int64 { return 9223372036854775808 }\n  fun main: Number { return 0 }\n}\n"
+    over = program("test_soundness_probes/test_an_integer_literal_past_int64_max_is_refused_by_its_range_1.yon")
     rc, out = _compile(_project(tmp_path, over), tmp_path / "out")
     assert _clean_rejection(rc, out, "E2001", "9223372036854775808", "Int64"), out
 
 
 def test_int64_to_text_writes_its_exact_digits(tmp_path):
-    entry = """\
-place Entry {
-  fun main: Number {
-    _a := Text.print(Int64.to_text(Int64.max_value))
-    _b := Text.print(Int64.to_text(Int64.min_value))
-    _c := Text.print(Int64.to_text(9007199254740993))
-    _d := Text.print(Int64.to_text(0 - 42))
-    return 0
-  }
-}
-"""
+    entry = program("test_soundness_probes/test_int64_to_text_writes_its_exact_digits_1.yon")
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "out")
     assert rc == 0, out
@@ -399,14 +287,7 @@ def test_int32_addition_wraps(tmp_path):
 
 # --- hygiene of generated names ------------------------------------------------
 
-_LEDGER = """\
-place Entry {
-  fun __conto(x: Number): Number { return x + 2 }
-  fun yon_rt_saldo(x: Number): Number { return x + 4 }
-  fun a__b(x: Number): Number { return x + 8 }
-  fun main: Number { return 0 }
-}
-"""
+_LEDGER = program("test_soundness_probes/module_2.yon")
 
 
 def _call_remote(tmp: Path, fn: str) -> int:
@@ -463,8 +344,8 @@ def test_no_in_band_sentinel(tmp_path, expr, sentinel_exit):
 @pytest.mark.xfail(strict=True, reason="`internal` hides a place from outside its "
                    "Space, so matching on its arms from outside is refused")
 def test_internal_place_match_from_outside_rejected(tmp_path):
-    entry = "place Entry { fun main: Number { return match A { A => 1, B => 2 } } }\n"
-    files = {"w/Topos.yon": "topos WTopos where {\n}\n",
+    entry = program("test_soundness_probes/test_internal_place_match_from_outside_rejected_1.yon")
+    files = {"w/Topos.yon": program("test_soundness_probes/test_internal_place_match_from_outside_rejected_2.yon"),
              "w/Secret.yon": "internal place Secret { this > A :U B }\n"}
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Secret"]\nspaces  = ["w"]\n', files)
     rc, out = _compile(proj, tmp_path / "out")
@@ -476,15 +357,10 @@ def test_internal_place_match_from_outside_rejected(tmp_path):
 def test_subobject_with_incompatible_field_rejected(tmp_path):
     """The mono `this < B` is checked structurally on fields, by name and type,
     not merely declared."""
-    entry = """\
-place Entry {
-  fun read(b: B): Number { return b.value }
-  fun main: Number { a := .-> A { value "hi" }  return read(a) }
-}
-"""
-    files = {"w/Topos.yon": "topos WTopos where {\n}\n",
-             "w/B.yon": "place B { value Number }\n",
-             "w/A.yon": "place A { this < B\n  value Text\n}\n"}
+    entry = program("test_soundness_probes/test_subobject_with_incompatible_field_rejected_1.yon")
+    files = {"w/Topos.yon": program("test_soundness_probes/test_subobject_with_incompatible_field_rejected_2.yon"),
+             "w/B.yon": program("test_soundness_probes/test_subobject_with_incompatible_field_rejected_3.yon"),
+             "w/A.yon": program("test_soundness_probes/test_subobject_with_incompatible_field_rejected_4.yon")}
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["X"]\nspaces  = ["w"]\n', files)
     rc, out = _compile(proj, tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'does not have all the fields of') and "subcontains" in out, out
@@ -495,13 +371,7 @@ place Entry {
 def test_escaping_closure_over_cell(tmp_path):
     """A closure over a cell is not mobile and is stopped at the return;
     otherwise it would read another activation's cell (exit 99)."""
-    entry = """\
-place Entry {
-  fun mk: Number -> Number { mut c := 10  c <- 20  return fun(y: Number) => y + c }
-  fun user(f: Number -> Number): Number { mut d := 90  d <- 98  return f(1) }
-  fun main: Number { f := mk  return user(f) }
-}
-"""
+    entry = program("test_soundness_probes/test_escaping_closure_over_cell_1.yon")
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "out")
     # rejected at compile time, or the closure sees its own cell (20 + 1)
@@ -516,59 +386,36 @@ place Entry {
 # tainted parameters at a store or on the wire) turns at least one case green.
 _CELL_ESCAPES = {
     # leaving the call
-    "alias": "fun mk(): Number -> Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  mut h := g  return h }",
-    "field": "fun mk(): Box { mut c := 10  c <- 20  return .-> Box { f (fun(y: Number) => y + c) } }",
-    "through_call": "fun idf(g: Number -> Number): Number -> Number { return g }\n"
-                    "  fun mk(): Number -> Number { mut c := 10  c <- 20  return idf(fun(y: Number) => y + c) }",
-    "implicit_tail": "fun mk(): Number -> Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c }",
-    "tail_through_when": "fun mk(): Number -> Number { mut c := 10  c <- 20  when c > 0 { g := fun(y: Number) => y + c } "
-                         "otherwise { mut h := fun(y: Number) => y + c } }",
-    "return_in_while": "fun mk(): Number -> Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  "
-                       "while c > 0 do { return g }  return g }",
-    "if_expression": "fun mk(): Number -> Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  "
-                     "return if c > 0 then g else fun(y: Number) => y }",
-    "match_arms": "fun mk(b: Bit): Number -> Number { mut c := 10  c <- 20  "
-                  "return match b { One => fun(y: Number) => y + c, Zero => fun(y: Number) => y + c } }",
-    "curried": "fun mk(): Number -> (Number -> Number) { mut c := 10  c <- 20  return fun(y: Number) => fun(z: Number) => z + c }",
-    "lambda_over_alias": "fun mk(): Number -> Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  "
-                         "return fun(y: Number) => g(y) }",
-    "move_lambda": "fun mk(): move from P to Q { mut c := 10  c <- 20  return move(s: P) => .-> Q { v c } from P to Q }",
-    "cell_holds_closure": "fun mk(): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
-                          "k <- fun(y: Number) => y + c  return k }",
-    "assigned_after_the_return": "fun mk(): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  mut i := 0  "
-                                 "while i < 2 do { when i > 0 { return k }  k <- fun(y: Number) => y + c  i <- i + 1 }  return k }",
-    "assigned_in_a_while_then_returned": "fun mk(): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
-                                         "mut i := 0  while i < 2 do { k <- fun(y: Number) => y + c  i <- i + 1 }  return k }",
-    "alias_before_assignment": "fun mk(): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
-                               "mut h := fun(y: Number) => y  mut i := 0  "
-                               "while i < 2 do { h <- k  k <- fun(y: Number) => y + c  i <- i + 1 }  return h }",
-    "stored_before_its_assignment_in_a_while": "fun mk(): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
-                                               "mut out := fun(y: Number) => y  mut i := 0  "
-                                               "while i < 2 do { when i > 0 { out <- k }  "
-                                               "k <- fun(y: Number) => y + c  i <- i + 1 }  return out }",
-    "through_a_loop_binder": "fun mk(b: Bit): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
-                             "l := List.cons(fun(y: Number) => y + c, List.empty)  "
-                             "for every g in l { k <- g }  return k }",
-    "no_declared_return": "fun mk() { mut c := 10  c <- 20  return fun(y: Number) => y + c }",
+    "alias": program("test_soundness_probes/module_3.yon"),
+    "field": program("test_soundness_probes/module_4.yon"),
+    "through_call": program("test_soundness_probes/module_5.yon"),
+    "implicit_tail": program("test_soundness_probes/module_6.yon"),
+    "tail_through_when": program("test_soundness_probes/module_7.yon"),
+    "return_in_while": program("test_soundness_probes/module_8.yon"),
+    "if_expression": program("test_soundness_probes/module_9.yon"),
+    "match_arms": program("test_soundness_probes/module_10.yon"),
+    "curried": program("test_soundness_probes/module_11.yon"),
+    "lambda_over_alias": program("test_soundness_probes/module_12.yon"),
+    "move_lambda": program("test_soundness_probes/module_13.yon"),
+    "cell_holds_closure": program("test_soundness_probes/module_14.yon"),
+    "assigned_after_the_return": program("test_soundness_probes/module_15.yon"),
+    "assigned_in_a_while_then_returned": program("test_soundness_probes/module_16.yon"),
+    "alias_before_assignment": program("test_soundness_probes/module_17.yon"),
+    "stored_before_its_assignment_in_a_while": program("test_soundness_probes/module_18.yon"),
+    "through_a_loop_binder": program("test_soundness_probes/module_19.yon"),
+    "no_declared_return": program("test_soundness_probes/module_20.yon"),
     # a cell is freed on return, whatever holds what mentions it
-    "cell_captured": "fun mk(): Number -> Number { mut h := 20  h <- 21  return fun(y: Number) => y + h }",
-    "cell_contents_read_out": "fun mk(): Number -> Number { mut h := fun(y: Number) => y  mut c := 10  c <- 20  "
-                              "h <- fun(y: Number) => y + c  return h }",
-    "cell_made_with_a_closure": "fun mk(): Number -> Number { mut c := 10  c <- 20  "
-                                "mut h := fun(y: Number) => y + c  return h }",
+    "cell_captured": program("test_soundness_probes/module_21.yon"),
+    "cell_contents_read_out": program("test_soundness_probes/module_22.yon"),
+    "cell_made_with_a_closure": program("test_soundness_probes/module_23.yon"),
     # handed to a helper that gives it back
-    "stored_by_a_helper": "fun put(g: Number -> Number): Number -> Number { return g }\n"
-                          "  fun mk(): Number -> Number { mut c := 10  c <- 20  return put(fun(y: Number) => y + c) }",
+    "stored_by_a_helper": program("test_soundness_probes/module_24.yon"),
     # sent on the wire
-    "wire_send": "fun mk(): Number { ch := Wire.make(4)  mut c := 10  c <- 20  "
-                 "_s := Wire.send(ch, fun(y: Number) => y + c)  return 0 }",
-    "wire_send_by_a_helper": "fun sendit(ch: Number, g: Number -> Number): Number { _s := Wire.send(ch, g)  return 0 }\n"
-                             "  fun mk(): Number { ch := Wire.make(4)  mut c := 10  c <- 20  "
-                             "return sendit(ch, fun(y: Number) => y + c) }",
+    "wire_send": program("test_soundness_probes/module_25.yon"),
+    "wire_send_by_a_helper": program("test_soundness_probes/module_26.yon"),
 }
 
-_CELL_PLACES = ("place Box { f Number -> Number }\nplace P { v Number }\nplace Q { v Number }\n"
-               "place Bit { this > One :U Zero }\n")
+_CELL_PLACES = (program("test_soundness_probes/module_27.yon"))
 
 
 # A route that leaves through a `return` inside a loop is closed by structure:
@@ -898,7 +745,7 @@ def test_a_store_into_a_value_makes_no_cell_of_it(tmp_path, form):
     assert "cell declared outside" not in out and "closure over a cell" not in out, out
 
 
-_MK = "fun mk(g: Number -> Number): Number { s := produce { emit g(1) }\n mut t := 0\n for every x in s { t <- t + x }\n return t }"
+_MK = program("test_soundness_probes/module_28.yon")
 _OVER_CELL = "fun(y: Number) => y + c"
 _WRITTEN = "mut c := 10  c <- 20"
 
@@ -906,35 +753,35 @@ _WRITTEN = "mut c := 10  c <- 20"
 # the functions it takes, and the body of main.
 _PARAM_ROUTES = {
     "directly": (_MK, f"{_WRITTEN}  return mk({_OVER_CELL})", "`mk`"),
-    "the_statement_form": ("fun mk(g: Number -> Number): Number { produce { emit g(1) }\n return 0 }",
+    "the_statement_form": (program("test_soundness_probes/module_29.yon"),
                            f"{_WRITTEN}  return mk({_OVER_CELL})", "`mk`"),
-    "in_a_scope": ("fun mk(g: Number -> Number): Number { s := produce { scope { emit g(1) } }\n return 0 }",
+    "in_a_scope": (program("test_soundness_probes/module_30.yon"),
                    f"{_WRITTEN}  return mk({_OVER_CELL})", "`mk`"),
-    "in_a_lambda": ("fun mk(g: Number -> Number): Number { s := produce { f := fun(y: Number) => g(y)  emit 1 }\n return 0 }",
+    "in_a_lambda": (program("test_soundness_probes/module_31.yon"),
                     f"{_WRITTEN}  return mk({_OVER_CELL})", "`mk`"),
     "written_after_the_call": (_MK, f"mut c := 10  r := mk({_OVER_CELL})  c <- 20  return r", "`mk`"),
     "a_local_closure": (_MK, f"{_WRITTEN}  f := {_OVER_CELL}  return mk(f)", "`mk`"),
     "a_copied_closure": (_MK, f"{_WRITTEN}  f := {_OVER_CELL}  h := f  return mk(h)", "`mk`"),
     "a_closure_in_a_cell": (_MK, f"{_WRITTEN}  mut f := fun(y: Number) => y  f <- {_OVER_CELL}  return mk(f)", "`mk`"),
     "a_lambda_over_a_closure": (_MK, f"{_WRITTEN}  f := {_OVER_CELL}  return mk(fun(y: Number) => f(y))", "`mk`"),
-    "through_a_helper": ("fun idf(g: Number -> Number): Number -> Number { return g }\n" + _MK,
+    "through_a_helper": (program("test_soundness_probes/module_32.yon"),
                          f"{_WRITTEN}  return mk(idf({_OVER_CELL}))", "`mk`"),
-    "the_parameter_copied": ("fun mk(g: Number -> Number): Number { h := g  s := produce { emit h(1) }\n return 0 }",
+    "the_parameter_copied": (program("test_soundness_probes/module_33.yon"),
                              f"{_WRITTEN}  return mk({_OVER_CELL})", "`mk`"),
-    "a_forwarder": (_MK + "\n fun fw(g: Number -> Number): Number { return mk(g) }",
+    "a_forwarder": (program("test_soundness_probes/module_34.yon"),
                     f"{_WRITTEN}  return fw({_OVER_CELL})", "`fw`"),
-    "a_forwarder_before_the_callee": ("fun fw(g: Number -> Number): Number { return mk(g) }\n" + _MK,
+    "a_forwarder_before_the_callee": (program("test_soundness_probes/module_35.yon"),
                                       f"{_WRITTEN}  return fw({_OVER_CELL})", "`fw`"),
-    "a_forwarder_with_a_lambda": (_MK + "\n fun fw(g: Number -> Number): Number { return mk(fun(y: Number) => g(y)) }",
+    "a_forwarder_with_a_lambda": (program("test_soundness_probes/module_36.yon"),
                                   f"{_WRITTEN}  return fw({_OVER_CELL})", "`fw`"),
-    "the_second_parameter": ("fun mk(n: Number, g: Number -> Number): Number { s := produce { emit g(n) }\n return 0 }",
+    "the_second_parameter": (program("test_soundness_probes/module_37.yon"),
                              f"{_WRITTEN}  return mk(1, {_OVER_CELL})", "`mk`"),
-    "a_recursive_forwarder": (_MK + "\n fun go(n: Number, g: Number -> Number): Number { return if n > 0 then go(n - 1, g) else mk(g) }",
+    "a_recursive_forwarder": (program("test_soundness_probes/module_38.yon"),
                               f"{_WRITTEN}  return go(1, {_OVER_CELL})", "`go`"),
     "a_lambda_with_a_produce": ("", f"{_WRITTEN}  l := fun(g: Number -> Number) => produce {{ emit g(1) }}\n"
                                     f" r := l({_OVER_CELL})  return 0", "this function value"),
     "a_function_named_as_a_value": (_MK, f"{_WRITTEN}  k := mk  return k({_OVER_CELL})", "this function value"),
-    "a_function_given_as_an_argument": (_MK + "\n fun app(h: (Number -> Number) -> Number, g: Number -> Number): Number { return h(g) }",
+    "a_function_given_as_an_argument": (program("test_soundness_probes/module_39.yon"),
                                         f"{_WRITTEN}  return app(mk, {_OVER_CELL})", "`app`"),
     "a_cell_of_an_outer_produce": (_MK, f"s := produce {{ {_WRITTEN}  v := mk({_OVER_CELL})  emit v }}\n return 0", "`mk`"),
 }
@@ -953,7 +800,7 @@ def test_a_closure_over_a_cell_does_not_enter_a_produce_through_a_parameter(tmp_
 
 
 def test_a_closure_in_a_section_does_not_enter_a_produce_through_a_parameter(tmp_path):
-    funs = "fun mk(o: Box): Number { s := produce { emit o.f(1) }\n return 0 }"
+    funs = program("test_soundness_probes/test_a_closure_in_a_section_does_not_enter_a_produce_through_a_parameter_1.yon")
     main = f"{_WRITTEN}  return mk(.-> Box {{ f ({_OVER_CELL}) }})"
     entry = "place Box { f Number -> Number }\n" + _param_entry(funs, main)
     rc, out = _compile(_project(tmp_path, entry, '\n[world.W]\nobjects = ["Box"]\n'), tmp_path / "out")
@@ -972,22 +819,19 @@ def test_a_function_in_a_section_is_a_function_value(tmp_path):
 # does not read the parameter inside a produce. With the value it computes.
 _PARAM_TWINS = {
     "a_pure_lambda": (_MK, "return mk(fun(y: Number) => y + 2)", 3),
-    "a_named_function": ("fun inc(y: Number): Number { return y + 4 }\n" + _MK, "return mk(inc)", 5),
+    "a_named_function": (program("test_soundness_probes/module_40.yon"), "return mk(inc)", 5),
     "an_immutable_captured": (_MK, "c := 20  return mk(fun(y: Number) => y + c)", 21),
     "a_cell_never_written": (_MK, f"mut c := 20  return mk({_OVER_CELL})", 21),
     "a_copy_captured": (_MK, "mut c := 10  c <- 20  x := c  c <- 30  return mk(fun(y: Number) => y + x)", 21),
-    "a_forwarder_of_a_pure_lambda": (_MK + "\n fun fw(g: Number -> Number): Number { return mk(g) }",
+    "a_forwarder_of_a_pure_lambda": (program("test_soundness_probes/module_41.yon"),
                                      "return fw(fun(y: Number) => y + 2)", 3),
-    "no_produce_in_the_callee": ("fun run1(g: Number -> Number): Number { return g(1) }",
+    "no_produce_in_the_callee": (program("test_soundness_probes/module_42.yon"),
                                  f"{_WRITTEN}  return run1({_OVER_CELL})", 21),
-    "a_value_computed_before": ("fun em(n: Number): Number { s := produce { emit n }\n mut t := 0\n"
-                                " for every x in s { t <- t + x }\n return t }",
+    "a_value_computed_before": (program("test_soundness_probes/module_43.yon"),
                                 f"{_WRITTEN}  f := {_OVER_CELL}  return em(f(1))", 21),
-    "the_closure_applied_before_the_produce": ("fun mk(g: Number -> Number): Number { v := g(1)  s := produce { emit v }\n"
-                                               " mut t := 0\n for every x in s { t <- t + x }\n return t }",
+    "the_closure_applied_before_the_produce": (program("test_soundness_probes/module_44.yon"),
                                                f"{_WRITTEN}  return mk({_OVER_CELL})", 21),
-    "another_parameter_read": ("fun mk(n: Number, g: Number -> Number): Number { v := g(1)  s := produce { emit n }\n"
-                               " mut t := 0\n for every x in s { t <- t + x }\n return t + v }",
+    "another_parameter_read": (program("test_soundness_probes/module_45.yon"),
                                f"{_WRITTEN}  return mk(1, {_OVER_CELL})", 22),
 }
 
@@ -1010,7 +854,7 @@ _NESTED_PRODUCERS = {
                                          " mut t := 0\n for every x in s { t <- t + x }\n return t", 6),
     "a_cell_of_the_function_of_the_same_name": ("mut f := 1  f <- 2\n produce { f := 9  emit f }\n return f", 2),
 }
-_MK2 = "fun mk2(n: Number): Number { f := 5\n k := fun(y: Number) => y + f\n produce { mut f := 1  f <- 2  emit f }\n return k(n) }"
+_MK2 = program("test_soundness_probes/module_46.yon")
 
 
 @pytest.mark.parametrize("form", sorted(_NESTED_PRODUCERS))
@@ -1071,8 +915,7 @@ def test_a_return_in_a_produce_takes_no_closure_over_its_cell(tmp_path):
                    reason="a cell of a produce says nothing of a closure over a same-named value outside it")
 def test_a_closure_over_a_value_named_like_a_cell_of_a_produce_leaves_the_body(tmp_path):
     # a refusal too many, not a hole: the walks of a value count cells by name
-    funs = ("fun mkc(): Number -> Number { f := 5\n produce { mut f := 1  f <- 2  emit f }\n"
-            " return fun(y: Number) => y + f }")
+    funs = (program("test_soundness_probes/test_a_closure_over_a_value_named_like_a_cell_of_a_produce_leaves_the_body_1.yon"))
     assert _compile_and_run(tmp_path, _param_entry(funs, "h := mkc()  return h(3)")) == 8
 
 
@@ -1112,24 +955,18 @@ def test_a_read_after_a_produce_statement_is_of_the_outer_value(tmp_path):
 
 # A spawn holds no store of its own, and a produce it holds is a boundary.
 def test_a_produce_in_a_spawn_writes_the_cells_it_declares(tmp_path):
-    entry = ("place Entry {\n  fun main: Number {\n"
-             "    w := spawn { produce { mut i := 1  i <- 2  emit i }  promote 1 }\n"
-             "    mut t := 0\n    for every x in w { t <- t + x }\n    return t }\n}\n")
+    entry = (program("test_soundness_probes/test_a_produce_in_a_spawn_writes_the_cells_it_declares_1.yon"))
     assert _compile_and_run(tmp_path, entry) == 1
 
 
 def test_a_produce_in_a_spawn_stores_into_no_cell_outside_it(tmp_path):
-    entry = ("place Entry {\n  fun main: Number {\n"
-             "    w := spawn { mut i := 1  produce { i <- 2  emit i }  promote 1 }\n"
-             "    return 0 }\n}\n")
+    entry = (program("test_soundness_probes/test_a_produce_in_a_spawn_stores_into_no_cell_outside_it_1.yon"))
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, "E2001", "is not supported inside a `produce`"), out
 
 
 def test_a_spawn_holds_no_store_of_its_own_around_a_produce(tmp_path):
-    entry = ("place Entry {\n  fun main: Number {\n"
-             "    w := spawn { mut i := 1  produce { emit 1 }  i <- 2  promote i }\n"
-             "    return 0 }\n}\n")
+    entry = (program("test_soundness_probes/test_a_spawn_holds_no_store_of_its_own_around_a_produce_1.yon"))
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, "E2001", "is not supported inside a `spawn`"), out
 
@@ -1175,16 +1012,13 @@ def test_a_closure_over_a_match_binder_runs(tmp_path):
 def test_a_cell_never_written_captured_and_returned_is_a_value(tmp_path):
     # no write, so no handle: the closure holds 10, and another call's cells
     # taking the slots changes nothing
-    entry = ("place Entry {\n  fun mk: Number -> Number { mut c := 10  return fun(y: Number) => y + c }\n"
-             "  fun user(f: Number -> Number): Number { mut d := 90  d <- 98  return f(1) + (d - d) }\n"
-             "  fun main: Number { f := mk  return user(f) }\n}\n")
+    entry = (program("test_soundness_probes/test_a_cell_never_written_captured_and_returned_is_a_value_1.yon"))
     assert _compile_and_run(tmp_path, entry) == 11
 
 
 @pytest.mark.xfail(strict=True, reason="a cell that holds a closure can be called by its name")
 def test_a_written_cell_that_holds_a_closure_is_called_by_its_name(tmp_path):
-    entry = ("place Entry {\n  fun main: Number { mut k := fun(y: Number) => y  "
-             "k <- fun(y: Number) => y + 1  return k(1) }\n}\n")
+    entry = (program("test_soundness_probes/test_a_written_cell_that_holds_a_closure_is_called_by_its_name_1.yon"))
     assert _compile_and_run(tmp_path, entry) == 2
 
 
@@ -1216,37 +1050,30 @@ def test_every_escape_route_of_a_cell_is_rejected(tmp_path, form):
 def test_closure_over_cell_sent_to_another_space_is_rejected(tmp_path):
     """The cross-Space call is a wire: the argument leaves the process."""
     (tmp_path / "echo.yon").write_text(
-        "place Entry {\n  fun use_remote(g: Number -> Number): Number { return g(1) }\n"
-        "  fun main: Number { return 0 }\n}\n")
+        program("test_soundness_probes/test_closure_over_cell_sent_to_another_space_is_rejected_1.yon"))
     (tmp_path / "client.yon").write_text(
-        "import echo::use_remote from Echo\n\nplace Entry {\n  fun main: Number {\n"
-        "    mut k := 10\n    k <- 20\n    return use_remote(fun(y: Number) => y + k)\n  }\n}\n")
+        program("test_soundness_probes/test_closure_over_cell_sent_to_another_space_is_rejected_2.yon"))
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
     assert _clean_rejection(rc, out, 'E2001', 'crosses into another Space') and "crosses" in out, out
 
 
 @pytest.mark.parametrize("body,expected", [
     # variant D: applied inside its own activation
-    ("fun mk: Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  return g(1) }", 21),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_1.yon"), 21),
     # passed downward: the callee runs inside the owner's activation
-    ("fun apply(g: Number -> Number): Number { return g(1) }\n"
-     "  fun mk: Number { mut c := 10  c <- 20  return apply(fun(y: Number) => y + c) }", 21),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_2.yon"), 21),
     # an immutable binding is captured by value: the closure is mobile
-    ("fun mk2: Number -> Number { mut c := 20  return fun(y: Number) => y + c }\n"
-     "  fun mk: Number { f := mk2  return f(1) }", 21),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_3.yon"), 21),
     # ... also when that value was read out of a cell
-    ("fun mk2: Number -> Number { mut c := 10  c <- 20  n := c + 0  return fun(y: Number) => y + n }\n"
-     "  fun mk: Number { f := mk2  return f(1) }", 21),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_4.yon"), 21),
     # a cell READ is a value, and so is what the closure computes
-    ("fun mk: Number { mut c := 10  c <- 20  return c }", 20),
-    ("fun mk: Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  n := g(1)  return n }", 21),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_5.yon"), 20),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_6.yon"), 21),
     # a cell used inside its activation, or its value handed to a callee
-    ("fun mk: Number { mut h := 20  g := fun(y: Number) => y + h  return g(1) }", 21),
-    ("fun pass(k: Number): Number { return k }\n"
-     "  fun mk: Number { mut h := 21  h2 := pass(h)  return h2 }", 21),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_7.yon"), 21),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_8.yon"), 21),
     # what crosses the wire is the closure's value, a number
-    ("fun mk(): Number { ch := Wire.make(4)  mut c := 10  c <- 20  g := fun(y: Number) => y + c  "
-     "_s := Wire.send(ch, g(1))  return Wire.recv(ch) }", 21),
+    (program("test_soundness_probes/test_mobile_uses_of_a_cell_are_untouched_9.yon"), 21),
 ])
 def test_mobile_uses_of_a_cell_are_untouched(tmp_path, body, expected):
     call = "mk()" if "Wire." in body else "mk"
@@ -1259,8 +1086,8 @@ def test_mobile_uses_of_a_cell_are_untouched(tmp_path, body, expected):
 
 @pytest.mark.parametrize("arg,extra", [
     ("3", ""),                                                          # violating literal
-    ("three(1)", "  fun three(k: Number): Number { return k + 2 }\n"),  # computed
-    ("loopy(0)", "  fun loopy(k: Number): Number { return if k > 100 then k else loopy(k + 1) }\n"),
+    ("three(1)", program("test_soundness_probes/test_bare_value_never_inhabits_a_subobject_1.yon")),  # computed
+    ("loopy(0)", program("test_soundness_probes/test_bare_value_never_inhabits_a_subobject_2.yon")),
 ])
 def test_bare_value_never_inhabits_a_subobject(tmp_path, arg, extra):
     """`{ n : A where P }` is a Sigma; a bare value is never accepted for it -
@@ -1287,8 +1114,7 @@ place Entry {
 
 
 @pytest.mark.parametrize("entry,expected", [
-    ("place Entry { fun main: Number { return match Int64.div(5, 0) "
-     "{ Int64 as v => 1, DomainError as e => 30 } } }\n", 30),
+    (program("test_soundness_probes/test_domain_error_reaches_the_caller_1.yon"), 30),
     (_HALF % "0 - 4", 30),
     (_HALF % "8", 1),
 ])
@@ -1302,14 +1128,7 @@ def test_domain_error_reaches_the_caller(tmp_path, entry, expected):
 @pytest.mark.xfail(strict=True, reason="an arrow type carries its latent effect, so "
                    "a function without `visits Output` cannot run an Output closure")
 def test_latent_effect_in_arrow_type(tmp_path):
-    entry = """\
-place Entry {
-  fun announce(n: Number): Number visits Output { _u := Output.print("hi")  return n }
-  fun mk: Number -> Number visits Output { return fun(y: Number) => announce(y) }
-  fun apply(g: Number -> Number): Number { return g(41) }
-  fun main: Number visits Output { return apply(mk) + 1 }
-}
-"""
+    entry = program("test_soundness_probes/test_latent_effect_in_arrow_type_1.yon")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'visits') and "visits" in out, out
 
@@ -1319,22 +1138,8 @@ place Entry {
 @pytest.mark.xfail(strict=True, reason="mutually synchronous calls between two "
                    "Spaces can deadlock, and the compiler says so")
 def test_mutual_sync_rpc_flagged(tmp_path):
-    (tmp_path / "alpha.yon").write_text("""\
-import beta::pong from Beta
-
-place Entry {
-  fun ping(n: Number): Number { return if n <= 0 then 0 else pong(n - 1) + 1 }
-  fun main: Number { return 0 }
-}
-""")
-    (tmp_path / "beta.yon").write_text("""\
-import alpha::ping from Alpha
-
-place Entry {
-  fun pong(n: Number): Number { return if n <= 0 then 0 else ping(n - 1) + 1 }
-  fun main: Number { return 0 }
-}
-""")
+    (tmp_path / "alpha.yon").write_text(program("test_soundness_probes/test_mutual_sync_rpc_flagged_1.yon"))
+    (tmp_path / "beta.yon").write_text(program("test_soundness_probes/test_mutual_sync_rpc_flagged_2.yon"))
     outs = [_compile(tmp_path / f"{n}.yon", tmp_path / f"{n.title()}_srv", cwd=tmp_path)
             for n in ("alpha", "beta")]
     assert any(rc != 0 and "deadlock" in out.lower() for rc, out in outs), outs
@@ -1345,17 +1150,6 @@ place Entry {
 @pytest.mark.xfail(strict=True, reason="a type index is pure: `clear c ++ clear c` "
                    "with a write to c in between does not compose")
 def test_cell_read_in_type_index(tmp_path):
-    entry = """\
-place Entry {
-  fun main: Number {
-    mut c := 5
-    p := clear c
-    c <- 6
-    q := clear c
-    j := p ++ q
-    return (j @ I0) * 10 + (j @ I1)
-  }
-}
-"""
+    entry = program("test_soundness_probes/test_cell_read_in_type_index_1.yon")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'concat') and "concat" in out, out

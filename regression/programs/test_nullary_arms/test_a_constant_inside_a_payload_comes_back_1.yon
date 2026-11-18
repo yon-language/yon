@@ -1,0 +1,9 @@
+place Entry {
+fun inner(n: Number): Lookup<Number> { return if n > 0 then n ↪ Found else Absent }
+fun outer(n: Number): Lookup<Lookup<Number>> { return inner(n) ↪ Found }
+fun main: Number {
+  a := match outer(0) { Found as l => (match l { Found as x => x, Absent => 40 }), Absent => 0 }
+  b := match outer(2) { Found as l => (match l { Found as x => x, Absent => 0 }), Absent => 0 }
+  return a + b
+}
+}

@@ -1,0 +1,4 @@
+place Box { f Number -> Number }
+place P { v Number }
+place Q { v Number }
+place Bit { this > One :U Zero }

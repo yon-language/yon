@@ -1,0 +1,8 @@
+place Sum { this > A :U B Number :U C Number }
+place Entry {
+fun pick(n: Number): Sum { return if n > 0 then n ↪ B else n ↪ C }
+fun main: Number {
+  x := match (40 ↪ B) { A => 0, B as p => p, C as q => q }
+  return x + (match pick(2) { A => 0, B as p => p, C as q => 0 })
+}
+}

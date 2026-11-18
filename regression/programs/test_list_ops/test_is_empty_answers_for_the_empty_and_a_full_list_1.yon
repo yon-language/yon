@@ -1,0 +1,1 @@
+fun no_numbers: List<Number> { return List.empty }

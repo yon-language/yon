@@ -1,0 +1,3 @@
+place Meter carried by number {
+  fun reading(m: Meter): Number { return m }
+}

@@ -1,0 +1,6 @@
+place Entry {}
+fun main(): Number {
+  _a := IO.print_num(7)
+  _b := IO.print_num(7)
+  return 0
+}

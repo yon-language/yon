@@ -11,16 +11,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
 
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
-_MAIN = ("place Entry {\n  fun main: Number {\n"
-         "    a := match decide(some_other(Heads)) { Present => 40, Absent => 0, Unknown => 1 }\n"
-         "    b := match decide(all_same(Heads)) { Present => 0, Absent => 2, Unknown => 1 }\n"
-         "    return a + b\n  }\n}\n")
+_MAIN = (program("test_prop_quantifiers/module_1.yon"))
 
 
 def _build(tmp_path: Path, props: str):
@@ -28,7 +26,7 @@ def _build(tmp_path: Path, props: str):
     (proj / "w").mkdir(parents=True)
     (proj / "yon.toml").write_text('[package]\nname = "pq"\n\n[world.W]\nspaces = ["w"]\n\n'
                                    '[runtime]\nbackend = "memory"\n')
-    (proj / "w" / "Coin.yon").write_text("place Coin { this > Heads :U Tails }\n")
+    (proj / "w" / "Coin.yon").write_text(program("test_prop_quantifiers/_build_1.yon"))
     (proj / "w" / "Topos.yon").write_text("topos where {\n" + props + "}\n")
     (proj / "Entry.yon").write_text(_MAIN)
     exe = tmp_path / "exe"

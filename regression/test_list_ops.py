@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -39,7 +40,7 @@ def test_is_empty_answers_for_the_empty_and_a_full_list(tmp_path):
     body = ("  l1 := List.cons(1, List.empty)\n"
             "  return (if List.is_empty(l1) then 1 else 2)"
             " + (if List.is_empty(no_numbers) then 40 else 0)\n")
-    funs = "fun no_numbers: List<Number> { return List.empty }\n"
+    funs = program("test_list_ops/test_is_empty_answers_for_the_empty_and_a_full_list_1.yon")
     assert _run(tmp_path, body, funs=funs).returncode == 42
 
 

@@ -1,0 +1,12 @@
+place Entry {}
+fun held(p: LatticePoint, x: Number): Number {
+  return match XRelMap.get(XRelMap.set(XRelMap.empty, p, x), p) { Found as v => v, Absent => 0 }
+}
+fun both(p: LatticePoint): Number {
+  _a := IO.print_num(held(p, 2.5))
+  _b := IO.print_num(held(p, 0 - 3))
+  return 0
+}
+fun main: Number {
+  return match LatticePoint.of_coordinate(1536) { LatticePoint as p => both(p), DomainError as d => 1 }
+}

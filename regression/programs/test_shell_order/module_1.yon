@@ -1,0 +1,43 @@
+place Entry {
+fun main: Number {
+  mut bad := 0
+  mut i := 0
+  while i < 196560 do {
+    bad <- bad + check(i)
+    i <- i + 1
+  }
+  return if bad == 0 then 42 else 1
+}
+/* 0 when the point of index i reads back index i, lies in the interval of
+   its orbit, and the orbit in the interval of its shape */
+fun check(i: Number): Number {
+  return match LatticePoint.at_index(i) {
+    LatticePoint as p => (if LatticePoint.index(p) == i then within(i, LatticePoint.orbit(p)) else 1),
+    DomainError as d => 1 }
+}
+fun within(i: Number, o: Number): Number {
+  f := first(o)
+  return if i >= f and i < f + count(o) then in_shape(i, shape_of(o)) else 1
+}
+fun first(o: Number): Number {
+  return match LatticePoint.orbit_first(o) { Number as f => f, DomainError as d => 0 - 1 }
+}
+fun count(o: Number): Number {
+  return match LatticePoint.orbit_count(o) { Number as c => c, DomainError as d => 0 - 1 }
+}
+/* the shape of an orbit, by the structure the C side verifies: orbits 0 to 3
+   are Axial, 4 to 6 Octadic, 7 to 11 Golay */
+fun shape_of(o: Number): Number {
+  return if o < 4 then 0 else if o < 7 then 2 else 1
+}
+fun in_shape(i: Number, s: Number): Number {
+  f := sfirst(s)
+  return if i >= f and i < f + scount(s) then 0 else 1
+}
+fun sfirst(s: Number): Number {
+  return match LatticePoint.shape_first(s) { Number as f => f, DomainError as d => 0 - 1 }
+}
+fun scount(s: Number): Number {
+  return match LatticePoint.shape_count(s) { Number as c => c, DomainError as d => 0 - 1 }
+}
+}

@@ -1,0 +1,6 @@
+place Entry {
+fun main(): Number {
+  n := SystemOs.refuse(WordOutsideRegion, Word64.from_int64(7), Word64.from_int64(5), Word64.zero)
+  return n + 1
+}
+}

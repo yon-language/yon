@@ -1,0 +1,4 @@
+place Entry {
+  fun iterate(a: Number, b: Number): Number { return a * b }
+  fun main: Number { return iterate(6, 7) }
+}

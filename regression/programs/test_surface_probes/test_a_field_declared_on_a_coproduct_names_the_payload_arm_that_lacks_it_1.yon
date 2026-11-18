@@ -1,0 +1,4 @@
+place Stato {
+  this > Opened :U Pending Number
+  balance Number
+}

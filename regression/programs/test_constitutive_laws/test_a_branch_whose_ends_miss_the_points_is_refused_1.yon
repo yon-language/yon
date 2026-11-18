@@ -1,0 +1,1 @@
+fun f(s: Cerchio): Number { return match s { punto => 42, giro => walk i => 41 } }

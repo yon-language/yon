@@ -1,0 +1,2 @@
+fun some(n: Number): PropTrunc<Number> { return n ↪ PropTrunc.incl }
+fun set(n: Number): SetTrunc<Number> { return n ↪ SetTrunc.incl }

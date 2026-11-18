@@ -1,0 +1,4 @@
+place Entry { }
+fun main(): Number {
+  return FnvHeap.value(FnvHeap.put(40, Word64.from_int64(1))) + 2
+}

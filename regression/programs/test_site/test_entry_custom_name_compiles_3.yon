@@ -1,0 +1,2 @@
+place Boot { }
+fun main: Number { return 0 }

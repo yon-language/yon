@@ -1,0 +1,3 @@
+fun round(e: Iso, x: Int64): (x ↦ e.forth ↦ e.left) = x {
+  return x ↦ e.left_law
+}

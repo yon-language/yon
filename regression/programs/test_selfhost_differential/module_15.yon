@@ -1,0 +1,4 @@
+/* a header comment */
+fun main: Number {
+  /* inline */ return 40 + 2 // a line comment
+}

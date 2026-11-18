@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -99,7 +100,7 @@ def test_the_region_of_the_space_is_the_same_at_every_ask(tmp_path):
 def test_heap_code_asks_for_its_region_without_allocating(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun probe_first(): Word64 { return read_word(SystemOs.fnv_heap_region, 0) }\n")
+        program("test_system_os/test_heap_code_asks_for_its_region_without_allocating_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out
 
@@ -287,7 +288,7 @@ def _prelude_with_heap_funs(tmp_path: Path, funs: str) -> dict:
 
 def test_heap_code_that_writes_a_text_literal_is_refused(tmp_path):
     env = _prelude_with_heap_funs(
-        tmp_path, '  fun label(r: Region): Text { return "slot" }\n')
+        tmp_path, program("test_system_os/test_heap_code_that_writes_a_text_literal_is_refused_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc != 0 and "[E2009]" in out and "Fatal error" not in out, out
     assert ("FnvHeap.label is the code of a heap (FnvHeap owns a primitive that "
@@ -298,9 +299,7 @@ def test_heap_code_that_writes_a_text_literal_is_refused(tmp_path):
 def test_heap_code_reaching_an_allocation_through_its_calls_is_refused(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        '  internal fun label(r: Region): Text { return "slot" }\n'
-        "  internal fun probe_tag(r: Region, w: Int64): Int64 { return Text.length(label(r)) + w }\n"
-        "  fun probe_put(r: Region, w: Int64): Int64 { return probe_tag(r, w) }\n")
+        program("test_system_os/test_heap_code_reaching_an_allocation_through_its_calls_is_refused_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc != 0 and "[E2009]" in out and "Fatal error" not in out, out
     assert ("FnvHeap.probe_put calls FnvHeap.probe_tag, which calls FnvHeap.label, which writes "
@@ -310,8 +309,7 @@ def test_heap_code_reaching_an_allocation_through_its_calls_is_refused(tmp_path)
 def test_heap_code_that_builds_a_section_is_refused(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun fail(r: Region) on error DomainError: Int64 {\n"
-        "    return .-> DomainError { message \"no\" }\n  }\n")
+        program("test_system_os/test_heap_code_that_builds_a_section_is_refused_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc != 0 and "[E2009]" in out, out
     assert "FnvHeap.fail builds a section of DomainError (.->)." in out, out
@@ -320,10 +318,7 @@ def test_heap_code_that_builds_a_section_is_refused(tmp_path):
 def test_heap_code_that_reads_and_writes_words_and_computes_is_accepted(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun bump(r: Region, i: Int64): Word64 {\n"
-        "    w := read_word(r, i) * Word64.from_int64(31) + Word64.one\n"
-        "    _u := write_word(r, i, w)\n"
-        "    return w\n  }\n")
+        program("test_system_os/test_heap_code_that_reads_and_writes_words_and_computes_is_accepted_1.yon"))
     rc, out, exe = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out
 
@@ -332,7 +327,7 @@ def test_heap_code_computing_on_the_bits_of_a_word_is_accepted(tmp_path):
     # the operators on the bits of a 64-bit integer are arithmetic, not calls
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun low_byte(r: Region, i: Int64): Int64 { return (i & 255) | (i ^ i) }\n")
+        program("test_system_os/test_heap_code_computing_on_the_bits_of_a_word_is_accepted_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out
 
@@ -341,8 +336,7 @@ def test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted(tmp_path):
     # a nullary arm is a constant, not a node: it allocates nothing
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun is_zero(r: Region, i: Int64): Boolean { return read_word(r, i) == Word64.zero }\n"
-        "  fun probe_first(r: Region): Lookup<Word64> { return Absent }\n")
+        program("test_system_os/test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out
 
@@ -350,7 +344,7 @@ def test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted(tmp_path):
 def test_heap_code_building_a_payload_arm_is_refused(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun probe_first(r: Region): Lookup<Word64> { return read_word(r, 0) ↪ Found }\n")
+        program("test_system_os/test_heap_code_building_a_payload_arm_is_refused_1.yon"))
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc != 0 and "[E2009]" in out and "Fatal error" not in out, out
     assert "FnvHeap.probe_first builds the coproduct value Found." in out, out

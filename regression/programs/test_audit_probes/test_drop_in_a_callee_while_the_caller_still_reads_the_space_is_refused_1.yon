@@ -1,0 +1,10 @@
+place Entry { }
+fun cleanup(): Number {
+  drop D
+  return 0
+}
+fun main(): Number {
+  p := .-> DP { n 7 }
+  z := cleanup()
+  return p.n
+}

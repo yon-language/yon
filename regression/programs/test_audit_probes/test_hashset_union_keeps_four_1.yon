@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  s := HashSet.add(HashSet.empty, 4)
+  return HashSet.size(HashSet.union(s, HashSet.empty))
+}

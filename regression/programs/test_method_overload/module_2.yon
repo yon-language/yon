@@ -1,0 +1,4 @@
+place Circle {
+  r := Number
+  fun area(c: Circle): Number { return c.r * c.r * 3 }
+}

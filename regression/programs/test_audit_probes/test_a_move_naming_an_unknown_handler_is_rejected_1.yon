@@ -1,0 +1,11 @@
+place Entry {
+  move PtoQ from P to Q {
+    v converts to v by double_itt
+  }
+  fun double_it(x: Number): Number { return x * 2 }
+  fun main: Number {
+    p := .-> P { v 21 }
+    q := apply_move(PtoQ, p)
+    return q.v
+  }
+}

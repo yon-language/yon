@@ -1,0 +1,1 @@
+  fun bad(a: Number, b: Number, q: (a = a) ∧ (a = a)): (a = a) ∧ (b = a) { return q }

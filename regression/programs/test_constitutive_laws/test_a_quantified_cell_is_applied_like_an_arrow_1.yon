@@ -1,0 +1,2 @@
+fun m(x: Number): nord = sud { return x ↦ meridiano }
+fun run: Number { return 42 }

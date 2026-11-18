@@ -1,0 +1,7 @@
+place Entry {}
+fun f(a: Number, b: Number): Number {
+  when a == 1 {
+    when b == 1 { return 1 } otherwise { return 2 }
+  } otherwise { return 3 }
+}
+fun main: Number { return f(1, 1) * 100 + f(1, 0) * 10 + f(0, 0) }

@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -49,8 +50,7 @@ def test_an_int64_by_zero_is_refused(tmp_path, what):
 @pytest.mark.parametrize("what", sorted(_OPS))
 def test_an_int32_by_zero_is_refused(tmp_path, what):
     op = _OPS[what]
-    extra = ("fun seven: Int32 { return 7 }\n"
-             "fun nought: Int32 { return 0 }\n")
+    extra = (program("test_integer_division/test_an_int32_by_zero_is_refused_1.yon"))
     r = _run(tmp_path, f"  q := seven {op} nought\n  return if q == seven then 1 else 2\n", extra)
     assert r.returncode == 3, (r.returncode, r.stderr)
     assert _ZERO in r.stderr, r.stderr

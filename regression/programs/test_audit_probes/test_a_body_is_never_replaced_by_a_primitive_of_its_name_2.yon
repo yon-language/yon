@@ -1,0 +1,2 @@
+place Entry {}
+fun main: Number { return Number.floor(2.5) }

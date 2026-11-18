@@ -1,0 +1,4 @@
+fun fail(m: Text) on error DomainError: Number { return .-> DomainError { message m } }
+fun check(i: Number, m: Text) on error DomainError: Number {
+  return if i < 2 then i else fail(m)
+}

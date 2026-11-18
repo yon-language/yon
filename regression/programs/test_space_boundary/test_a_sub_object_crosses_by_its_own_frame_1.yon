@@ -1,0 +1,3 @@
+place SyntaxError { this < Error  line Number }
+
+fun describe(e: Error): Number { return Text.length(e.message) }

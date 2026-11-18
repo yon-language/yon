@@ -1,0 +1,4 @@
+place Entry {
+fun road(x: Number): x = x { return clear x }
+fun main: Number { return 42 ↦ road @ I0 }
+}

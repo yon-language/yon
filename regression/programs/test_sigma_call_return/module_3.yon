@@ -1,0 +1,1 @@
+  fun w2(d: Number, q: d = 1): Σr : Number, (r = 0) ∧ (d = 1) { return pair(0, pair(refl(0), q)) }

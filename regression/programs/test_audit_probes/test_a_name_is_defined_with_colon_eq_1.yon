@@ -1,0 +1,4 @@
+fun main: Number {
+  mut x := 1 + 2
+  return x
+}

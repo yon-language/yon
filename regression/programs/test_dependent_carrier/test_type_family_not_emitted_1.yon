@@ -1,0 +1,4 @@
+
+fun Fam(x: Number): Type_0 { return Number }
+fun takes(p: El(Fam(3))): Number { return 0 }
+fun main: Number { return 0 }

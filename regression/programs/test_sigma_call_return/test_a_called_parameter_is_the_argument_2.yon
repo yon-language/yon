@@ -1,0 +1,3 @@
+  fun inc(n: Number): Number { return n + 1 }
+  fun k(g: Number -> Number, q: g = inc): g(0) = 1 { return k(g, q) }
+  fun bad(g: Number -> Number): g(0) = 1 { return k(inc, refl(inc)) }

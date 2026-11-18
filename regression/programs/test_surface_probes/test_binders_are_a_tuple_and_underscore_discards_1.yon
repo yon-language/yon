@@ -1,0 +1,5 @@
+place L { this > Nil :U Cons Number L }
+place Entry {
+fun h(l: L): Number { return match l { Nil => 0, Cons as (h, _) => h } }
+fun main: Number { return (42, Nil) ↪ Cons ↦ h }
+}

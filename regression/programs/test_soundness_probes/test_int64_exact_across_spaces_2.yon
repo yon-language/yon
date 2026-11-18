@@ -1,0 +1,10 @@
+import echo::odd_remote from Echo
+
+place Entry {
+  fun main: Number {
+    a := odd_remote(Int64.ipow_ok(2, 40) + 1)
+    b := odd_remote(Int64.ipow_ok(2, 52) + 1)
+    mut c := odd_remote(Int64.ipow_ok(2, 53) + 1)
+    return a + 2 * b + 4 * c
+  }
+}

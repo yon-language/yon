@@ -1,0 +1,2 @@
+place Entry { }
+fun main: Number { return 0 }

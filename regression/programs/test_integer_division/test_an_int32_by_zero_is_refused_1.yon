@@ -1,0 +1,2 @@
+fun seven: Int32 { return 7 }
+fun nought: Int32 { return 0 }

@@ -1,0 +1,3 @@
+  proof fun pick(d: Nat, n: Nat): (match n { zero => d, succ as k => d }) = d {
+    return match n { zero => refl(d), succ as k => refl(d) }
+  }

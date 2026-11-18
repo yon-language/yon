@@ -1,0 +1,4 @@
+fun main: Number {
+  sq := .-> Square { side 5 }
+  return Square.area(sq)
+}

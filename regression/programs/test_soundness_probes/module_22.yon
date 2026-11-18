@@ -1,0 +1,1 @@
+fun mk(): Number -> Number { mut h := fun(y: Number) => y  mut c := 10  c <- 20  h <- fun(y: Number) => y + c  return h }

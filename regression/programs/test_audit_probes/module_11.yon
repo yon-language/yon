@@ -1,0 +1,5 @@
+fun h: Number {
+  mut c := .-> P { x 1 }
+  c <- .-> P { x 2 }
+  return c.x
+}

@@ -1,0 +1,5 @@
+place Box { this > Full Number Number :U Empty }
+place Entry {
+fun mk(a: Number): Box { return (a, 2) ↪ Full }
+fun main: Number { return if mk(1) == mk(1) then 42 else 1 }
+}

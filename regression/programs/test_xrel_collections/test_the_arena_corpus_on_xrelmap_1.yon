@@ -1,0 +1,25 @@
+place Entry {}
+fun orbit_at(n: Number): Number {
+  return match LatticePoint.of_coordinate(n) {
+    LatticePoint as q => LatticePoint.orbit(q), DomainError as d => 0 - 1 }
+}
+fun no_entries: XRelMap<LatticePoint, Number> { return XRelMap.empty }
+fun with_q(p: LatticePoint, q: LatticePoint): Number {
+  a := XRelMap.set(XRelMap.set(XRelMap.empty, p, 42), q, 7)
+  _1 := IO.print_num(match XRelMap.get(a, p) { Found as v => v, Absent => 0 })
+  _2 := IO.print_num(if XRelMap.has(a, p) then 1 else 0)
+  _3 := IO.print_num(LatticePoint.orbit(p))
+  _4 := IO.print_num(if LatticePoint.orbit(p) == LatticePoint.orbit(q) then 1 else 0)
+  _5 := IO.print_num(if LatticePoint.orbit(p) == orbit_at(16778752) then 1 else 0)
+  _6 := IO.print_num(match XRelMap.get(no_entries, p) { Found as v => 1, Absent => 0 })
+  _7 := IO.print_num(match XRelMap.get(a, q) { Found as v => v, Absent => 0 })
+  return 0
+}
+fun at_p(p: LatticePoint): Number {
+  return match LatticePoint.of_coordinate(1280) {
+    LatticePoint as q => with_q(p, q), DomainError as d => 0 - 1 }
+}
+fun main: Number {
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => at_p(p), DomainError as d => 0 - 1 }
+}

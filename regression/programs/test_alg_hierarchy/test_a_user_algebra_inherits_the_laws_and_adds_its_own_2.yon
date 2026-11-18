@@ -1,0 +1,7 @@
+place Flip uses algebra Tally {
+  this > Zero :U One
+  fun op(a: Flip, b: Flip): Flip {
+    return match a { Zero => b, One => match b { Zero => One, One => Zero } }
+  }
+  fun unit: Flip { return Zero }
+}

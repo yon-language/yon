@@ -1,0 +1,3 @@
+  proof fun helper(u: Term, v: Term, q): Term.yes = Term.no {
+    return ite_injective(yes, u, v, no, u, v, q)
+  }

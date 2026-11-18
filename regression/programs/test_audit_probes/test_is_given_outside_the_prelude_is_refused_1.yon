@@ -1,0 +1,3 @@
+place Tools {
+  fun f: Number is given
+}

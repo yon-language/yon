@@ -1,0 +1,3 @@
+import svc::a_op from A
+place Entry { }
+fun main(): Number { drop A  r := a_op(5)  return r - r }

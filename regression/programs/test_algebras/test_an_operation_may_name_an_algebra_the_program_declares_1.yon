@@ -1,0 +1,4 @@
+place Lub is algebra {
+  operation join(a: Lub, b: Lub): Lub
+  law idempotent ∀a : Lub, join(a, a) = a
+}

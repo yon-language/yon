@@ -1,0 +1,12 @@
+place Entry {
+  fun main(): Number {
+    c := Wire.make_shm(7, 0)
+    mut total := 0
+    mut v := Wire.await_shm(7)
+    while v != 4294967295 do {
+      total <- total + v
+      v <- Wire.await_shm(7)
+    }
+    return total
+  }
+}

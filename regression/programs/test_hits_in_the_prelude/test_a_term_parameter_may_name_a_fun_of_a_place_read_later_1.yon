@@ -1,0 +1,3 @@
+place Aaa {
+  fun f(p: Quotient<Number, Zeta.ogni>): Number { return 0 }
+}

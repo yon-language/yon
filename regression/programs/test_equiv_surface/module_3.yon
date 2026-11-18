@@ -1,0 +1,4 @@
+fun f(t: Tri): Ter { return match t { ta => xb, tb => xc, tc => xa } }
+fun g(x: Ter): Tri { return match x { xa => tc, xb => ta, xc => tb } }
+fun eta(a: Tri): g(f(a)) = a { return match a { ta => clear ta, tb => clear tb, tc => clear tc } }
+fun eps(b: Ter): f(g(b)) = b { return match b { xa => clear xa, xb => clear xb, xc => clear xc } }

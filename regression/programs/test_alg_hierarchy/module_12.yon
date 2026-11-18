@@ -1,0 +1,10 @@
+internal place Sum carried by i64 {
+  this < Monoid
+  operation op(a: Sum, b: Sum): Sum as "+"
+  operation unit: Sum as "0"
+  law commutative ∀a : Sum ∀b : Sum, a + b = b + a
+  fun make(n: Int64): Sum { return n }
+  fun value(s: Sum): Int64 { return s }
+  fun forty: Sum { return 40 }
+  fun raised(s: Sum): Int64 { return s + 2 }
+}

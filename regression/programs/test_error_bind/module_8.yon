@@ -1,0 +1,5 @@
+place OtherError { this < Error }
+fun f(x: Number) on error OtherError: Number {
+  return escape Number.sqrt(x) + 1
+}
+fun main: Number { return match f(4) { Number as v => v, OtherError as e => 9 } }

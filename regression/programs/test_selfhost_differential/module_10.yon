@@ -1,0 +1,2 @@
+fun sub3(a, b, c): Number { return a - b - c }
+fun main: Number { return sub3(100, 30, 8) }

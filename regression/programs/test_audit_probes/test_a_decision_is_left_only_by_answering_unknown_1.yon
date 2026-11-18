@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  p := unknown
+  return match decide(p) { Present => 1, Absent => 2 }
+}

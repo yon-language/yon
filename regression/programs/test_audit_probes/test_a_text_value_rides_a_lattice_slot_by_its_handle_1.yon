@@ -1,0 +1,10 @@
+place Entry {}
+fun main(): Number {
+  m := XRelMap.set(XRelMap.empty, 1536, Text.concat("ab", "c"))
+  mut x := match XRelMap.get(m, 1536) { Found as v => (if v == "abc" then 1 else 0), Absent => 0 }
+  y := match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, Text.concat("a", "bc")), p) {
+      Found as v => Text.length(v), Absent => 0 }),
+    DomainError as d => 0 }
+  return x * 10 + y
+}

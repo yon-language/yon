@@ -1,0 +1,7 @@
+place Entry {}
+fun main(): Number {
+  m := XRelMap.set(XRelMap.empty, Text.concat("ab", "c"), 7)
+  m2 := XRelMap.set(m, Text.concat("a", "bc"), 9)
+  got := match XRelMap.get(m2, "abc") { Found as v => v, Absent => 0 }
+  return XRelMap.size(m2) * 10 + got
+}

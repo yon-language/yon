@@ -1,0 +1,1 @@
+fun five: Celsius { return 5 }

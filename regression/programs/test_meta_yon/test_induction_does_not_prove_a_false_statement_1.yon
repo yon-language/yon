@@ -1,0 +1,3 @@
+  proof fun bad(n: Nat): plus(n, zero) = zero {
+    return match n { zero => clear, succ as m => (s_, bad(m)) ↦ ap }
+  }

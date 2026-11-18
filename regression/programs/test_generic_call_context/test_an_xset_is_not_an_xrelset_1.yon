@@ -1,0 +1,4 @@
+fun main: Number {
+  s := XSet.empty()
+  return XRelSet.size(s)
+}

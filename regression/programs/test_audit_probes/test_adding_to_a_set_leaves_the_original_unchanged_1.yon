@@ -1,0 +1,9 @@
+place Entry {}
+fun sz(s: HashSet<Number>): Number { return HashSet.size(s) }
+fun main: Number {
+  s := HashSet.add(HashSet.empty, 1)
+  mut t := HashSet.add(s, 2)
+  mut b := HashSet.size(s)
+  mut c := sz(s)
+  return b * 10 + c
+}

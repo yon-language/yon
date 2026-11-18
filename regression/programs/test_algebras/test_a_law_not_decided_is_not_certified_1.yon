@@ -1,0 +1,5 @@
+place Meter carried by number uses algebra Additive {
+  fun op(a: Meter, b: Meter): Meter { return a + b }
+  fun unit: Meter { return 0 }
+  fun inv(a: Meter): Meter { return 0 - a }
+}

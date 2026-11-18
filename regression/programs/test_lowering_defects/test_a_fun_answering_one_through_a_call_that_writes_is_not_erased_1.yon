@@ -1,0 +1,11 @@
+place Entry {
+fun main(): Number {
+  _ := say()
+  return 42
+}
+fun shout(): Unit {
+  _ := SystemOs.write_output("heard\n")
+  return star
+}
+fun say(): Unit { return shout() }
+}

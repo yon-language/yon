@@ -1,0 +1,10 @@
+fun fail(m: Text) on error DomainError: Number { return .-> DomainError { message m } }
+fun check(i: Number, m: Text) on error DomainError: Number {
+  return if i < 2 then i else fail(m)
+}
+fun g(x: Number) on error DomainError: Boolean {
+  return x > 0 && escape fail("ab") > 0
+}
+fun main: Number {
+  return match g(0 - 1) { Boolean as b => if b then 1 else 2, DomainError as d => 100 + Text.length(d.message) }
+}

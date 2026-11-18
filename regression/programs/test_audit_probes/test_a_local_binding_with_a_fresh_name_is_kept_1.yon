@@ -1,0 +1,7 @@
+place Entry {
+fun total: Number { return 1 }
+fun main: Number {
+  subtotal := 41 + 1
+  return subtotal + total - 1
+}
+}

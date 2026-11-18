@@ -1,0 +1,2 @@
+fun fy(x: Number): Number { return x }
+place YP { }

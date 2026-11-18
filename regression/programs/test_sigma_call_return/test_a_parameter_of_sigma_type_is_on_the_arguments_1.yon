@@ -1,0 +1,1 @@
+  fun takes(d: Number, s: Σx : Number, x = d): Number { return fst(s) }

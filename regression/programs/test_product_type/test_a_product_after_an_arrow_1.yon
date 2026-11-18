@@ -1,0 +1,2 @@
+  fun twin(x: Number): (Number, Number) { return pair(x, x) }
+  fun apply(f: Number -> (Number, Number)): Number { return fst(f(42)) }

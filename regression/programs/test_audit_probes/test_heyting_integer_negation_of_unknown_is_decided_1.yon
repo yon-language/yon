@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  mut n := ~? heyting(0, 1)
+  return __heyt_int_mask(n)
+}

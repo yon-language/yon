@@ -1,0 +1,2 @@
+fun sum(n): Number { return if n == 0 then 0 else n + sum(n - 1) }
+fun main: Number { return sum(10) }

@@ -1,0 +1,4 @@
+  fun gone(e: Empty): Number { return 0 }
+  proof fun at_true(b: Boolean, q: b = true): Number {
+    return match b { true => 1, false => gone(absurd(inv(q))) }
+  }

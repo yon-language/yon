@@ -1,0 +1,12 @@
+place Entry {
+fun len(c: Chain<Number>): Number {
+  return match c { Nil => 0, Link as (x, rest) => 1 + len(rest) }
+}
+fun total(c: Chain<Number>): Number {
+  return match c { Nil => 0, Link as (x, rest) => x + total(rest) }
+}
+fun main: Number {
+  c := (7, (8, (24, Chain.Nil) ↪ Link) ↪ Link) ↪ Link
+  return len(c) * 0 + total(c) + 3
+}
+}

@@ -1,0 +1,3 @@
+place Other {
+  fun keep(h: FnvHeap<Number>): FnvHeap<Number> { return h }
+}

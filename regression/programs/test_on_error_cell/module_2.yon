@@ -1,0 +1,12 @@
+fun g(n: Number) on error DomainError: Number {
+  mut acc := 0
+  mut i := 0
+  while i < n do {
+    acc <- acc + i
+    i <- i + 1
+  }
+  return acc
+}
+fun main: Number {
+  return match g(5) { Number as v => v, DomainError as d => 99 }
+}

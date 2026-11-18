@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -26,7 +27,7 @@ def _make(tmp_path, places, main_body):
     root = tmp_path / "ov"
     (root / "w").mkdir(parents=True)
     (root / "yon.toml").write_text(TOML)
-    (root / "w" / "Topos.yon").write_text("topos CTopos where {\n}\n")
+    (root / "w" / "Topos.yon").write_text(program("test_method_overload/_make_1.yon"))
     for name, body in places.items():
         (root / "w" / f"{name}.yon").write_text(body)
     (root / "Entry.yon").write_text("place Entry { }\n" + main_body)
@@ -42,37 +43,26 @@ def _run(tmp_path, places, main_body):
     return subprocess.run([str(b)], capture_output=True, timeout=60).returncode
 
 
-SQUARE = ("place Square {\n  side := Number\n"
-          "  fun area(s: Square): Number { return s.side * s.side }\n}\n")
-CIRCLE = ("place Circle {\n  r := Number\n"
-          "  fun area(c: Circle): Number { return c.r * c.r * 3 }\n}\n")
+SQUARE = (program("test_method_overload/module_1.yon"))
+CIRCLE = (program("test_method_overload/module_2.yon"))
 
 
 def test_dispatch_by_receiver_type(tmp_path):
     # sq.area() -> Square's area (25); ci.area() -> Circle's area (12); 25+12=37.
-    main = ("fun main: Number {\n"
-            "  sq := .-> Square { side 5 }\n"
-            "  ci := .-> Circle { r 2 }\n"
-            "  return sq.area() + ci.area()\n}\n")
+    main = (program("test_method_overload/test_dispatch_by_receiver_type_1.yon"))
     assert _run(tmp_path, {"Square": SQUARE, "Circle": CIRCLE}, main) == 37
 
 
 def test_qualified_call(tmp_path):
     # the Place.method(x) form resolves to the same target.
-    main = ("fun main: Number {\n"
-            "  sq := .-> Square { side 5 }\n"
-            "  return Square.area(sq)\n}\n")
+    main = (program("test_method_overload/test_qualified_call_1.yon"))
     assert _run(tmp_path, {"Square": SQUARE, "Circle": CIRCLE}, main) == 25
 
 
 def test_third_place_extends_without_touching_others(tmp_path):
     # adding a place with the same method name is open: no change to Square/Circle.
-    tri = ("place Tri {\n  base := Number\n"
-           "  fun area(t: Tri): Number { return t.base }\n}\n")
-    main = ("fun main: Number {\n"
-            "  sq := .-> Square { side 4 }\n"
-            "  t := .-> Tri { base 9 }\n"
-            "  return sq.area() + t.area()\n}\n")  # 16 + 9 = 25
+    tri = (program("test_method_overload/test_third_place_extends_without_touching_others_1.yon"))
+    main = (program("test_method_overload/test_third_place_extends_without_touching_others_2.yon"))  # 16 + 9 = 25
     assert _run(tmp_path, {"Square": SQUARE, "Circle": CIRCLE, "Tri": tri}, main) == 25
 
 
@@ -90,20 +80,16 @@ def _reject(tmp_path, places, main_body):
 def test_genuine_ambiguity_is_rejected(tmp_path):
     # two methods with the same name AND the same receiver type cannot be told
     # apart: still a clean duplicate error, not a silent pick.
-    dup = ("place Square {\n  side := Number\n"
-           "  fun area(s: Square): Number { return s.side * s.side }\n"
-           "  fun area(s: Square): Number { return s.side }\n}\n")
-    rc, out = _reject(tmp_path, {"Square": dup}, "fun main: Number { return 0 }\n")
+    dup = (program("test_method_overload/test_genuine_ambiguity_is_rejected_1.yon"))
+    rc, out = _reject(tmp_path, {"Square": dup}, program("test_method_overload/test_genuine_ambiguity_is_rejected_2.yon"))
     assert rc != 0, "same-name same-receiver methods should be rejected"
     assert "TYPE ERROR [E2001]" in out, out
     assert "duplicate top-level function" in out and "area" in out, out
     assert "cannot be distinguished" in out, out
 
 
-TRI = "place Tri {\n  base := Number\n}\n"
-CIRCLE_RADIUS = ("place Circle {\n  r := Number\n"
-                 "  fun area(c: Circle): Number { return c.r * c.r * 3 }\n"
-                 "  fun radius(c: Circle): Number { return c.r }\n}\n")
+TRI = program("test_method_overload/module_3.yon")
+CIRCLE_RADIUS = (program("test_method_overload/module_4.yon"))
 
 
 @pytest.mark.parametrize("method", ["area", "radius"],
@@ -125,8 +111,5 @@ def test_method_absent_for_receiver_type_is_rejected(tmp_path, method):
 def test_unique_method_dispatches_on_its_own_receiver(tmp_path):
     # the control for the rejection above: the same places, the method called on
     # the place that declares it, compiles and runs (radius 2 + Tri.base 5 = 7).
-    main = ("fun main: Number {\n"
-            "  ci := .-> Circle { r 2 }\n"
-            "  t := .-> Tri { base 5 }\n"
-            "  return ci.radius() + t.base\n}\n")
+    main = (program("test_method_overload/test_unique_method_dispatches_on_its_own_receiver_1.yon"))
     assert _run(tmp_path, {"Square": SQUARE, "Circle": CIRCLE_RADIUS, "Tri": TRI}, main) == 7

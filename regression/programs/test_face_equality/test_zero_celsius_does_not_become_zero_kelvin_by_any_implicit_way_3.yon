@@ -1,0 +1,1 @@
+fun warm(n: Int64): Celsius { return n }

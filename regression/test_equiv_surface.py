@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -17,19 +18,19 @@ _TOML = ('[package]\nname = "equiv"\n\n[world.W]\nobjects = ["Bool", "Bit", "Tri
          '[runtime]\nbackend = "memory"\n')
 LSP = ROOT / "frontend" / "_build" / "default" / "yon_lsp.exe"
 
-_BOOL_BIT = 'fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }\nfun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }\nfun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }\nfun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }\n'
+_BOOL_BIT = program("test_equiv_surface/module_1.yon")
 
-_SUCC_PRED = 'fun succ(n: Int64): Int64 { return n + 1 }\nfun pred(n: Int64): Int64 { return n - 1 }\n'
+_SUCC_PRED = program("test_equiv_surface/module_2.yon")
 
 
 def _build(tmp_path: Path, top: str, body: str):
     proj = tmp_path / "proj"
     proj.mkdir(parents=True)
     (proj / "yon.toml").write_text(_TOML)
-    (proj / "Bool.yon").write_text('place Bool { this > tt :U ff }\n')
-    (proj / "Bit.yon").write_text('place Bit { this > one :U zero }\n')
-    (proj / "Tri.yon").write_text('place Tri { this > ta :U tb :U tc }\n')
-    (proj / "Ter.yon").write_text('place Ter { this > xa :U xb :U xc }\n')
+    (proj / "Bool.yon").write_text(program("test_equiv_surface/_build_1.yon"))
+    (proj / "Bit.yon").write_text(program("test_equiv_surface/_build_2.yon"))
+    (proj / "Tri.yon").write_text(program("test_equiv_surface/_build_3.yon"))
+    (proj / "Ter.yon").write_text(program("test_equiv_surface/_build_4.yon"))
     (proj / "Entry.yon").write_text(
         "place Entry {\n" + top + "fun main: Number {\n" + body + "\n}\n}\n")
     exe = tmp_path / "exe"
@@ -105,7 +106,7 @@ def test_the_primitives_of_the_kernel_are_not_written(tmp_path, body, code, word
 
 # a turn of three points: forth is not its own inverse, so forth and back tell
 # apart what they give
-_TURN = 'fun f(t: Tri): Ter { return match t { ta => xb, tb => xc, tc => xa } }\nfun g(x: Ter): Tri { return match x { xa => tc, xb => ta, xc => tb } }\nfun eta(a: Tri): g(f(a)) = a { return match a { ta => clear ta, tb => clear tb, tc => clear tc } }\nfun eps(b: Ter): f(g(b)) = b { return match b { xa => clear xa, xb => clear xb, xc => clear xc } }\n'
+_TURN = program("test_equiv_surface/module_3.yon")
 
 
 def test_back_from_the_target_is_the_undo_and_not_the_forth(tmp_path):
@@ -122,7 +123,7 @@ def test_back_from_the_target_is_the_undo_and_not_the_forth(tmp_path):
 def test_a_fun_of_the_program_named_undo_is_called_once_as_a_fun(tmp_path):
     # undo is the reverse of an equivalence only where no fun has the name: a
     # fun undo is checked as a fun, and its call is not copied where it is used
-    top = 'fun undo(n: Int64): Int64 {\n  _ := Text.print("undone")\n  return n + 1\n}\n'
+    top = program("test_equiv_surface/test_a_fun_of_the_program_named_undo_is_called_once_as_a_fun_1.yon")
     rc, out, exe = _build(tmp_path, top, "  u := undo(41)\n  return if u == 42 and u + 0 == 42 then 42 else 1")
     assert rc == 0, out
     r = subprocess.run([str(exe)], capture_output=True, text=True, timeout=30)
@@ -130,7 +131,7 @@ def test_a_fun_of_the_program_named_undo_is_called_once_as_a_fun(tmp_path):
 
 
 def test_a_fun_of_the_program_named_undo_leaves_the_transport_back_to_the_equivalence(tmp_path):
-    top = 'fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }\nfun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }\nfun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }\nfun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }\nfun undo(n: Int64): Int64 { return n + 1 }\n'
+    top = program("test_equiv_surface/test_a_fun_of_the_program_named_undo_leaves_the_transport_back_to_the_equivalence_1.yon")
     body = ("  bridge := b2bit <=> bit2b by eta, eps\n"
             "  near := zero ↦ bridge\n"
             "  return match near { tt => 1, ff => 42 }")
@@ -154,7 +155,7 @@ def test_an_equivalence_is_a_path_returned_or_passed_where_one_is_asked(tmp_path
     # univalence against the declared type of a return and of a parameter: the
     # types check; a path received as a parameter has no line known at compile
     # time to transport along (test_audit_probes.py)
-    top = ('fun succ(n: Int64): Int64 { return n + 1 }\nfun pred(n: Int64): Int64 { return n - 1 }\nfun line: Int64 = Int64 {\n  return succ <=> pred\n}\nfun go(p: Int64 = Int64, v: Int64): Int64 { return transport(p, v) }\nfun used: Int64 { return go(succ <=> pred, 10) }\n')
+    top = (program("test_equiv_surface/test_an_equivalence_is_a_path_returned_or_passed_where_one_is_asked_1.yon"))
     out = _types(tmp_path, top)
     # the server ran (it lints the fun nothing calls) and found no error
     assert "function 'line' is never used" in out and "error" not in out, out

@@ -1,0 +1,5 @@
+place Entry {
+  fun big: Int64 { return 9007199254740992 + 1 }
+  fun base: Int64 { return 9007199254740992 }
+  fun main: Number { return if big - base == 1 then 1 else 0 }
+}

@@ -1,0 +1,6 @@
+place Entry {}
+fun main: Number {
+  m1 := HashMap.set(HashMap.empty, 1, 10)
+  m2 := HashMap.set(m1, 2, 20)
+  return HashMap.size(m1) * 10 + HashMap.size(m2)
+}

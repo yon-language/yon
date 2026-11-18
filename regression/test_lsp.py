@@ -16,30 +16,15 @@ import time
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 LSP = ROOT / "frontend" / "_build" / "default" / "yon_lsp.exe"
 FIXTURE = ROOT / "regression" / "keyword_coverage" / "drop_reclaim"
 
-_ILLEGAL = """\
-import svc::d_op from D
-place Entry { }
-fun main(): Number {
-  drop D
-  r := d_op(5)
-  return r - r
-}
-"""
+_ILLEGAL = program("test_lsp/module_1.yon")
 
-_LEGAL = """\
-import svc::d_op from D
-place Entry { }
-fun main(): Number {
-  r := d_op(5)
-  drop D
-  return r - r
-}
-"""
+_LEGAL = program("test_lsp/module_2.yon")
 
 
 def _check(tmp_path, entry: str) -> tuple[int, str]:
@@ -80,15 +65,14 @@ def _two_world_project(root: Path) -> Path:
         '[package]\nname = "bnd"\n[runtime]\nbackend = "separate"\n'
         '[world.W1]\nobjects = ["X"]\nspaces  = ["A"]\n'
         '[world.W2]\nobjects = ["Y"]\nspaces  = ["B"]\n')
-    (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
-    (root / "B" / "Topos.yon").write_text("topos TB where { }\n")
+    (root / "A" / "Topos.yon").write_text(program("test_lsp/_two_world_project_1.yon"))
+    (root / "B" / "Topos.yon").write_text(program("test_lsp/_two_world_project_2.yon"))
     (root / "B" / "BP.yon").write_text(
-        "fun b_op(x: Number): Number { return x + 1 }\nplace BP { }\n")
+        program("test_lsp/_two_world_project_3.yon"))
     # A (world W1) imports from B (world W2): the wire crosses a world boundary.
     a = root / "A" / "AP.yon"
     a.write_text(
-        "import svc::b_op from B\nplace AP { }\n"
-        "fun a_op(x: Number): Number { r := b_op(x)  return r }\n")
+        program("test_lsp/_two_world_project_4.yon"))
     return a
 
 
@@ -110,13 +94,13 @@ def _world_project(root: Path):
     (root / "yon.toml").write_text(
         '[package]\nname = "w"\n[runtime]\nbackend = "separate"\n'
         '[world.W]\nobjects = ["X"]\nspaces  = ["A"]\n')
-    (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
+    (root / "A" / "Topos.yon").write_text(program("test_lsp/_world_project_1.yon"))
     (root / "A" / "AP.yon").write_text(
-        "place AP { }\nfun a_op(x: Number): Number { return x + 1 }\n")
+        program("test_lsp/_world_project_2.yon"))
     # main uses a_op so the package is lint-clean too (no W1001 unused-function):
     # the check below can then demand the full "OK: no errors" verdict.
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main: Number { return a_op(0) - 1 }\n")
+        program("test_lsp/_world_project_3.yon"))
     return root
 
 
@@ -148,12 +132,12 @@ def _two_boundary_files_same_pos(root: Path) -> Path:
     for d, t in [("A", "TA"), ("B", "TB"), ("OtherX", "TX"), ("OtherY", "TY")]:
         (root / d / "Topos.yon").write_text(f"topos {t} where {{ }}\n")
     (root / "OtherX" / "XP.yon").write_text(
-        "fun fx(x: Number): Number { return x }\nplace XP { }\n")
+        program("test_lsp/_two_boundary_files_same_pos_1.yon"))
     (root / "OtherY" / "YP.yon").write_text(
-        "fun fy(x: Number): Number { return x }\nplace YP { }\n")
+        program("test_lsp/_two_boundary_files_same_pos_2.yon"))
     a = root / "A" / "AP.yon"
-    a.write_text("import svc::fx from OtherX\nplace AP { }\n")
-    (root / "B" / "BP.yon").write_text("import svc::fy from OtherY\nplace BP { }\n")
+    a.write_text(program("test_lsp/_two_boundary_files_same_pos_3.yon"))
+    (root / "B" / "BP.yon").write_text(program("test_lsp/_two_boundary_files_same_pos_4.yon"))
     return a
 
 
@@ -177,7 +161,7 @@ def test_lsp_still_reports_genuine_type_error_in_package_file(tmp_path):
     a package file is still reported under E2001."""
     root = _world_project(tmp_path / "proj")
     (root / "A" / "AP.yon").write_text(
-        "place AP { }\nfun a_op(x: Number): Number { return zzz + 1 }\n")
+        program("test_lsp/test_lsp_still_reports_genuine_type_error_in_package_file_1.yon"))
     r = subprocess.run([str(LSP), "--check", str(root / "A" / "AP.yon")],
                        capture_output=True, text=True, timeout=60)
     out = r.stdout + r.stderr
@@ -191,16 +175,16 @@ def _cross_file_call_project(root: Path):
     (root / "yon.toml").write_text(
         '[package]\nname = "xf"\n[runtime]\nbackend = "separate"\n'
         '[world.W]\nobjects = ["X", "Y"]\nspaces  = ["A", "B"]\n')
-    (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
-    (root / "B" / "Topos.yon").write_text("topos TB where { }\n")
+    (root / "A" / "Topos.yon").write_text(program("test_lsp/_cross_file_call_project_1.yon"))
+    (root / "B" / "Topos.yon").write_text(program("test_lsp/_cross_file_call_project_2.yon"))
     (root / "A" / "AP.yon").write_text(
-        "place AP { }\nfun a_op(n: Number): Number { return gee(n) + 1 }\n")
+        program("test_lsp/_cross_file_call_project_3.yon"))
     (root / "B" / "BP.yon").write_text(
-        "place BP { }\nfun gee(n: Number): Number { return n * 2 }\n")
+        program("test_lsp/_cross_file_call_project_4.yon"))
     # main uses a_op so the project is lint-clean (no unused-function warnings);
     # these tests are about cross-file type resolution, not lint.
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main: Number { return a_op(1) }\n")
+        program("test_lsp/_cross_file_call_project_5.yon"))
     return root
 
 
@@ -221,7 +205,7 @@ def test_lsp_type_error_attributes_to_owning_file(tmp_path):
     onto a clean sibling that references it -- whole-program check, per-file view."""
     root = _cross_file_call_project(tmp_path / "proj")
     (root / "B" / "BP.yon").write_text(
-        "place BP { }\nfun gee(n: Number): Number { return zzz }\n")
+        program("test_lsp/test_lsp_type_error_attributes_to_owning_file_1.yon"))
     b = subprocess.run([str(LSP), "--check", str(root / "B" / "BP.yon")],
                        capture_output=True, text=True, timeout=60)
     bout = b.stdout + b.stderr
@@ -320,8 +304,8 @@ class _LspClient:
             self.proc.wait(timeout=30)
 
 
-_AP_CLEAN = "place AP { }\nfun a_op(n: Number): Number { return gee(n) + 1 }\n"
-_AP_BROKEN = "place AP { }\nfun a_op(n: Number): Number { return zzz + 1 }\n"
+_AP_CLEAN = program("test_lsp/module_3.yon")
+_AP_BROKEN = program("test_lsp/module_4.yon")
 
 
 def _uri(p: Path) -> str:

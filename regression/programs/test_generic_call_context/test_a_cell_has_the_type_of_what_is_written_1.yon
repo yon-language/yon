@@ -1,0 +1,6 @@
+fun main: Number {
+  mut l := List.empty
+  l <- List.cons(40, l)
+  l <- List.cons(2, l)
+  return List.length(l) + 40
+}

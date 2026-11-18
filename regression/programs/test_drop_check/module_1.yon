@@ -1,0 +1,7 @@
+place Entry { }
+fun main: Number {
+  p := .-> DP { n 7 }
+  filler := 1
+  y := p.n
+  return y
+}

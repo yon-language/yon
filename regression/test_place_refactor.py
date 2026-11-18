@@ -15,6 +15,7 @@ import subprocess
 
 import pytest
 from pathlib import Path
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
@@ -59,7 +60,7 @@ def test_body_clause_is_the_header_clause(tmp_path):
     (tmp_path / "h").mkdir()
     (tmp_path / "b").mkdir()
     header = _emit(_insert_twin(tmp_path / "h", "place QueryInsert on error QueryError {\n  sql Number\n}\n"))
-    body = _emit(_insert_twin(tmp_path / "b", 'place QueryInsert {\n  on error QueryError\n  sql Number\n}\n'))
+    body = _emit(_insert_twin(tmp_path / "b", program("test_place_refactor/test_body_clause_is_the_header_clause_1.yon")))
     assert header.returncode == 0 and body.returncode == 0, body.stderr[-300:]
     assert header.stdout == body.stdout, "body clause emits different MLIR than the header"
 
@@ -134,7 +135,7 @@ def test_record_pattern_on_a_payload_is_refused_and_the_tuple_shown(tmp_path):
 
 
 def test_mediatrice_on_arm_is_refused_and_the_injection_shown(tmp_path):
-    r = _twin(tmp_path, 'place NumList { this > Nil :U Cons Number NumList }\nplace Entry { }\nfun main: Number {\n  c := .-> Cons { _1 1 }\n  return 0\n}\n')
+    r = _twin(tmp_path, program("test_place_refactor/test_mediatrice_on_arm_is_refused_and_the_injection_shown_1.yon"))
     out = (r.stderr + r.stdout).decode()
     assert r.returncode != 0 and "E2001" in out and "(x1, x2) ↪ Cons" in out, out
 
@@ -145,7 +146,7 @@ def test_injection_needs_the_whole_payload(tmp_path):
     twin = tmp_path / "twin"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        'place NumList { this > Nil :U Cons Number NumList }\nplace Entry { }\nfun main: Number {\n  c := 1 ↪ NumList.Cons\n  return 0\n}\n')
+        program("test_place_refactor/test_injection_needs_the_whole_payload_1.yon"))
     r = _emit(twin)
     assert r.returncode != 0
     assert b"arm Cons: expected 2 payload(s), got 1" in r.stderr + r.stdout
@@ -174,6 +175,6 @@ def test_full_circle_no_constructors(tmp_path):
     twin = tmp_path / "circle"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        'place NumList { this > Nil :U Cons Number NumList }\nplace Entry { }\nfun sum(xs: NumList): Number {\n  return match xs {\n    Nil => 0,\n    Cons as (h, t) => h + sum(t)\n  }\n}\nfun main: Number {\n  xs := (5, ((37, NumList.Nil) ↪ NumList.Cons)) ↪ NumList.Cons\n  return sum(xs)\n}\n')
+        program("test_place_refactor/test_full_circle_no_constructors_1.yon"))
     r = _emit(twin)
     assert r.returncode == 0, r.stderr.decode(errors="replace")[-400:]

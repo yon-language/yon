@@ -1,0 +1,10 @@
+place Entry {
+fun deep(n: Number): Number {
+  mut c := n
+  c <- c + 1
+  return if n == 0 then c else deep(n - 1) + 0 * c
+}
+fun main: Number {
+  return deep(1100)
+}
+}

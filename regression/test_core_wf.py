@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = Path(
@@ -44,11 +45,7 @@ def _run(src: str, tmp_path, core_wf=False):
 
 def test_a1_dependent_types_certified(tmp_path):
     """El(Fam x) is certified by the kernel checker, not skipped."""
-    src = """
-fun Fam(x: Number): Type_0 { return Number }
-fun takes(p: Σx : Number, El(Fam(x))): Number { return 0 }
-fun main: Number { return 0 }
-"""
+    src = program("test_core_wf/test_a1_dependent_types_certified_1.yon")
     r = _run(src, tmp_path, core_wf=True)
     assert r.returncode == 0, r.stderr.decode(errors="replace")[-800:]
     err = r.stderr.decode(errors="replace")
@@ -62,11 +59,7 @@ fun main: Number { return 0 }
 def test_rejects_el_of_non_code(tmp_path):
     """El(g(y)) where g : number -> number is El of a non-code: the surface accepts
     it, the kernel re-check rejects it."""
-    src = """
-fun g(x: Number): Number { return x }
-fun f(y: Number, p: El(g(y))): Number { return 0 }
-fun main: Number { return 0 }
-"""
+    src = program("test_core_wf/test_rejects_el_of_non_code_1.yon")
     r = _run(src, tmp_path)
     assert r.returncode != 0, "gate accepted El of a non-code"
     err = r.stderr.decode(errors="replace")
@@ -78,10 +71,7 @@ fun main: Number { return 0 }
 
 def test_ordinary_program_not_false_rejected(tmp_path):
     """A plain runtime program compiles: out-of-fragment types are skipped."""
-    src = """
-fun add(a: Number, b: Number): Number { return a }
-fun main: Number { return add(2, 3) }
-"""
+    src = program("test_core_wf/test_ordinary_program_not_false_rejected_1.yon")
     r = _run(src, tmp_path, core_wf=True)
     err = r.stderr.decode(errors="replace")
     assert r.returncode == 0, err[-800:]

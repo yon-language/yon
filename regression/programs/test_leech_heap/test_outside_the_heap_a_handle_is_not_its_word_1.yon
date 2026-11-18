@@ -1,0 +1,2 @@
+fun with_point(p: LatticePoint, k: Number): Number { return k }
+fun raw(h: LeechHeap<Number>): Int64 { return h }

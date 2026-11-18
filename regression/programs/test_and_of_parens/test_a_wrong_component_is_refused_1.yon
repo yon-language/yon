@@ -1,0 +1,3 @@
+  fun bad(a: Number, b: Number): (a = a) ∧ (b = a) {
+    return pair(refl(a), refl(a))
+  }

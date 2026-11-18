@@ -1,0 +1,9 @@
+place Entry {
+fun succ(n: Int64): Int64 { return n + 1 }
+fun pred(n: Int64): Int64 { return n - 1 }
+fun go(p: Int64 = Int64, v: Int64): Int64 { return transport(p, v) }
+fun main: Number {
+  y := go(succ <=> pred, 10)
+  return if y == 11 then 11 else 0
+}
+}

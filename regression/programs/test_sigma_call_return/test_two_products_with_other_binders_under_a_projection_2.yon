@@ -1,0 +1,1 @@
+  fun bad(d: Number, s: Σp : (Number, Number), fst(p) = d): Σq : (Number, Number), snd(q) = d { return s }

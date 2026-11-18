@@ -1,0 +1,7 @@
+place Entry {
+fun wrap<T>(x: T): Box<T> { return x ↪ Full }
+fun leggi(b: Box<Number>): Number {
+  return match b { Full as p => p, Empty => 0 }
+}
+fun main: Number { return leggi(40 ↪ Full) + leggi(wrap(2)) }
+}

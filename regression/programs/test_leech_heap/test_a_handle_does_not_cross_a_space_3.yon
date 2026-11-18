@@ -1,0 +1,7 @@
+place Entry {
+  fun main(): Number {
+    _ := LeechHeap.stage(Word64.from_int64(1))
+    h := Other.keep(LeechHeap.commit(0, 0, 1))
+    return 42
+  }
+}

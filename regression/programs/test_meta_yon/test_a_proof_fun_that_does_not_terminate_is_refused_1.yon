@@ -1,0 +1,1 @@
+  proof fun giro(n: Nat): Nat { return giro(n) }

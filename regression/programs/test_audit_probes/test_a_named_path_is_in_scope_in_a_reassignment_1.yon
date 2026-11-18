@@ -1,0 +1,7 @@
+place Entry {}
+fun main: Number {
+  p := clear 7
+  mut acc := 0
+  acc <- p @ I0
+  return acc
+}

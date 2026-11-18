@@ -1,0 +1,2 @@
+fun orphan(y: Number): Number { return y }
+fun main: Number { return 0 }

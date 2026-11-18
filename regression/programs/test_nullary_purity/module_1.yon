@@ -1,0 +1,17 @@
+place Uso {
+  fun built: Opened { return .-> Opened { initial 1 } }
+  fun branches(n: Number): Number { return if n > 0 then 1 else 0 }
+  fun matched(s: Scelta): Number { return match s { Si => 1, No => 0 } }
+  fun loop_on_a_local_cell: Number {
+    mut c := 0
+    mut i := 0
+    while i < 10 do { c <- c + i
+      i <- i + 1 }
+    return c
+  }
+  fun prints(): Number { return IO.print_num(1) }
+  fun calls_one_that_prints(): Number { return prints() }
+  fun args: Number { return SystemOs.arg_count }
+  fun clock(): Int64 { return SystemOs.monotonic_ns() }
+  fun calls_the_clock(): Int64 { return clock() }
+}

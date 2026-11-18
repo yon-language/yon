@@ -27,6 +27,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = Path(
@@ -93,10 +94,7 @@ STUCK_FAM = "fun Fam(x: Number): Type_0 { return Fam(x) }\n"
 
 def test_value_dependent_el_compiles(tmp_path):
     """A value-dependent `El` lowers to the uniform box {ptr, i64}."""
-    src = STUCK_FAM + (
-        "fun viaEl(x: Number, p: El(Fam(x))): Number { return 0 }\n"
-        "fun main: Number { return 0 }\n"
-    )
+    src = program("test_boxed_el_carrier/test_value_dependent_el_compiles_1.yon")
     mlir = _emit(src, tmp_path)
     sig = _sig(mlir, "viaEl")
     assert sig is not None, "viaEl was not emitted"
@@ -108,11 +106,7 @@ def test_boxed_carrier_is_uniform(tmp_path):
     """Two DISTINCT stuck families produce the SAME carrier — uniformity is what lets a
     function over `El(stuck)` compile once, regardless of the code inside."""
     src = (
-        "fun Fam(x: Number): Type_0 { return Fam(x) }\n"
-        "fun Gam(y: Number): Type_0 { return Gam(y) }\n"
-        "fun useF(x: Number, p: El(Fam(x))): Number { return 0 }\n"
-        "fun useG(y: Number, q: El(Gam(y))): Number { return 0 }\n"
-        "fun main: Number { return 0 }\n"
+        program("test_boxed_el_carrier/test_boxed_carrier_is_uniform_1.yon")
     )
     mlir = _emit(src, tmp_path)
     sf, sg = _sig(mlir, "useF"), _sig(mlir, "useG")
@@ -127,10 +121,7 @@ def test_boxed_carrier_is_uniform(tmp_path):
 def test_boxed_value_round_trips_through_call(tmp_path):
     """The box round-trips through the calling convention: a function that takes
     `El(stuck)` and RETURNS `El(stuck)` carries the box through unmodified."""
-    src = STUCK_FAM + (
-        "fun passBox(x: Number, p: El(Fam(x))): El(Fam(x)) { return p }\n"
-        "fun main: Number { return 0 }\n"
-    )
+    src = program("test_boxed_el_carrier/test_boxed_value_round_trips_through_call_1.yon")
     mlir = _emit(src, tmp_path)
     sig, ret = _sig(mlir, "passBox"), _ret(mlir, "passBox")
     assert sig is not None and ret is not None, "passBox not emitted"
@@ -148,10 +139,7 @@ def test_computed_case_never_boxed(tmp_path):
     type) gets the CONCRETE carrier, NEVER the box. The box is strictly the last
     resort for a genuinely stuck code — it must not swallow the computed case."""
     src = (
-        "fun Fam(x: Number): Type_0 { return Number }\n"
-        "fun viaEl(p: El(Fam(7))): Number { return 0 }\n"
-        "fun direct(p: Number): Number { return 0 }\n"
-        "fun main: Number { return 0 }\n"
+        program("test_boxed_el_carrier/test_computed_case_never_boxed_1.yon")
     )
     mlir = _emit(src, tmp_path)
     se, sd = _sig(mlir, "viaEl"), _sig(mlir, "direct")

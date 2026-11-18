@@ -1,0 +1,3 @@
+  fun bad(d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.tgt)): Peak {
+    return peak_of(d1, d2, q)
+  }

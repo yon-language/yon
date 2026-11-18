@@ -1,0 +1,2 @@
+  fun left_of(a: Number, q: (a = a) ∧ (a = a)): a = a { return fst(q) }
+  fun right_of(a: Number, q: (a = a) ∧ (a = a)): a = a { return snd(q) }

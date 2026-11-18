@@ -15,6 +15,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -62,11 +63,7 @@ def test_a_place_that_lists_no_algebra_takes_no_operator(tmp_path):
     assert rc != 0 and "E2001" in out, out
 
 
-_COIN = ("place Coin uses algebra BooleanOr {\n"
-         "  this > Heads :U Tails\n"
-         "  fun op(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }\n"
-         "  fun unit: Coin { return Tails }\n"
-         "}\n")
+_COIN = (program("test_algebras/module_1.yon"))
 
 
 def test_the_laws_are_certified_on_a_finite_model(tmp_path):
@@ -82,7 +79,7 @@ def test_a_law_false_on_the_model_is_refuted(tmp_path):
 
 
 def test_a_model_must_give_each_operation(tmp_path):
-    src = _COIN.replace("  fun unit: Coin { return Tails }\n", "")
+    src = program("test_algebras/test_a_model_must_give_each_operation_1.yon")
     rc, out, _ = _build(tmp_path, {"Coin": src}, "  return 42", objects=["Coin"])
     assert rc != 0 and "does not give its operation unit" in out, out
 
@@ -137,10 +134,7 @@ def test_the_catalog_is_the_set_of_the_algebras_of_the_prelude():
 
 
 def test_an_operation_may_name_an_algebra_the_program_declares(tmp_path):
-    lub = ("place Lub is algebra {\n"
-           "  operation join(a: Lub, b: Lub): Lub\n"
-           "  law idempotent ∀a : Lub, join(a, a) = a\n"
-           "}\n")
+    lub = (program("test_algebras/test_an_operation_may_name_an_algebra_the_program_declares_1.yon"))
     rc, out, exe = _build(tmp_path, {"Lub": lub, "Or": _names("Lub", "  law idempotent\n")},
                           "  return 42", objects=["Lub", "Or"])
     assert rc == 0, out
@@ -162,10 +156,7 @@ def test_a_law_the_named_algebra_does_not_state_is_refused(tmp_path):
 
 
 def test_a_law_the_named_algebra_declares_by_name_alone_passes(tmp_path):
-    lub = ("place Lub is algebra {\n"
-           "  operation join(a: Lub, b: Lub): Lub\n"
-           "  law sturdy\n"
-           "}\n")
+    lub = (program("test_algebras/test_a_law_the_named_algebra_declares_by_name_alone_passes_1.yon"))
     rc, out, exe = _build(tmp_path, {"Lub": lub, "Or": _names("Lub", "  law sturdy\n")},
                           "  return 42", objects=["Lub", "Or"])
     assert rc == 0, out
@@ -270,11 +261,7 @@ def test_a_place_that_names_an_algebra_makes_no_instance_function(tmp_path):
 
 
 def test_a_law_not_decided_is_not_certified(tmp_path):
-    src = ("place Meter carried by number uses algebra Additive {\n"
-           "  fun op(a: Meter, b: Meter): Meter { return a + b }\n"
-           "  fun unit: Meter { return 0 }\n"
-           "  fun inv(a: Meter): Meter { return 0 - a }\n"
-           "}\n")
+    src = (program("test_algebras/test_a_law_not_decided_is_not_certified_1.yon"))
     rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
     assert rc != 0 and "E2102" in out and "not certified" in out, out
 
@@ -325,10 +312,7 @@ def test_an_axiom_is_declared_only_where_the_certification_does_not_decide(tmp_p
 
 
 def test_a_place_takes_the_operations_it_does_not_give_from_its_carrier(tmp_path):
-    word = ("internal place W carried by i64 uses algebra Additive, Multiplicative {\n"
-            "  fun make(n: Int64): W { return n }\n"
-            "  fun value(w: W): Int64 { return w }\n"
-            "}\n")
+    word = (program("test_algebras/test_a_place_takes_the_operations_it_does_not_give_from_its_carrier_1.yon"))
     rc, out, exe = _build(tmp_path, {"W": word},
                           "  return if W.value(W.make(40) + W.make(2) * W.make(1)) == 42 then 42 else 1",
                           objects=["W"])
@@ -351,7 +335,7 @@ def test_carried_by_in_the_body_of_an_algebra_points_to_the_header(tmp_path):
 
 
 def test_carried_by_is_given_on_a_place_that_is_no_algebra_is_refused(tmp_path):
-    src = "place Meter carried by i64 is given {\n}\n"
+    src = program("test_algebras/test_carried_by_is_given_on_a_place_that_is_no_algebra_is_refused_1.yon")
     rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
     assert rc != 0 and "E2001" in out, out
     assert ("place Meter: `carried by i64 is given` declares the axioms of an algebra on its carrier, "
@@ -382,14 +366,7 @@ def test_a_decided_law_that_is_false_is_refuted_even_with_is_given(tmp_path):
 
 # a signature: a fun in its body is a derived operation, with an instance in
 # each model (a fun in the body of an instance is a fun of its house instead)
-_DERIVED = ("place Sum is algebra {\n"
-            '  operation add(a: Sum, b: Sum): Sum as "+"\n'
-            '  operation zero: Sum as "0"\n'
-            "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
-            "  law neutral ∀a : Sum, a + zero = a\n"
-            "  fun double(a: Sum): Sum { return a + a }\n"
-            "  fun triple(a: Sum): Sum { return double(a) + a + zero }\n"
-            "}\n")
+_DERIVED = (program("test_algebras/module_2.yon"))
 
 _W = ("internal place W carried by i64 uses algebra Sum {\n"
       "  fun make(n: Int64): W { return n }\n"
@@ -408,7 +385,7 @@ def test_a_derived_operation_has_an_instance_in_each_model(tmp_path):
 
 
 def test_a_model_that_gives_a_derived_operation_keeps_its_own(tmp_path):
-    own = "  fun double(a: W): W { return a }\n"
+    own = program("test_algebras/test_a_model_that_gives_a_derived_operation_keeps_its_own_1.yon")
     rc, out, exe = _build(tmp_path, {"Sum": _DERIVED, "W": _W.replace("EXTRA", own)},
                           "  return if W.value(W.triple(W.make(21))) == 42 then 42 else 1",
                           objects=["Sum", "W"])
@@ -417,15 +394,8 @@ def test_a_model_that_gives_a_derived_operation_keeps_its_own(tmp_path):
 
 
 def test_a_derived_operation_on_a_finite_model(tmp_path):
-    alg = ("place Lub is algebra {\n"
-           "  operation join(a: Lub, b: Lub): Lub\n"
-           "  law idempotent ∀a : Lub, join(a, a) = a\n"
-           "  fun join3(a: Lub, b: Lub, c: Lub): Lub { return join(join(a, b), c) }\n"
-           "}\n")
-    coin = ("place Coin uses algebra Lub {\n"
-            "  this > Heads :U Tails\n"
-            "  fun join(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }\n"
-            "}\n")
+    alg = (program("test_algebras/test_a_derived_operation_on_a_finite_model_1.yon"))
+    coin = (program("test_algebras/test_a_derived_operation_on_a_finite_model_2.yon"))
     rc, out, exe = _build(tmp_path, {"Lub": alg, "Coin": coin},
                           "  return match Coin.join3(Tails, Tails, Heads) { Heads => 42, Tails => 1 }",
                           objects=["Lub", "Coin"])
@@ -433,12 +403,7 @@ def test_a_derived_operation_on_a_finite_model(tmp_path):
     assert _run(exe).returncode == 42
 
 
-_INSTANCE = ("place Sum carried by i64 {\n"
-             "  this < Monoid\n"
-             '  operation op(a: Sum, b: Sum): Sum as "+"\n'
-             '  operation unit: Sum as "0"\n'
-             "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
-             "}\n")
+_INSTANCE = (program("test_algebras/module_3.yon"))
 _MODEL = ("internal place W carried by i64 uses algebra Sum {\n"
           "  fun make(n: Int64): W { return n }\n"
           "  fun value(w: W): Int64 { return w }\n"
@@ -475,8 +440,7 @@ def test_a_fun_in_the_body_of_an_instance_is_no_derived_operation(tmp_path):
 
 
 def test_an_internal_instance_keeps_its_signature(tmp_path):
-    gives = ("  fun op(a: W, b: W): W { return make(value(a) + value(b)) }\n"
-             "  fun unit: W { return make(0) }\n")
+    gives = (program("test_algebras/test_an_internal_instance_keeps_its_signature_1.yon"))
     rc, out, exe = _build(tmp_path, {"Sum": "internal " + _INSTANCE, "W": _MODEL.replace("GIVES", gives)},
                           _FORTY_TWO, objects=["Sum", "W"])
     assert rc == 0, out

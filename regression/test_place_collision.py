@@ -17,6 +17,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -37,11 +38,11 @@ def _project(root: Path, second_place: str):
         '[world.Beta]\nobjects = ["Y"]\nspaces  = ["sb"]\n\n'
         '[runtime]\nbackend = "memory"\n'
     )
-    (root / "Entry.yon").write_text("place Entry { }\nfun main: Number { return 7 }\n")
-    (root / "sa" / "Dup.yon").write_text("place Dup { x Number }\n")
-    (root / "sa" / "Topos.yon").write_text("topos AlphaT where {\n}\n")
+    (root / "Entry.yon").write_text(program("test_place_collision/_project_1.yon"))
+    (root / "sa" / "Dup.yon").write_text(program("test_place_collision/_project_2.yon"))
+    (root / "sa" / "Topos.yon").write_text(program("test_place_collision/_project_3.yon"))
     (root / "sb" / f"{second_place}.yon").write_text(f"place {second_place} {{ y Number }}\n")
-    (root / "sb" / "Topos.yon").write_text("topos BetaT where {\n}\n")
+    (root / "sb" / "Topos.yon").write_text(program("test_place_collision/_project_4.yon"))
 
 
 def test_cross_world_place_collision_rejected(tmp_path):

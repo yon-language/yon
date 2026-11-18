@@ -1,0 +1,6 @@
+place Entry {
+fun pick(n: Number): Lookup<Number> { return if n > 0 then n ↪ Found else Absent }
+fun main: Number {
+  return match pick(0) { Absent => 42, _ => 1 }
+}
+}

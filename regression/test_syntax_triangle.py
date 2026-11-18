@@ -38,6 +38,7 @@ from pathlib import Path
 import pytest
 
 import compiling_corpus as cc
+from yon_programs import program
 
 def _stable_id(text: str) -> str:
     """A node id stable across processes: Python's hash() of a str is salted
@@ -426,7 +427,7 @@ def compile_fragment(chapter, content, tmp):
     ctx_places, ctx_rest = _split_places(ctx_head)
     places, rest = _split_places(body)
     named = {**ctx_places, **context, **places, **own}
-    main = "fun main: Number { return 0 }\n"
+    main = program("test_syntax_triangle/compile_fragment_1.yon")
     # a source compiled to a binary of its own, beside the sources it imports from
     alone = [p for p in own if "/" not in p and p != "Entry.yon"]
     if alone:

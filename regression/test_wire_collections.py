@@ -17,6 +17,7 @@ import os
 import subprocess
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -81,9 +82,9 @@ def _cross_project(tmp_path: Path, place: str, fields: str, elem: str, build: st
     for d, spaces in ((svc, '"w"'), (sub, '"w", "P"')):
         (d / "w").mkdir(parents=True)
         (d / "yon.toml").write_text(toml.format(n=d.name, s=spaces))
-        (d / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
+        (d / "w" / "Topos.yon").write_text(program("test_wire_collections/_cross_project_1.yon"))
     (svc / "w" / f"{place}.yon").write_text(f"place {place} {{\n{fields}{funs}\n}}\n")
-    (svc / "Entry.yon").write_text("place Entry {\n  fun main: Number { return 0 }\n}\n")
+    (svc / "Entry.yon").write_text(program("test_wire_collections/_cross_project_2.yon"))
     (sub / "w" / f"{place}.yon").write_text(f"place {place} {{\n{fields}}}\n")
     (sub / "yon_modules" / "prod").mkdir(parents=True)
     (sub / "yon_modules" / "prod" / "prod.yon").write_text(

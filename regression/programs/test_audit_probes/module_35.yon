@@ -1,0 +1,18 @@
+place Entry {
+  fun probe(base: Number): Number {
+    mut bad := 0
+    mut k := 0
+    while k < 1000 do {
+      p := .-> P { v base + k }
+      bad <- bad + (if p.v == base + k then 0 else 1)
+      k <- k + 1
+    }
+    return bad
+  }
+  fun main(): Number {
+    results := spawn in 8 parallel {
+      promote probe(spawn_index * 100000 + 1)
+    }
+    return results.fold(0, fun(a: Number, v: Number) => a + v)
+  }
+}

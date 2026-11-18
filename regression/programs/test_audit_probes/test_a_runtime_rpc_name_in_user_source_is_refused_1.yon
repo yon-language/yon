@@ -1,0 +1,5 @@
+import svc::d_op from D
+place Entry { }
+fun main: Number {
+  return __yon_rpc2_invoke1__D(7, 3)
+}

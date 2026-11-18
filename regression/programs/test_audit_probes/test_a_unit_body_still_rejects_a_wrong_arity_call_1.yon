@@ -1,0 +1,5 @@
+place Entry {
+  fun k(a: Number): Number { return a }
+  fun f: Unit { return k(1, 2, 3, 4) }
+  fun main: Number { return 7 }
+}

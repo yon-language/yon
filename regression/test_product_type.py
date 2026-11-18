@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -66,51 +67,51 @@ def _mlir(tmp_path, name, src):
 # the three examples shown to Antonio, written with the parentheses
 
 def test_a_product_swaps_its_components(tmp_path):
-    body = '  fun swap(p: (Number, Boolean)): (Boolean, Number) { return pair(snd(p), fst(p)) }\n'
+    body = program("test_product_type/test_a_product_swaps_its_components_1.yon")
     assert _runs(tmp_path, body, "return snd(swap(pair(7, true)))") == 7
 
 
 def test_a_generic_reads_its_parameters_from_a_product(tmp_path):
-    body = '  fun first<K, V>(p: (K, V)): K { return fst(p) }\n'
+    body = program("test_product_type/test_a_generic_reads_its_parameters_from_a_product_1.yon")
     assert _runs(tmp_path, body, "return first(pair(42, 7))") == 42
 
 
 def test_a_list_holds_products(tmp_path):
-    body = '  fun keys<K, V>(xs: List<(K, V)>): Number { return List.length(xs) }\n'
+    body = program("test_product_type/test_a_list_holds_products_1.yon")
     assert _runs(tmp_path, body, "return keys(List.cons(pair(1, 2), List.empty))") == 1
 
 
 # nesting, the other component and the other positions of a type
 
 def test_a_product_nests(tmp_path):
-    body = '  fun mid(p: (Number, (Number, Number))): Number { return fst(snd(p)) }\n'
+    body = program("test_product_type/test_a_product_nests_1.yon")
     assert _runs(tmp_path, body, "return mid(pair(1, pair(42, 3)))") == 42
 
 
 def test_the_second_component(tmp_path):
-    body = '  fun second<K, V>(p: (K, V)): V { return snd(p) }\n'
+    body = program("test_product_type/test_the_second_component_1.yon")
     assert _runs(tmp_path, body, "return second(pair(42, 7))") == 7
 
 
 def test_a_product_as_a_result(tmp_path):
-    body = '  fun twin(x: Number): (Number, Number) { return pair(x, x + 1) }\n'
+    body = program("test_product_type/test_a_product_as_a_result_1.yon")
     assert _runs(tmp_path, body, "return snd(twin(41))") == 42
 
 
 def test_a_product_nests_on_the_left(tmp_path):
-    body = '  fun head(p: ((Number, Number), Number)): Number { return snd(fst(p)) }\n'
+    body = program("test_product_type/test_a_product_nests_on_the_left_1.yon")
     assert _runs(tmp_path, body, "return head(pair(pair(1, 42), 3))") == 42
 
 
 def test_a_product_with_components_of_different_types(tmp_path):
-    body = '  fun size(p: (Text, Number)): Number { return snd(p) }\n'
+    body = program("test_product_type/test_a_product_with_components_of_different_types_1.yon")
     assert _runs(tmp_path, body, 'return size(pair("a", 42))') == 42
 
 
 # no new type: the parentheses, Sigma and the meet of two paths are one product
 
 def test_a_product_flows_into_its_sigma(tmp_path):
-    body = ('  fun up(p: (Number, Number)): Σx : Number, Number { return p }\n  fun down(p: Σx : Number, Number): (Number, Number) { return p }\n')
+    body = (program("test_product_type/test_a_product_flows_into_its_sigma_1.yon"))
     assert _runs(tmp_path, body, "return fst(down(up(pair(42, 7))))") == 42
 
 
@@ -122,57 +123,57 @@ def test_the_parentheses_compile_to_the_sigma_they_stand_for(tmp_path):
 
 
 def test_a_meet_of_paths_is_the_product_of_the_paths(tmp_path):
-    body = ('  fun first_of(a: Number, q: (a = a) ∧ (a = a)): a = a { return fst(q) }\n  fun both(a: Number): (a = a) ∧ (a = a) { return pair(refl(a), refl(a)) }\n')
+    body = (program("test_product_type/test_a_meet_of_paths_is_the_product_of_the_paths_1.yon"))
     assert _runs(tmp_path, body, "first_of(42, both(42))\n  return 42") == 42
 
 
 def test_no_place_stands_behind_the_parentheses(tmp_path):
-    body = '  fun f(p: Pair): Number { return 0 }\n'
+    body = program("test_product_type/test_no_place_stands_behind_the_parentheses_1.yon")
     _refused(tmp_path, body, "return 0", "E2001", "unknown user type: Pair")
 
 
 def test_a_wrong_component_is_refused(tmp_path):
-    body = '  fun f(p: (Number, Text)): Number { return 0 }\n'
+    body = program("test_product_type/test_a_wrong_component_is_refused_1.yon")
     _refused(tmp_path, body, "return f(pair(1, 2))", "E2001", "parameter p expects")
 
 
 def test_a_component_read_at_the_wrong_type_is_refused(tmp_path):
-    body = '  fun f(p: (Number, Text)): Number { return snd(p) }\n'
+    body = program("test_product_type/test_a_component_read_at_the_wrong_type_is_refused_1.yon")
     _refused(tmp_path, body, 'return f(pair(1, "a"))', "E2001", "type mismatch")
 
 
 # before an arrow the parentheses are the arguments of a fun
 
-ADD = '  fun add(x: Number, y: Number): Number { return x + y }\n'
+ADD = program("test_product_type/module_1.yon")
 
 
 def test_before_an_arrow_they_are_two_arguments(tmp_path):
-    body = '  fun add(x: Number, y: Number): Number { return x + y }\n  fun apply(f: (Number, Number) -> Number): Number { return f(40, 2) }\n'
+    body = program("test_product_type/test_before_an_arrow_they_are_two_arguments_1.yon")
     assert _runs(tmp_path, body, "return apply(add)") == 42
 
 
 def test_before_an_arrow_the_two_arguments_are_not_a_pair(tmp_path):
-    body = '  fun add(x: Number, y: Number): Number { return x + y }\n  fun apply(f: (Number, Number) -> Number): Number { return f(pair(40, 2)) }\n'
+    body = program("test_product_type/test_before_an_arrow_the_two_arguments_are_not_a_pair_1.yon")
     _refused(tmp_path, body, "return apply(add)", "E2001", "HOF f: parameter expects Number")
 
 
 def test_three_arguments_before_an_arrow_stay_arguments(tmp_path):
-    body = ('  fun add3(x: Number, y: Number, z: Number): Number { return x + y + z }\n  fun apply(f: (Number, Number, Number) -> Number): Number { return f(40, 1, 1) }\n')
+    body = (program("test_product_type/test_three_arguments_before_an_arrow_stay_arguments_1.yon"))
     assert _runs(tmp_path, body, "return apply(add3)") == 42
 
 
 def test_a_product_as_one_argument_is_written_in_its_own_parentheses(tmp_path):
-    body = ('  fun left(p: (Number, Number)): Number { return fst(p) }\n  fun apply(f: ((Number, Number)) -> Number): Number { return f(pair(42, 7)) }\n')
+    body = (program("test_product_type/test_a_product_as_one_argument_is_written_in_its_own_parentheses_1.yon"))
     assert _runs(tmp_path, body, "return apply(left)") == 42
 
 
 def test_a_product_as_one_of_two_arguments(tmp_path):
-    body = ('  fun plus(p: (Number, Number), z: Number): Number { return fst(p) + z }\n  fun apply(f: ((Number, Number), Number) -> Number): Number { return f(pair(40, 7), 2) }\n')
+    body = (program("test_product_type/test_a_product_as_one_of_two_arguments_1.yon"))
     assert _runs(tmp_path, body, "return apply(plus)") == 42
 
 
 def test_a_product_after_an_arrow(tmp_path):
-    body = ('  fun twin(x: Number): (Number, Number) { return pair(x, x) }\n  fun apply(f: Number -> (Number, Number)): Number { return fst(f(42)) }\n')
+    body = (program("test_product_type/test_a_product_after_an_arrow_1.yon"))
     assert _runs(tmp_path, body, "return apply(twin)") == 42
 
 
@@ -197,7 +198,7 @@ def test_three_components_as_a_result_are_refused(tmp_path):
 
 
 def test_the_nested_form_of_the_refusal_compiles(tmp_path):
-    body = '  fun last(p: (Number, (Number, Number))): Number { return snd(snd(p)) }\n'
+    body = program("test_product_type/test_the_nested_form_of_the_refusal_compiles_1.yon")
     assert _runs(tmp_path, body, "return last(pair(1, pair(2, 42)))") == 42
 
 
@@ -234,8 +235,8 @@ def _formatted_is_the_same_program(tmp_path, fun):
 
 @pytest.mark.skipif(not YONFMT.exists(), reason="yonfmt missing")
 @pytest.mark.parametrize("fun", [
-    '  fun f(p: (Number, (Number, Number))): Number { return fst(snd(p)) }\n',
-    '  fun g(k: (Number, Number) -> Number): Number { return k(1, 2) }\n',
+    program("test_product_type/test_the_formatter_keeps_the_program_1.yon"),
+    program("test_product_type/test_the_formatter_keeps_the_program_2.yon"),
 ])
 def test_the_formatter_keeps_the_program(tmp_path, fun):
     _formatted_is_the_same_program(tmp_path, fun)
@@ -246,8 +247,8 @@ def test_the_formatter_keeps_the_program(tmp_path, fun):
                    reason="a Sigma as the only domain of an arrow is formatted as a Sigma of an arrow")
 @pytest.mark.skipif(not YONFMT.exists(), reason="yonfmt missing")
 @pytest.mark.parametrize("fun", [
-    '  fun h(k: ((Number, Number)) -> Number): Number { return k(pair(1, 2)) }\n',
-    '  fun s(k: (Σx : Number, Number) -> Number): Number { return k(pair(1, 2)) }\n',
+    program("test_product_type/test_the_formatter_keeps_a_sigma_domain_1.yon"),
+    program("test_product_type/test_the_formatter_keeps_a_sigma_domain_2.yon"),
 ])
 def test_the_formatter_keeps_a_sigma_domain(tmp_path, fun):
     _formatted_is_the_same_program(tmp_path, fun)

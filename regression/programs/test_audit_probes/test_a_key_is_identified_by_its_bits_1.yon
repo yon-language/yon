@@ -1,0 +1,7 @@
+place Entry {}
+fun main: Number {
+  negz := 0.0 * (0 - 1)
+  nan := 0.0 / 0.0
+  s := HashSet.add(HashSet.add(HashSet.add(HashSet.empty, 0.0), negz), nan)
+  return HashSet.size(s) * 10 + (if HashSet.contains(s, nan) then 1 else 0)
+}

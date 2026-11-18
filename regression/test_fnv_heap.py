@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -25,7 +26,7 @@ YONC = ROOT / "toolchain" / "yonc"
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
 _TOML = '[package]\nname = "probe"\n\n[runtime]\nbackend = "memory"\n'
-_INT64 = "fun int64(n: Int64): Int64 { return n }\n"
+_INT64 = program("test_fnv_heap/module_1.yon")
 
 
 def _build(tmp_path: Path, main_body: str, extra: str = ""):
@@ -157,19 +158,7 @@ def test_a_chain_of_segments_is_read_directly_by_its_handles(tmp_path):
 
 
 _REPLICAS = (
-    "/* the handles of v for v in [1, 3000], put forward (r = 0) or backward,\n"
-    "   each weighted by v: the same sum on every replica only if they share\n"
-    "   the heap and its deduplication */\n"
-    "fun weighted(r: Number): Word64 {\n"
-    "  t := Word64.from_int64(11)\n"
-    "  mut s := Word64.zero\n"
-    "  mut k := int64(0)\n"
-    "  while k < 3000 do {\n"
-    "    v := if r == 0 then k + 1 else 3000 - k\n"
-    "    h := FnvHeap.handle_word(FnvHeap.put(Word64.from_int64(v), t))\n"
-    "    s <- s + h * Word64.from_int64(v)\n"
-    "    k <- k + 1\n  }\n"
-    "  return s\n}\n")
+    program("test_fnv_heap/module_2.yon"))
 _REPLICAS_MAIN = (
     "  sums := spawn in 2 parallel {\n    promote weighted(spawn_index)\n  }\n"
     "  total := sums.fold(Word64.zero, fun(a: Word64, v: Word64) => a + v)\n"
@@ -208,14 +197,14 @@ def test_a_word_past_a_value_is_refused(tmp_path):
 
 def test_a_handle_of_one_type_is_not_a_handle_of_another(tmp_path):
     rc, out, _ = _build(tmp_path, "  return 1\n",
-                        "fun wrong(h: FnvHeap<Number>): FnvHeap<Boolean> { return h }\n")
+                        program("test_fnv_heap/test_a_handle_of_one_type_is_not_a_handle_of_another_1.yon"))
     assert rc != 0 and "E2001" in out, out
     assert "type mismatch: expected FnvHeap<Boolean>, got FnvHeap<Number>" in out, out
 
 
 def test_outside_the_heap_a_handle_is_not_its_word(tmp_path):
     rc, out, _ = _build(tmp_path, "  return 1\n",
-                        "fun raw(h: FnvHeap<Number>): Int64 { return h }\n")
+                        program("test_fnv_heap/test_outside_the_heap_a_handle_is_not_its_word_1.yon"))
     assert rc != 0 and "E2001" in out, out
     assert "type mismatch: expected Int64, got FnvHeap<Number>" in out, out
 
@@ -232,12 +221,11 @@ def test_a_handle_does_not_cross_a_space(tmp_path):
     (proj / "w").mkdir(parents=True)
     (proj / "yon.toml").write_text('[package]\nname = "cross"\n\n[world.W]\nspaces = ["w"]\n\n'
                                    '[runtime]\nbackend = "memory"\n')
-    (proj / "w" / "Topos.yon").write_text("topos where {\n}\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_fnv_heap/test_a_handle_does_not_cross_a_space_1.yon"))
     (proj / "w" / "Other.yon").write_text(
-        "place Other {\n  fun keep(h: FnvHeap<Number>): FnvHeap<Number> { return h }\n}\n")
+        program("test_fnv_heap/test_a_handle_does_not_cross_a_space_2.yon"))
     (proj / "Entry.yon").write_text(
-        "place Entry {\n  fun main(): Number {\n"
-        "    h := Other.keep(FnvHeap.put(40, Word64.from_int64(1)))\n    return 42\n  }\n}\n")
+        program("test_fnv_heap/test_a_handle_does_not_cross_a_space_3.yon"))
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=300)
     out = r.stdout + r.stderr
@@ -252,10 +240,8 @@ def test_a_law_of_an_algebra_is_not_given(tmp_path):
     (proj / "yon.toml").write_text('[package]\nname = "alg"\n\n[world.W]\nobjects = ["Plus"]\n\n'
                                    '[runtime]\nbackend = "memory"\n')
     (proj / "Plus.yon").write_text(
-        "place Plus is algebra {\n"
-        "  operation plus(a: Plus, b: Plus): Plus as \"+\"\n"
-        "  law commutative ∀a : Plus ∀b : Plus, a + b = b + a is given\n}\n")
-    (proj / "Entry.yon").write_text("place Entry {\n  fun main: Number { return 42 }\n}\n")
+        program("test_fnv_heap/test_a_law_of_an_algebra_is_not_given_1.yon"))
+    (proj / "Entry.yon").write_text(program("test_fnv_heap/test_a_law_of_an_algebra_is_not_given_2.yon"))
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=300)
     out = r.stdout + r.stderr
@@ -273,13 +259,12 @@ def test_an_import_does_not_take_a_name_of_the_heaps_house(tmp_path):
     (proj / "yon.toml").write_text(
         '[package]\nname = "x"\n[runtime]\nbackend = "memory"\n'
         '[world.Commerce]\nspaces = ["Orders", "Billing"]\nobjects = ["Order", "Account"]\n')
-    (proj / "Orders" / "Order.yon").write_text("place Order { id Text }\nimport Mod::feed from Billing\n")
-    (proj / "Orders" / "Topos.yon").write_text("topos OrdersCat where {\n}\n")
-    (proj / "Billing" / "Account.yon").write_text("place Account { balance Number }\n")
-    (proj / "Billing" / "Topos.yon").write_text("topos BillingCat where {\n}\n")
+    (proj / "Orders" / "Order.yon").write_text(program("test_fnv_heap/test_an_import_does_not_take_a_name_of_the_heaps_house_1.yon"))
+    (proj / "Orders" / "Topos.yon").write_text(program("test_fnv_heap/test_an_import_does_not_take_a_name_of_the_heaps_house_2.yon"))
+    (proj / "Billing" / "Account.yon").write_text(program("test_fnv_heap/test_an_import_does_not_take_a_name_of_the_heaps_house_3.yon"))
+    (proj / "Billing" / "Topos.yon").write_text(program("test_fnv_heap/test_an_import_does_not_take_a_name_of_the_heaps_house_4.yon"))
     (proj / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): Number {\n"
-        "  return FnvHeap.value(FnvHeap.put(40, Word64.from_int64(1))) + 2\n}\n")
+        program("test_fnv_heap/test_an_import_does_not_take_a_name_of_the_heaps_house_5.yon"))
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True,
                        text=True, timeout=300)

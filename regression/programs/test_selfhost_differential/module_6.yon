@@ -1,0 +1,1 @@
+fun main: Number { x := 20  y := 22  return if x == y then 99 else x + y }

@@ -1,0 +1,12 @@
+fun concat_all<T uses Monoid>(xs: List<T>): T {
+  return match xs {
+    Nil => T.unit,
+    Cons as (h, t) => T.op(h, concat_all<T>(t))
+  }
+}
+fun three(a: Int64, b: Int64, c: Int64): List<Int64> {
+  return List.cons(a, List.cons(b, List.cons(c, List.empty)))
+}
+fun words(a: Word64, b: Word64): List<Word64> {
+  return List.cons(a, List.cons(b, List.empty))
+}

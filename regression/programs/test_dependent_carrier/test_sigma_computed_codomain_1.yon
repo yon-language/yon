@@ -1,0 +1,5 @@
+
+fun Fam(x: Number): Type_0 { return Number }
+fun viaEl(p: Σx : Number, El(Fam(x))): Number { return 0 }
+fun direct(p: Σx : Number, Number): Number { return 0 }
+fun main: Number { return 0 }

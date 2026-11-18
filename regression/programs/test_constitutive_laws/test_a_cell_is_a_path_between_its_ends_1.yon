@@ -1,0 +1,3 @@
+fun g: punto = punto { return giro }
+fun at0: Cerchio { return giro @ I0 }
+fun run: Number { return match at0 { punto => 42, giro => walk i => 42 } }

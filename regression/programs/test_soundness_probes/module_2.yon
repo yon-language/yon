@@ -1,0 +1,6 @@
+place Entry {
+  fun __conto(x: Number): Number { return x + 2 }
+  fun yon_rt_saldo(x: Number): Number { return x + 4 }
+  fun a__b(x: Number): Number { return x + 8 }
+  fun main: Number { return 0 }
+}

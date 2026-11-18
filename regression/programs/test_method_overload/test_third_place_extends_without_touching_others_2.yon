@@ -1,0 +1,5 @@
+fun main: Number {
+  sq := .-> Square { side 4 }
+  t := .-> Tri { base 9 }
+  return sq.area() + t.area()
+}

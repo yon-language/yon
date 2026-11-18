@@ -1,0 +1,2 @@
+place AP { }
+fun a_op(x: Number): Number { return zzz + 1 }

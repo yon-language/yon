@@ -1,0 +1,4 @@
+fun leggi(a: Account): Number {
+  return match a { Opened { initial as i } => i, Closed { moment as m } => m }
+}
+fun run: Number { return leggi(Account.prova) }

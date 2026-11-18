@@ -1,0 +1,6 @@
+  fun forget(a: Term, b: Term, p: a = b): Number { return 0 }
+  proof fun early(u: Term, v: Term, u2: Term, v2: Term, d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.src)): Number {
+    x := forget(yes, no, ite_injective(yes, u, v, no, u2, v2, q))
+    return match d1 { ifTrue as (a, b) => x, ifFalse as (a, b) => x, ifSame as (a, b) => x,
+      inC as (a, b, c) => x, inU as (a, b, c) => x, inV as (a, b, c) => x }
+  }

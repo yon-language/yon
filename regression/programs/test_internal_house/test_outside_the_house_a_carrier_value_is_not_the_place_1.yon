@@ -1,0 +1,1 @@
+  fun same(w: Word): Word { return w }

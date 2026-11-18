@@ -1,0 +1,7 @@
+import svc::d_op from D
+place Entry { }
+fun main(): Number {
+  r := d_op(5)
+  drop D
+  return r - r
+}

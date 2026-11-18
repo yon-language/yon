@@ -1,0 +1,6 @@
+fun n(a: Number): Number { return a }
+fun u(a: Text): Number { return 0 }
+fun main: Number {
+  k := fun(x) => n(x) + u(x)
+  return k(1)
+}

@@ -1,0 +1,4 @@
+place Tri {
+  base := Number
+  fun area(t: Tri): Number { return t.base }
+}

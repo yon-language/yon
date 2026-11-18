@@ -34,6 +34,7 @@ from pathlib import Path
 import pytest
 
 from test_formatter import CORPUS, FMT, ROOT
+from yon_programs import program
 
 EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
 _CORPUS_ROOTS = (ROOT / "examples", ROOT / "regression" / "yon_tests", ROOT / "selfhost",
@@ -157,7 +158,7 @@ def test_corpus_units_cover_the_formatter_corpus():
     assert set(CORPUS) <= covered, sorted(map(str, set(CORPUS) - covered))[:10]
 
 
-_DROP_PROBE = 'place Entry { }\nfun main: Number {\n  mut x := 1\n  x <- x + 41\n  return x\n}\n'
+_DROP_PROBE = program("test_formatter_semantics/module_1.yon")
 
 
 @pytest.mark.skipif(not FMT.exists() or not EMIT.exists(), reason="yonfmt or emitter not built")

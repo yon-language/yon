@@ -1,0 +1,4 @@
+place Coin uses algebra Lub {
+  this > Heads :U Tails
+  fun join(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }
+}

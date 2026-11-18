@@ -1,0 +1,2 @@
+fun r(x): Number { return r(1) + r("a") }
+fun main: Number { return 0 }

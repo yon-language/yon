@@ -1,0 +1,5 @@
+place Box<V> {
+  items List<V>
+  fun make<V>(items: List<V>): Box<V> { return .-> Box { items items } }
+  fun first<V>(b: Box<V>): Lookup<V> { return List.head(b.items) }
+}

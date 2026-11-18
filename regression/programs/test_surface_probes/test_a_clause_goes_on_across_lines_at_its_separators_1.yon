@@ -1,0 +1,13 @@
+place Tree {
+  this > Leaf Number
+    :U Node Tree Tree :U
+    Nil
+}
+place Entry {
+fun count(t: Tree): Number {
+  return match t { Leaf as x => x, Node as (a, b) => count(a) + count(b), Nil => 0 }
+}
+fun main: Number {
+  return count((40 ↪ Leaf, 2 ↪ Leaf) ↪ Node)
+}
+}

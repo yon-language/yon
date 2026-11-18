@@ -1,0 +1,16 @@
+place Entry {}
+fun one(k: Number): Number {
+  results := spawn in 1 parallel {
+    promote k
+  }
+  return results.fold(0, fun(a: Number, v: Number) => a + v)
+}
+fun main: Number {
+  mut good := 0
+  mut i := 0
+  while i < 40 do {
+    good <- good + (if one(i + 100) == i + 100 then 1 else 0)
+    i <- i + 1
+  }
+  return good
+}

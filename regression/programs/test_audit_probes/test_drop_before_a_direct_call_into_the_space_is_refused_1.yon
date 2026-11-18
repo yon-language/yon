@@ -1,0 +1,7 @@
+import svc::d_op from D
+place Entry { }
+fun b(k: Number): Number { return d_op(k) }
+fun main(): Number {
+  drop D
+  return b(3)
+}

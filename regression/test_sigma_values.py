@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -47,10 +48,10 @@ def _refused(tmp_path, body, main, *words):
     return out
 
 
-FIRST = "  fun first<K, V>(p: Σx : K, V): K { return fst(p) }\n"
-SECOND = "  fun second<K, V>(p: Σx : K, V): V { return snd(p) }\n"
-KEYS = "  fun keys<K, V>(xs: List<Σx : K, V>): Number { return List.length(xs) }\n"
-MID = "  fun mid(p: Σx : Number, Σy : Number, Number): Number { return fst(snd(p)) }\n"
+FIRST = program("test_sigma_values/module_1.yon")
+SECOND = program("test_sigma_values/module_2.yon")
+KEYS = program("test_sigma_values/module_3.yon")
+MID = program("test_sigma_values/module_4.yon")
 
 
 def test_a_generic_reads_its_parameters_from_a_sigma(tmp_path):
@@ -116,20 +117,20 @@ def test_a_pair_lives_in_a_cell(tmp_path):
 
 def test_a_pair_is_captured_by_a_closure(tmp_path):
     assert _runs(tmp_path,
-                 "  fun apply(f: Number -> Number, x: Number): Number { return f(x) }\n",
+                 program("test_sigma_values/test_a_pair_is_captured_by_a_closure_1.yon"),
                  "p := pair(40, 2)\n"
                  "  return apply(fun(y: Number) => fst(p) + y, snd(p))") == 42
 
 
 def test_a_generic_keeps_the_boolean_of_a_pair(tmp_path):
     assert _runs(tmp_path,
-                 FIRST + "  fun pick(b: Boolean): Number { return if b then 42 else 0 }\n",
+                 program("test_sigma_values/test_a_generic_keeps_the_boolean_of_a_pair_1.yon"),
                  "return pick(first(pair(true, 7)))") == 42
 
 
 def test_a_boolean_in_a_pair_comes_back_from_a_list(tmp_path):
     assert _runs(tmp_path,
-                 "  fun pick(b: Boolean): Number { return if b then 42 else 0 }\n",
+                 program("test_sigma_values/test_a_boolean_in_a_pair_comes_back_from_a_list_1.yon"),
                  "mut t := 0\n"
                  "  for every p in List.cons(pair(true, 7), List.empty) { t <- pick(fst(p)) }\n"
                  "  return t") == 42
@@ -138,8 +139,7 @@ def test_a_boolean_in_a_pair_comes_back_from_a_list(tmp_path):
 def test_an_int64_in_a_pair_keeps_its_bits_through_a_list(tmp_path):
     # 2^53 + 1 has no f64: the 64 bits come back only if nothing converted them
     assert _runs(tmp_path,
-                 "  fun big(n: Int64): Int64 { return n * 9007199254740992 + 1 }\n"
-                 "  fun odd(n: Int64): Number { return if n % 2 == 1 then 42 else 0 }\n",
+                 program("test_sigma_values/test_an_int64_in_a_pair_keeps_its_bits_through_a_list_1.yon"),
                  "mut t := 0\n"
                  "  for every p in List.cons(pair(big(1), 7), List.empty) { t <- odd(fst(p)) }\n"
                  "  return t") == 42
@@ -152,21 +152,19 @@ def test_a_generic_gives_back_a_pair_from_a_pair(tmp_path):
 
 def test_a_function_returns_what_a_generic_gave_back_from_a_nested_pair(tmp_path):
     assert _runs(tmp_path,
-                 FIRST + "  fun inner: Boolean { return fst(first(pair(pair(true, 1), 7))) }\n",
+                 program("test_sigma_values/test_a_function_returns_what_a_generic_gave_back_from_a_nested_pair_1.yon"),
                  "return if inner then 42 else 0") == 42
 
 
 def test_a_function_returns_the_pair_a_generic_gave_back(tmp_path):
     assert _runs(tmp_path,
-                 "  fun same<T>(x: T): T { return x }\n"
-                 "  fun made: Σx : Number, Number { return same(pair(42, 7)) }\n",
+                 program("test_sigma_values/test_a_function_returns_the_pair_a_generic_gave_back_1.yon"),
                  "return fst(made)") == 42
 
 
 def test_a_generic_gives_back_an_int64_from_a_pair(tmp_path):
     assert _runs(tmp_path,
-                 FIRST + "  fun big(n: Int64): Int64 { return n * 9007199254740992 + 1 }\n"
-                 "  fun odd(n: Int64): Number { return if n % 2 == 1 then 42 else 0 }\n",
+                 program("test_sigma_values/test_a_generic_gives_back_an_int64_from_a_pair_1.yon"),
                  "return odd(first(pair(big(1), 7)))") == 42
 
 
@@ -194,7 +192,7 @@ def test_two_equal_pairs_in_a_slot_are_one_value(tmp_path):
 def test_two_arguments_of_one_type_parameter_are_both_pairs(tmp_path):
     # the first comes from a slot and fixes the slot, the second enters it as a pair, whole
     assert _runs(tmp_path,
-                 "  fun second_of<T>(a: T, b: T): T { return b }\n",
+                 program("test_sigma_values/test_two_arguments_of_one_type_parameter_are_both_pairs_1.yon"),
                  "mut t := 0\n"
                  "  for every p in List.cons(pair(1, 2), List.empty) {\n"
                  "    t <- snd(second_of(p, pair(7, 42)))\n  }\n"
@@ -203,18 +201,13 @@ def test_two_arguments_of_one_type_parameter_are_both_pairs(tmp_path):
 
 def test_a_sigma_over_a_conjunction_of_paths_runs(tmp_path):
     assert _runs(tmp_path,
-                 "  fun value(a: Number, s: { x : Number where (x = a) ∧ (x = a) }): Number { return fst(s) }\n",
+                 program("test_sigma_values/test_a_sigma_over_a_conjunction_of_paths_runs_1.yon"),
                  "return value(42, pair(42, pair(refl(42), refl(42))))") == 42
 
 
 SUB = "{ a : Number where Πx : Number, Πy : Number, x = y }"
 PROOF = "Πx : Number, Πy : Number, x = y"
-SUB_BODY = (f"  fun plus(n: Number): Number {{ return n + 0 }}\n"
-            f"  fun forget(s: {SUB}): Number {{ return plus(s) }}\n"
-            f"  fun read(s: {SUB}): Number {{ return fst(s) }}\n"
-            f"  fun made(p: {PROOF}): {SUB} {{ return pair(42, p) }}\n"
-            f"  fun from_pair(p: {PROOF}): Number {{ return plus(made(p)) }}\n"
-            f"  fun read_pair(p: {PROOF}): Number {{ return read(made(p)) }}\n")
+SUB_BODY = (program("test_sigma_values/module_5.yon"))
 
 
 def _function_text(mlir, name):
@@ -241,7 +234,7 @@ def test_a_comprehension_is_its_carrier_without_a_slot(tmp_path):
 
 def test_the_proof_of_a_comprehension_has_no_value(tmp_path):
     _refused(tmp_path,
-             f"  fun of_sub(s: {SUB}): {PROOF} {{ return snd(s) }}\n",
+             program("test_sigma_values/test_the_proof_of_a_comprehension_has_no_value_1.yon"),
              "return 42",
              "E2001", "proof of a comprehension")
 
@@ -253,7 +246,7 @@ def _across_spaces(tmp_path, ty, read, value):
     (proj / "w").mkdir(parents=True)
     (proj / "yon.toml").write_text('[package]\nname = "p"\n\n[runtime]\nbackend = "memory"\n\n'
                                    '[world.W]\nobjects = ["Q"]\nspaces  = ["w"]\n')
-    (proj / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
+    (proj / "w" / "Topos.yon").write_text(program("test_sigma_values/_across_spaces_1.yon"))
     (proj / "w" / "Q.yon").write_text(
         f"place Q {{\n  side Number\n  fun digest(x: {ty}): Number {{ return {read} }}\n}}\n")
     (proj / "Entry.yon").write_text(
@@ -280,7 +273,7 @@ def test_a_pair_at_the_boundary_is_refused_with_its_reason(tmp_path, ty, read, v
 
 def test_a_parameter_nothing_fixes_is_refused(tmp_path):
     out = _refused(tmp_path,
-                   "  fun ghost<K, V>(p: Σx : K, Number): List<V> { return List.empty }\n",
+                   program("test_sigma_values/test_a_parameter_nothing_fixes_is_refused_1.yon"),
                    "x := ghost(pair(1, 2))\n  return 0",
                    "E2001", "ambiguous call of ghost", "type parameter V")
     assert "unknown" not in out, out
@@ -288,7 +281,7 @@ def test_a_parameter_nothing_fixes_is_refused(tmp_path):
 
 def test_a_component_nothing_fixes_is_refused(tmp_path):
     _refused(tmp_path,
-             "  fun half<K, V>(p: Σx : K, Number): Σy : V, Number { return half(p) }\n",
+             program("test_sigma_values/test_a_component_nothing_fixes_is_refused_1.yon"),
              "x := half(pair(1, 2))\n  return 0",
              "E2001", "ambiguous call of half", "V")
 
@@ -297,31 +290,30 @@ def test_a_component_nothing_fixes_is_refused(tmp_path):
 
 def test_a_sigma_over_a_prelude_place_is_no_generic(tmp_path):
     assert _runs(tmp_path,
-                 "  fun size(p: Σx : List<Number>, Number): Number { return List.length(fst(p)) + snd(p) }\n",
+                 program("test_sigma_values/test_a_sigma_over_a_prelude_place_is_no_generic_1.yon"),
                  "return size(pair(List.cons(1, List.empty), 41))") == 42
 
 
 def test_the_name_of_a_binder_does_not_tell_two_products_apart(tmp_path):
     # a product of a place of the prelude and a number, built with no binder at all
     assert _runs(tmp_path,
-                 "  fun size(p: Σx : List<Number>, Number): Number { return snd(p) }\n",
+                 program("test_sigma_values/test_the_name_of_a_binder_does_not_tell_two_products_apart_1.yon"),
                  "return size(pair(List.cons(1, List.empty), 42))") == 42
     _refused(tmp_path,
-             "  fun size(p: Σx : List<Number>, Number): Number { return snd(p) }\n",
+             program("test_sigma_values/test_the_name_of_a_binder_does_not_tell_two_products_apart_2.yon"),
              "return size(pair(1, 42))",
              "E2001", "size", "parameter p")
 
 
 def test_a_sigma_over_a_lookup_is_no_generic(tmp_path):
     assert _runs(tmp_path,
-                 "  fun grab(p: Σx : Lookup<Number>, Number): Number {\n"
-                 "    return match fst(p) { Absent => snd(p), Found as v => v }\n  }\n",
+                 program("test_sigma_values/test_a_sigma_over_a_lookup_is_no_generic_1.yon"),
                  "return grab(pair(List.head(List.cons(42, List.empty)), 7))") == 42
 
 
 def test_a_sigma_over_text_is_no_generic(tmp_path):
     assert _runs(tmp_path,
-                 "  fun grab(p: Σx : Text, Number): Number { return snd(p) }\n",
+                 program("test_sigma_values/test_a_sigma_over_text_is_no_generic_1.yon"),
                  'return grab(pair("a", 42))') == 42
 
 
@@ -333,5 +325,5 @@ def test_text_in_a_pair_goes_through_a_list(tmp_path):
 
 
 def test_a_generic_identity_returns_the_pair(tmp_path):
-    assert _runs(tmp_path, "  fun same<T>(x: T): T { return x }\n",
+    assert _runs(tmp_path, program("test_sigma_values/test_a_generic_identity_returns_the_pair_1.yon"),
                  "return fst(same(pair(42, 7)))") == 42

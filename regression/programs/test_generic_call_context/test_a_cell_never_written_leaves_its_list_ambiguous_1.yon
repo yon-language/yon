@@ -1,0 +1,4 @@
+fun main: Number {
+  mut l := List.empty
+  return 0
+}

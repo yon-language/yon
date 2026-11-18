@@ -1,0 +1,4 @@
+place Entry {
+  // the answer
+  fun main: Number { return 42 }
+}

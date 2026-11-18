@@ -1,0 +1,4 @@
+place R {
+  id Number
+  body Text
+}

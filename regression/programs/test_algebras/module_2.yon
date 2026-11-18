@@ -1,0 +1,8 @@
+place Sum is algebra {
+  operation add(a: Sum, b: Sum): Sum as "+"
+  operation zero: Sum as "0"
+  law commutative ∀a : Sum ∀b : Sum, a + b = b + a
+  law neutral ∀a : Sum, a + zero = a
+  fun double(a: Sum): Sum { return a + a }
+  fun triple(a: Sum): Sum { return double(a) + a + zero }
+}

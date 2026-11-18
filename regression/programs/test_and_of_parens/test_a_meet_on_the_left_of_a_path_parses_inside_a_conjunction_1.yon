@@ -1,0 +1,1 @@
+  fun h(a: Boolean, b: Boolean, q: ((a ∧ b) = a) ∧ (a = a)): Number { return 0 }

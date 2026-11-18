@@ -1,0 +1,9 @@
+import svc::d_op from D
+place Repo {
+  fun load(k: Number): Number { return d_op(k) }
+}
+place Entry { }
+fun main(): Number {
+  drop D
+  return Repo.load(3)
+}

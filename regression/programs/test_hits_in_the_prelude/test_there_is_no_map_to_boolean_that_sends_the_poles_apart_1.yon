@@ -1,0 +1,4 @@
+fun e_polo_nord(s: Suspension<S1>): Boolean {
+  return match s { north => true, south => false,
+    merid as x => walk i => true }
+}

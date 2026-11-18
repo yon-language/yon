@@ -1,0 +1,5 @@
+place Entry {}
+fun d: Decision { return Unknown }
+fun main: Number {
+  return match d { Present => 1, Absent => 2, Unknown => 3 }
+}

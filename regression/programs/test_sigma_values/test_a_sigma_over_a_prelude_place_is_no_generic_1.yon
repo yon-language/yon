@@ -1,0 +1,1 @@
+  fun size(p: Σx : List<Number>, Number): Number { return List.length(fst(p)) + snd(p) }

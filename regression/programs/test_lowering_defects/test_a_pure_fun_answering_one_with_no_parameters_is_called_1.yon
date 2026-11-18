@@ -1,0 +1,8 @@
+place Entry {
+fun main: Number {
+  _ := nothing
+  x := nothing
+  return 42
+}
+fun nothing: Unit { return star }
+}

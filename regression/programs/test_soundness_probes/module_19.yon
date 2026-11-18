@@ -1,0 +1,1 @@
+fun mk(b: Bit): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  l := List.cons(fun(y: Number) => y + c, List.empty)  for every g in l { k <- g }  return k }

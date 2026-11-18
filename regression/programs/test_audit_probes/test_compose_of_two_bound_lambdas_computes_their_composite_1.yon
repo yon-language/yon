@@ -1,0 +1,8 @@
+place Entry {
+  fun main: Number {
+    f := fun(x: Number) => x + 3
+    g := fun(y: Number) => y * 2
+    h := compose f with g
+    return h(1)
+  }
+}

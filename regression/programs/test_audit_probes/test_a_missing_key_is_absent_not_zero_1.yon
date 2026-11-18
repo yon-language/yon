@@ -1,0 +1,7 @@
+place Entry {}
+fun main(): Number {
+  m := HashMap.set(HashMap.empty, 1, 0)
+  mut a := match HashMap.get(m, 1) { Found as v => (if v == 0 then 1 else 0), Absent => 5 }
+  mut b := match HashMap.get(m, 2) { Found as v => 7, Absent => 10 }
+  return a + b
+}

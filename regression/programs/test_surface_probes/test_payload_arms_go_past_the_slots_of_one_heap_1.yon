@@ -1,0 +1,10 @@
+place Chain { this > End :U Link Number Chain }
+place Entry {
+fun build(i: Number, acc: Chain): Chain {
+  return if i == 0 then acc else build(i - 1, (i, acc) ↪ Link)
+}
+fun len(c: Chain, n: Number): Number {
+  return match c { End => n, Link as (h, t) => len(t, n + 1) }
+}
+fun main: Number { return if len(build(200000, End), 0) == 200000 then 42 else 1 }
+}

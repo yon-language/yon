@@ -1,0 +1,4 @@
+
+fun g(x: Number): Number { return x }
+fun f(y: Number, p: El(g(y))): Number { return 0 }
+fun main: Number { return 0 }

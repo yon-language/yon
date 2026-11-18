@@ -1,0 +1,9 @@
+place Entry {
+  fun main: Number {
+    _a := Text.print(Int64.to_text(Int64.max_value))
+    _b := Text.print(Int64.to_text(Int64.min_value))
+    _c := Text.print(Int64.to_text(9007199254740993))
+    _d := Text.print(Int64.to_text(0 - 42))
+    return 0
+  }
+}

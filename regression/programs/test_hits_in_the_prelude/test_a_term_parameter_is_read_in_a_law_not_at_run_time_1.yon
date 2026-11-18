@@ -1,0 +1,3 @@
+place Scatola<r : Number -> Number> { this > piena Number
+  fun leggi(x: Number): Number { return x ↦ r }
+}

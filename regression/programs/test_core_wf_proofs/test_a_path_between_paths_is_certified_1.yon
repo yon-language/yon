@@ -1,0 +1,7 @@
+place Bool { this > tt :U ff }
+place Entry {
+proof fun quadrato(a: Bool, p: a = a): p = p { return clear p }
+fun main(): Number {
+  return 1
+}
+}

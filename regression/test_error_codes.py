@@ -27,6 +27,7 @@ from pathlib import Path
 import pytest
 
 import compiling_corpus as cc
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "frontend" / "error_codes.ml"
@@ -59,7 +60,7 @@ NO_PRODUCER = {
 }
 
 _TOML = '[package]\nname = "{name}"\n{extra}[runtime]\nbackend = "memory"\n'
-_ENTRY_OK = 'place Entry {\n  fun main: Number { return 0 }\n}\n'
+_ENTRY_OK = program("test_error_codes/module_1.yon")
 
 # Producers that live in THIS module (the grep below skips this file, whose
 # NO_PRODUCER table would otherwise count as a producer of what it lists).
@@ -101,7 +102,7 @@ def test_lexer_error_carries_e1002(tmp_path):
     """A character the lexer has no token for is a LEXICAL error (E1002), not a
     parse error (E1001): the input never reaches the parser."""
     (tmp_path / "ok").mkdir()
-    rc, out = _emit(_project(tmp_path / "ok", 'place Entry {\n  fun main: Number { return 0 + 1 }\n}\n'))
+    rc, out = _emit(_project(tmp_path / "ok", program("test_error_codes/test_lexer_error_carries_e1002_1.yon")))
     assert rc == 0, f"the control (`+` for `$`) must emit:\n{out[-600:]}"
     proj = _project(tmp_path, "place Entry {\n  fun main: Number { return 0 $ 1 }\n}\n")
     rc, out = _emit(proj)
@@ -116,7 +117,7 @@ def test_manifest_error_carries_e4004(tmp_path):
     world = '[world.W]\nobjects = ["X"]\nspaces  = ["w{close}]\n'
     bad = _project(tmp_path, _ENTRY_OK, world.format(close=""))
     (bad / "w").mkdir()
-    (bad / "w" / "Topos.yon").write_text('topos T where {\n}\n')
+    (bad / "w" / "Topos.yon").write_text(program("test_error_codes/test_manifest_error_carries_e4004_1.yon"))
     rc, out = _emit(bad)
     assert rc != 0 and "Fatal error: exception" not in out, out
     assert "MANIFEST ERROR [E4004]:" in out and "unterminated string" in out, out

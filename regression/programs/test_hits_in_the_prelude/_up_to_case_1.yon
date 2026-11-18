@@ -1,0 +1,4 @@
+place TextUpToCase { this > inj Text
+  law quot ∀a : Text ∀b : Text, a ↦ lower = b ↦ lower → a ↪ inj = b ↪ inj
+  fun lower(s: Text): Text { return Text.lower(s) }
+}

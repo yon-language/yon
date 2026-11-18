@@ -21,6 +21,7 @@ import os
 import subprocess
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -30,11 +31,11 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missin
 
 # the places every side declares, in Space w
 _PLACES = {
-    "Pt.yon": "place Pt { x Number  y Number }\n",
-    "Note.yon": "place Note { message Text  line Number }\n",
-    "Line.yon": "place Line { a Pt  b Note }\n",
-    "Bag.yon": "place Bag { label Text  counts HashMap<Number, Number> }\n",
-    "SyntaxError.yon": "place SyntaxError { this < Error  line Number }\n",
+    "Pt.yon": program("test_space_boundary_matrix/module_1.yon"),
+    "Note.yon": program("test_space_boundary_matrix/module_2.yon"),
+    "Line.yon": program("test_space_boundary_matrix/module_3.yon"),
+    "Bag.yon": program("test_space_boundary_matrix/module_4.yon"),
+    "SyntaxError.yon": program("test_space_boundary_matrix/module_5.yon"),
 }
 
 _FILL = """  mut m := {empty}
@@ -130,7 +131,7 @@ def _side(d: Path, name: str, spaces: str, objects: str):
     (d / "yon.toml").write_text(
         f'[package]\nname = "{name}"\n\n[runtime]\nbackend = "memory"\n\n'
         f'[world.W]\nobjects = [{objects}]\nspaces  = [{spaces}]\n')
-    (d / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
+    (d / "w" / "Topos.yon").write_text(program("test_space_boundary_matrix/_side_1.yon"))
     for f, text in _PLACES.items():
         (d / "w" / f).write_text(text)
 

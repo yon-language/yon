@@ -1,0 +1,2 @@
+fun answer(b: Boolean): Number { return if b then 1 else 42 }
+fun refused(d: DomainError): Number { return 2 }

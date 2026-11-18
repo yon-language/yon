@@ -1,0 +1,8 @@
+place Two uses algebra Group {
+  this > Zero :U One
+  fun op(a: Two, b: Two): Two {
+    return match a { Zero => b, One => match b { Zero => One, One => Zero } }
+  }
+  fun unit: Two { return Zero }
+  fun inv(a: Two): Two { return One }
+}

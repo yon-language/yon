@@ -1,0 +1,6 @@
+place Entry {
+  fun announce(n: Number): Number visits Output { _u := Output.print("hi")  return n }
+  fun mk: Number -> Number visits Output { return fun(y: Number) => announce(y) }
+  fun apply(g: Number -> Number): Number { return g(41) }
+  fun main: Number visits Output { return apply(mk) + 1 }
+}

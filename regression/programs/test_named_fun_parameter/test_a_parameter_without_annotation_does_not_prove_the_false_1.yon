@@ -1,0 +1,6 @@
+  proof fun helper(u: Term, v: Term, q): Term.yes = Term.no {
+    return ite_injective(yes, u, v, no, u, v, q)
+  }
+  proof fun bad(u: Term, v: Term, d2: Step, q: (yes, u, v) ↪ ite = (d2 ↦ Step.src)): Term.yes = Term.no {
+    return helper(u, v, q)
+  }

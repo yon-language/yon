@@ -1,0 +1,8 @@
+place Entry {
+  fun identity<T>(x: T): T { return x }
+  fun first<A, B>(x: A, y: B): A { return x }
+  fun apply(f: Number -> Number, x: Number): Number { return f(x) }
+  fun main: Number {
+    return identity(40) + Text.length(first("ok", 0)) + apply(identity, 0)
+  }
+}

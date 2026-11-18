@@ -1,0 +1,13 @@
+import pb::pb from Beta
+place Other {
+fun d1: Number { return 0 }
+fun d2: Number { return 0 }
+fun d3: Number { return 0 }
+fun d4: Number { return 0 }
+fun fb(): Number {
+  w := wire to space Beta
+  sub := w.awaits(pb)
+  s := sub.stream
+  return s.fold(0, fun(a: Number, r: Number) => a + r)
+}
+}

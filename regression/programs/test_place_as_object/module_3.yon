@@ -1,0 +1,3 @@
+place Term { this > Leaf Number :U Node Term }
+fun d(t: Term): Number { return match t { Leaf as n => n, Node as m => d(m) } }
+fun main: Number { return d(7 ↪ Leaf ↪ Node ↪ Node) }

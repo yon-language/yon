@@ -1,0 +1,5 @@
+place Entry {
+fun main: Number {
+  return match List.head(List.cons(10, List.cons(11, List.empty))) { Found as v => v, Absent => 0 }
+}
+}

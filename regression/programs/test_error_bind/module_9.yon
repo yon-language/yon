@@ -1,0 +1,3 @@
+fun check(i: Number) on error DomainError: Number {
+  return if i < 2 then i else .-> DomainError { message if i < 3 then "ab" else "abcd" }
+}

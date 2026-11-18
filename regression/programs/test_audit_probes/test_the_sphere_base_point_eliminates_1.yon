@@ -1,0 +1,5 @@
+place Entry {
+fun main: Number {
+  return match S2.base { base => 42, surf => walk i => walk j => 42 }
+}
+}

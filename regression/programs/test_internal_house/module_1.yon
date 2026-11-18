@@ -1,0 +1,1 @@
+  fun make(n: Int64): Word { return n }

@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -60,15 +61,12 @@ def _proof(tmp_path, theorems):
 
 
 def test_exfalso_takes_the_type_the_context_expects(tmp_path):
-    r, _ = _proof(tmp_path, "  fun some_term(e: Empty): Term { return exfalso(e) }\n")
+    r, _ = _proof(tmp_path, program("test_generic_call_context/test_exfalso_takes_the_type_the_context_expects_1.yon"))
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_one_result_does_not_have_two_types(tmp_path):
-    r, proj = _proof(tmp_path, "  fun as_term(t: Term): Number { return 0 }\n"
-                               "  fun as_nat(n: Nat): Number { return 0 }\n"
-                               "  fun twice(e: Empty): Number {\n    x := exfalso(e)\n"
-                               "    return as_term(x) + as_nat(x)\n  }\n")
+    r, proj = _proof(tmp_path, program("test_generic_call_context/test_one_result_does_not_have_two_types_1.yon"))
     _refused(r, "parameter")
     out = r.stdout + r.stderr
     assert "expects Nat, got Term" in out or "expects Term, got Nat" in out, out
@@ -78,7 +76,7 @@ def test_one_result_does_not_have_two_types(tmp_path):
 
 
 def test_a_call_nothing_fixes_is_ambiguous(tmp_path):
-    r, proj = _proof(tmp_path, "  fun loose(e: Empty): Number {\n    x := exfalso(e)\n    return 0\n  }\n")
+    r, proj = _proof(tmp_path, program("test_generic_call_context/test_a_call_nothing_fixes_is_ambiguous_1.yon"))
     _refused(r, "ambiguous call of", "exfalso", "type parameter T", "annotate")
     out = r.stdout + r.stderr
     line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "x := exfalso(e)")
@@ -86,23 +84,20 @@ def test_a_call_nothing_fixes_is_ambiguous(tmp_path):
 
 
 def test_the_expected_type_of_a_later_use_fixes_the_call(tmp_path):
-    r, _ = _proof(tmp_path, "  fun later(e: Empty): Term {\n    x := exfalso(e)\n    return x\n  }\n")
+    r, _ = _proof(tmp_path, program("test_generic_call_context/test_the_expected_type_of_a_later_use_fixes_the_call_1.yon"))
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_a_cell_has_the_type_of_what_is_written(tmp_path):
-    _exits(tmp_path, _entry(tmp_path, "fun main: Number {\n  mut l := List.empty\n"
-                                      "  l <- List.cons(40, l)\n  l <- List.cons(2, l)\n"
-                                      "  return List.length(l) + 40\n}"), 42)
+    _exits(tmp_path, _entry(tmp_path, program("test_generic_call_context/test_a_cell_has_the_type_of_what_is_written_1.yon")), 42)
 
 
 def test_a_write_of_another_type_is_refused(tmp_path):
-    _refused(_entry(tmp_path, 'fun main: Number {\n  mut l := List.empty\n  l <- List.cons(1, l)\n'
-                              '  l <- List.cons("a", l)\n  return 0\n}'), "List__cons")
+    _refused(_entry(tmp_path, program("test_generic_call_context/test_a_write_of_another_type_is_refused_1.yon")), "List__cons")
 
 
 def test_a_cell_never_written_leaves_its_list_ambiguous(tmp_path):
-    _refused(_entry(tmp_path, "fun main: Number {\n  mut l := List.empty\n  return 0\n}"),
+    _refused(_entry(tmp_path, program("test_generic_call_context/test_a_cell_never_written_leaves_its_list_ambiguous_1.yon")),
              "ambiguous call of", "List__empty", "annotate")
 
 
@@ -115,20 +110,19 @@ def test_the_space_cell_forms_are_gone(tmp_path, form, name):
              f"`{name}` is gone", "`mut c := e`", "`c <- e`")
 
 
-@pytest.mark.parametrize("decl", ["fun same(x, y) { return x == y }",
-                                  "fun same<T>(x: T, y: T): Boolean { return x == y }"])
+@pytest.mark.parametrize("decl", [program("test_generic_call_context/test_equality_on_an_abstract_type_is_refused_1.yon"),
+                                  program("test_generic_call_context/test_equality_on_an_abstract_type_is_refused_2.yon")])
 def test_equality_on_an_abstract_type_is_refused(tmp_path, decl):
     _refused(_entry(tmp_path, decl + "\nfun main: Number { return 0 }"),
              "abstract type T admits no operation")
 
 
 def test_equality_with_a_type_the_body_fixes_is_accepted(tmp_path):
-    _exits(tmp_path, _entry(tmp_path, "fun same(x, y) { return x + 0 == y }\n"
-                                      "fun main: Number { return if same(1, 1) then 42 else 0 }"), 42)
+    _exits(tmp_path, _entry(tmp_path, program("test_generic_call_context/test_equality_with_a_type_the_body_fixes_is_accepted_1.yon")), 42)
 
 
 def test_a_space_is_not_a_type(tmp_path):
-    _refused(_entry(tmp_path, "fun f(c: Space): Number { return 0 }\nfun main: Number { return 0 }"),
+    _refused(_entry(tmp_path, program("test_generic_call_context/test_a_space_is_not_a_type_1.yon")),
              "`Space` is not a type", "a Space is a package")
 
 
@@ -139,10 +133,9 @@ def test_the_primitives_of_a_cell_are_not_reachable(tmp_path, name):
 
 
 def test_an_xset_has_its_own_type(tmp_path):
-    _exits(tmp_path, _entry(tmp_path, "fun two(): XSet { return XSet.add(XSet.add(XSet.empty(), 1), 2) }\n"
-                                      "fun main: Number { return XSet.size(two()) + 40 }"), 42)
+    _exits(tmp_path, _entry(tmp_path, program("test_generic_call_context/test_an_xset_has_its_own_type_1.yon")), 42)
 
 
 def test_an_xset_is_not_an_xrelset(tmp_path):
-    _refused(_entry(tmp_path, "fun main: Number {\n  s := XSet.empty()\n  return XRelSet.size(s)\n}"),
+    _refused(_entry(tmp_path, program("test_generic_call_context/test_an_xset_is_not_an_xrelset_1.yon")),
              "XRelSet__size")

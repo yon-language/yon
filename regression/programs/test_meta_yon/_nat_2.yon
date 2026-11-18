@@ -1,0 +1,1 @@
+place Nat { this > zero :U succ Nat }

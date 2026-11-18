@@ -1,0 +1,1 @@
+  proof fun exfalso<T>(e: Empty): T { return match e { nessuno as x => x ↦ exfalso } }

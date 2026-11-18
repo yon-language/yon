@@ -1,0 +1,10 @@
+place Entry {}
+fun main: Number {
+  f := fun(x: Number) => x + 1
+  when true {
+    f := 5
+    return f
+  } otherwise {
+    return 0
+  }
+}

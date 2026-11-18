@@ -1,0 +1,4 @@
+place Entry {
+fun d(a: Int64, b: Int64): Int64 { return a / b }
+fun main: Number { return if d(7, 2) == 3 then (if d(0 - 7, 2) == 0 - 3 then 5 else 6) else 7 }
+}

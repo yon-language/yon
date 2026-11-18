@@ -1,0 +1,6 @@
+place Entry {}
+fun main(): Number {
+  m := HashMap.set(HashMap.empty, 1, 10)
+  l := .-> Lookup { hits 32 }
+  return l.hits + (match HashMap.get(m, 1) { Found as v => v, Absent => 0 })
+}

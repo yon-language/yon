@@ -1,0 +1,2 @@
+  fun giro(n: Nat): Nat { return giro(n) }
+  proof fun usa(n: Nat): Nat { return giro(n) }

@@ -1,0 +1,5 @@
+place Entry {
+  fun stats(x: Number): Text { return "no" }
+  fun other(x: Number): Number { return x * 2 }
+  fun main: Number { return 0 }
+}

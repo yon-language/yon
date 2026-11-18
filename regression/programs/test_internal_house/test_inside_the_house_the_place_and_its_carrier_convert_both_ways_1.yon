@@ -1,0 +1,2 @@
+  fun make(n: Int64): Word { return n }
+  fun to_int(w: Word): Int64 { return w }

@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from test_formatter import CORPUS
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 RW = ROOT / "frontend" / "_build" / "default" / "yonrw.exe"
@@ -44,7 +45,7 @@ def test_writing_each_node_again_keeps_every_byte_of_the_corpus():
     assert not changed, changed[:10]
 
 
-SRC = 'place Entry {\n  // a comment before\n  fun main: Number {\n    a := 7  -  2   /* a comment after the operation */\n    b := a*3\n    return b      // the end\n  }\n}\n'
+SRC = program("test_rewriter/module_1.yon")
 
 
 def test_a_rewrite_keeps_the_comments_and_the_text_around_its_nodes(tmp_path):

@@ -1,0 +1,6 @@
+place Sum carried by i64 {
+  this < Monoid
+  operation op(a: Sum, b: Sum): Sum as "+"
+  operation unit: Sum as "0"
+  law commutative ∀a : Sum ∀b : Sum, a + b = b + a
+}

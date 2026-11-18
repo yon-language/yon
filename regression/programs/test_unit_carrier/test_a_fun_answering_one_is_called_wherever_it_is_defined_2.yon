@@ -1,0 +1,5 @@
+fun say(n: Number): Unit {
+  _ := if n == 41 then SystemOs.write_output("ok\n")
+       else SystemOs.write_output("bad\n")
+  return star
+}

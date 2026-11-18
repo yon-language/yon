@@ -1,0 +1,1 @@
+  fun probe_first(r: Region): Lookup<Word64> { return read_word(r, 0) ↪ Found }

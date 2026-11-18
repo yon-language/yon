@@ -1,0 +1,2 @@
+fun cd(n): Number { return if n >= 1 then cd(n - 1) else 42 }
+fun main: Number { return cd(9) }

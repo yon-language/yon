@@ -1,0 +1,2 @@
+fun f(x) { return x.a }
+fun main: Number { return 0 }

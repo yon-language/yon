@@ -1,0 +1,7 @@
+place Bad { f Bad -> Number }
+place Entry {
+  fun omega(b: Bad): Number { g := b.f  return g(b) }
+  fun boom(n: Number): Number { return omega(.-> Bad { f omega }) }
+  fun force(n: Number): boom(n) = 0 { return clear }
+  fun main: Number { return 0 }
+}

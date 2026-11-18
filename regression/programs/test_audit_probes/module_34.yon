@@ -1,0 +1,2 @@
+place Entry {}
+fun plus(a: Number, b: Number): Number { return a + b }

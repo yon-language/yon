@@ -1,0 +1,1 @@
+  fun f(a: Number, s: { x : Number where (x = a) ∧ (x = a) }): Number { return fst(s) }

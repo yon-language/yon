@@ -1,0 +1,2 @@
+  fun wit(d: Number): Σr : Number, r = d { return pair(d, refl(d)) }
+  fun keeps(r: Number): Σw : Number, w = r + 1 { return wit(r + 1) }

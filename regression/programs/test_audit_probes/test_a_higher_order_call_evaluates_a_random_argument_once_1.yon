@@ -1,0 +1,1 @@
+fun twice(f: Number -> Number, x: Number): Number { return f(x) - f(x) }

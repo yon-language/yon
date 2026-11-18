@@ -1,0 +1,7 @@
+place Entry {}
+fun main(): Number {
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, 42), p) { Found as v => v, Absent => 0 }),
+    DomainError as d => 0
+  }
+}

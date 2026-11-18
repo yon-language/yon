@@ -1,0 +1,4 @@
+place Stato {
+  this > Opened :U Spento
+  balance Number
+}

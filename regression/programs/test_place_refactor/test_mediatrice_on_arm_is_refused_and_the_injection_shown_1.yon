@@ -1,0 +1,6 @@
+place NumList { this > Nil :U Cons Number NumList }
+place Entry { }
+fun main: Number {
+  c := .-> Cons { _1 1 }
+  return 0
+}

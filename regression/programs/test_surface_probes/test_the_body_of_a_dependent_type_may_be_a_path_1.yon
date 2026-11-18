@@ -1,0 +1,4 @@
+place Entry {
+fun f(p: Πx : Number, x = x): Number { return 42 }
+fun main: Number { return 42 }
+}

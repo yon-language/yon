@@ -1,0 +1,2 @@
+fun with_point(p: LatticePoint, k: Number): Number { return k }
+fun wrong(h: LeechHeap<Number>): LeechHeap<Boolean> { return h }

@@ -1,0 +1,7 @@
+import svc::d_op from D
+place Entry { }
+fun main(): Number {
+  drop Zeta
+  r := d_op(5)
+  return r - r
+}

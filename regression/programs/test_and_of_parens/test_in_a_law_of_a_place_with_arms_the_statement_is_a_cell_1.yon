@@ -1,0 +1,4 @@
+place Coin {
+  this > heads :U tails
+  law both ∀a : Coin, (a = a) ∧ (a = a)
+}

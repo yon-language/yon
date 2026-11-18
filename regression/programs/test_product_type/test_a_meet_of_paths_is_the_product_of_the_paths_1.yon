@@ -1,0 +1,2 @@
+  fun first_of(a: Number, q: (a = a) ∧ (a = a)): a = a { return fst(q) }
+  fun both(a: Number): (a = a) ∧ (a = a) { return pair(refl(a), refl(a)) }

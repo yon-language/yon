@@ -1,0 +1,7 @@
+place Entry {
+  fun main: Number {
+    vw := view(s: P) => s.v + 2 of P
+    sp := .-> P { v 40 }
+    return vw(sp)
+  }
+}

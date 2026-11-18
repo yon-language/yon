@@ -1,0 +1,4 @@
+place Entry {
+  fun stats(x: Number): Number { return x + 1 }
+  fun main: Number { return 0 }
+}

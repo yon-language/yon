@@ -1,0 +1,1 @@
+place Entry { fun main: Number { return match Int64.div(5, 0) { Int64 as v => 1, DomainError as e => 30 } } }

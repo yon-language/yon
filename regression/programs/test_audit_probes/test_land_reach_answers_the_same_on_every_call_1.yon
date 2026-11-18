@@ -1,0 +1,12 @@
+place Entry {}
+fun plus(a: Number, b: Number): Number { return a + b }
+fun main(): Number {
+  m := Generated.gen(Generated.gen(Generated.generated_by(plus, HashSet.empty), 3), 5)
+  mut hits := 0
+  mut i := 0
+  while i < 400 do {
+    hits <- hits + (if Land.reach(m, 8 + i - i) then 1 else 0)
+    i <- i + 1
+  }
+  return if hits == 400 then 1 else 0
+}

@@ -1,0 +1,5 @@
+place Entry {
+fun inc(x: Number): Number { return x + 1 }
+fun apply<V>(g: V -> V, x: V): V { return g(x) }
+fun main: Number { return apply(inc, 41) }
+}

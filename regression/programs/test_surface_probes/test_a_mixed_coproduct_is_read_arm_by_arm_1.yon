@@ -1,0 +1,7 @@
+fun a: Stato { return .-> Opened { initial 1 balance 2 } }
+fun b: Stato { return 3 ↪ Pending }
+fun c: Stato { return Spento }
+fun leggi(s: Stato): Number {
+  return match s { Opened { initial as i } => i, Pending as n => n, Spento => 4 }
+}
+fun run: Number { return leggi(a) * 100 + leggi(b) * 10 + leggi(c) }

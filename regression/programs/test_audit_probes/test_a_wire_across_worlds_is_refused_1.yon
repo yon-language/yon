@@ -1,0 +1,5 @@
+place AP { }
+fun a_op(x: Number): Number {
+  w := wire to space Bx
+  return x
+}

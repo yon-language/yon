@@ -1,0 +1,4 @@
+place W {
+  this > only Term
+  fun inner(w: W): Term { return match w { only as t => t } }
+}

@@ -1,0 +1,14 @@
+place Entry {
+  fun accept(a: Account): Number { return 7 }
+  fun log(l: Ledger): Number { return 8 }
+  fun main: Number {
+    o := .-> Opened { initial 42 }
+    return accept(o) * 10 + log(o)
+  }
+}
+place Account {
+  this > Opened :U Closed
+}
+place Ledger {
+  this > Frozen :U Opened
+}

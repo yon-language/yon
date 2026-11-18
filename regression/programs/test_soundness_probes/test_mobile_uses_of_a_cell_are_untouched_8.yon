@@ -1,0 +1,2 @@
+fun pass(k: Number): Number { return k }
+  fun mk: Number { mut h := 21  h2 := pass(h)  return h2 }

@@ -1,0 +1,13 @@
+place Entry {
+fun h: Number {
+  mut c := .-> P { x 1 }
+  c <- .-> P { x 2 }
+  return c.x
+}
+fun main: Number {
+  mut k := h
+  mut d := 0
+  d <- 7
+  return d + k * 10
+}
+}

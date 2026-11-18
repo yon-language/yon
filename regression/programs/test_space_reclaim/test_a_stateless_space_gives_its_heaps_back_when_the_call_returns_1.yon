@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    r := Q.work(100000)
+    return r - 200000 + 7
+  }
+}

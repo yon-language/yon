@@ -1,0 +1,21 @@
+/* 2,000 values at the point of index 777: the sum of the generations
+   this replica took, each value read back from its handle */
+fun with_point(p: LatticePoint, k: Number): Number {
+  mut s := 0
+  mut j := 0
+  while j < 2000 do {
+    h := LeechHeap.put(j, p)
+    s <- s + (if LeechHeap.value(h) == j then generation_number(h) else 0 - 1000000000)
+    j <- j + 1
+  }
+  return s
+}
+fun generation_number(h: LeechHeap<Number>): Number {
+  mut n := 0
+  mut i := int64(0)
+  while i < LeechHeap.generation(h) do {
+    n <- n + 1
+    i <- i + 1
+  }
+  return n
+}

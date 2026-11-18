@@ -1,0 +1,3 @@
+import svc::b_op from Bx
+place AP { }
+fun a_op(x: Number): Number { r := b_op(x)  return r }

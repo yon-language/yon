@@ -1,0 +1,4 @@
+fun samples(): Wire<Reading> {
+  s := produce { emit .-> Reading { temp 10 humidity 50 } }
+  return s
+}

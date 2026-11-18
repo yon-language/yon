@@ -1,0 +1,4 @@
+place Entry {
+  fun giro(n: Number): Number { return giro(n) }
+  fun main: Number { return 0 }
+}

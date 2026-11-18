@@ -1,0 +1,2 @@
+fun run: Number { return 0 }
+fun b(s: Stato): Number { return s.balance }

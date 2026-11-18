@@ -1,0 +1,17 @@
+place IntExpr { this > Lit Int64 :U Nil }
+place Entry {
+  fun via_list(x: Int64): Int64 { return match List.head(List.cons(x, List.empty)) { Found as v => v, Absent => 0 } }
+  fun wrap(x: Int64): IntExpr { return x ↪ Lit }
+  fun unwrap(e: IntExpr): Int64 { return match e { Lit as n => n, Nil => 0 } }
+  fun adder(k: Int64): Int64 -> Int64 { return fun(y: Int64) => k + y }
+  fun same(x: Int64): Number {
+    f := adder(x)
+    a := if via_list(x) == x then 1 else 0
+    mut c := if unwrap(wrap(x)) == x then a else 0
+    return if f(0) == x then c else 0
+  }
+  fun main: Number {
+    return same(Int64.max_value) + same(Int64.min_value) * 10
+         + same(9007199254740992 + 1) * 100
+  }
+}

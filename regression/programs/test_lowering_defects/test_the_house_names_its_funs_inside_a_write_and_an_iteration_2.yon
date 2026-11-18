@@ -1,0 +1,10 @@
+place Counter {
+  fun run: Int64 {
+    mut x := start
+    iter 3 do { x <- x + step }
+    return x
+  }
+  fun expected: Int64 { return 42 }
+  internal fun start: Int64 { return 30 }
+  internal fun step: Int64 { return 4 }
+}

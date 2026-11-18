@@ -1,0 +1,3 @@
+place Uso {
+  fun f(p: Pushout<Codice, Cliente, Utente>): Number { return 0 }
+}

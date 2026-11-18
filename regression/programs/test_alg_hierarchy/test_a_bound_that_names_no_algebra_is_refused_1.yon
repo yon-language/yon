@@ -1,0 +1,3 @@
+fun first<T uses Monoidd>(xs: List<T>): T {
+  return match xs { Cons as (h, t) => h, Nil => first(xs) }
+}

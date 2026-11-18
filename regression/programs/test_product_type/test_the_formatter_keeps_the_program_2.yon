@@ -1,0 +1,1 @@
+  fun g(k: (Number, Number) -> Number): Number { return k(1, 2) }

@@ -1,0 +1,4 @@
+place Entry {
+fun some(x: Number): Lookup<Text> { return x ↪ Found }
+fun main: Number { return 0 }
+}

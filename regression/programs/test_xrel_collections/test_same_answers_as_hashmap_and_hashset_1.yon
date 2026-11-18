@@ -1,0 +1,39 @@
+place Entry {}
+fun main(): Number {
+  mut h := HashMap.empty
+  mut x := XRelMap.empty
+  mut ha := HashSet.empty
+  mut hb := HashSet.empty
+  mut xa := XRelSet.empty
+  mut xb := XRelSet.empty
+  mut i := 0
+  iter 300 do {
+    key := (i % 200) * 0.5
+    h <- HashMap.set(h, key, i)
+    x <- XRelMap.set(x, key, i)
+    ha <- (if i % 3 == 0 then ha else HashSet.add(ha, key))
+    xa <- (if i % 3 == 0 then xa else XRelSet.add(xa, key))
+    hb <- (if i % 5 < 2 then HashSet.add(hb, key + 7) else hb)
+    xb <- (if i % 5 < 2 then XRelSet.add(xb, key + 7) else xb)
+    i <- i + 1
+  }
+  mut sh := 0
+  mut sx := 0
+  mut j := 0
+  iter 300 do {
+    key := j * 0.5
+    sh <- sh + (match HashMap.get(h, key) { Found as v => v, Absent => 0 - 1 })
+    sx <- sx + (match XRelMap.get(x, key) { Found as v => v, Absent => 0 - 1 })
+    j <- j + 1
+  }
+  _1 := IO.print_num(sh)
+  _2 := IO.print_num(sx)
+  _3 := IO.print_num(HashMap.size(h))
+  _4 := IO.print_num(XRelMap.size(x))
+  _5 := IO.print_num(HashSet.size(HashSet.union(ha, hb)))
+  _6 := IO.print_num(XRelSet.size(XRelSet.union(xa, xb)))
+  _7 := IO.print_num(HashSet.size(HashSet.intersect(ha, hb)))
+  _8 := IO.print_num(XRelSet.size(XRelSet.intersect(xa, xb)))
+  _9 := IO.print_num(if XRelSet.contains(XRelSet.union(xa, xb), 7.5) then 1 else 0)
+  return 0
+}

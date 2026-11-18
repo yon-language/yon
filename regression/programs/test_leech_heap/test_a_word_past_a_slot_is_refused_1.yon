@@ -1,0 +1,4 @@
+fun with_point(p: LatticePoint, k: Number): Number {
+  x := LeechHeap.word(LeechHeap.put(40, p), 5)
+  return 1
+}

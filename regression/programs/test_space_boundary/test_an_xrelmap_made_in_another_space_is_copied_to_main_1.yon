@@ -1,0 +1,6 @@
+place Entry {
+  fun main(): Number {
+    mut m := Q.points(6)
+    return XRelMap.size(m) + (match XRelMap.get(m, 5) { Found as v => v, Absent => 0 })
+  }
+}

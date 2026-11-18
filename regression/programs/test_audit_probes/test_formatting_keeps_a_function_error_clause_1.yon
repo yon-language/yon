@@ -1,0 +1,4 @@
+place Entry {
+  fun half(n: Number) on error DomainError: Number { return n / 2 }
+  fun main: Number { return half(84) }
+}

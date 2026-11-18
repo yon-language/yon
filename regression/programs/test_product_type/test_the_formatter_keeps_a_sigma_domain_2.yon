@@ -1,0 +1,1 @@
+  fun s(k: (Σx : Number, Number) -> Number): Number { return k(pair(1, 2)) }

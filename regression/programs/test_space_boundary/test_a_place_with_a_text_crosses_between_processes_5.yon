@@ -1,0 +1,8 @@
+import notes::describe from Notes
+
+place Entry {
+  fun main: Number {
+    n := .-> Note { message "unexpected }" line 30 }
+    return describe(n)
+  }
+}

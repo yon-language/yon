@@ -1,0 +1,8 @@
+place Entry {}
+fun neg(x: Number): Number { return if 1 / x < 0 then 1 else 0 }
+fun main: Number {
+  z := 0 * (0 - 1)
+  mut r := match Number.sqrt(z) { Number as v => v, DomainError as d => 1 }
+  return neg(r) * 1000 + neg(Number.sin(z)) * 100 + neg(Number.floor(z)) * 10
+       + neg(floor(z))
+}

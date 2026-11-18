@@ -24,6 +24,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -31,11 +32,7 @@ YONC = ROOT / "toolchain" / "yonc"
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
 TOML = '[package]\nname = "{n}"\n\n[runtime]\nbackend = "memory"\n'
-FAIL = '''fun fail(m: Text) on error DomainError: Number { return .-> DomainError { message m } }
-fun check(i: Number, m: Text) on error DomainError: Number {
-  return if i < 2 then i else fail(m)
-}
-'''
+FAIL = program("test_error_bind/module_1.yon")
 def main_of(call, ok="v", err="Text.length(d.message) + 100"):
     return f"fun main: Number {{\n  return match {call} {{ Number as v => {ok}, DomainError as d => {err} }}\n}}\n"
 CASES = {}
@@ -75,28 +72,9 @@ fun f(x: Number) on error DomainError: Number {
   return add1(escape Number.sqrt(x))
 }
 """ + main_of("f(9)"), 4)
-case("tailsub", """fun h(x: Number) on error Error: Number {
-  return Number.sqrt(x)
-}
-fun main: Number {
-  return match h(0 - 4) { Number as v => v, Error as e => 7 }
-}
-""", 7)
-case("tailsub_ok", """fun h(x: Number) on error Error: Number {
-  return Number.sqrt(x)
-}
-fun main: Number {
-  return match h(9) { Number as v => v, Error as e => 7 }
-}
-""", 3)
-case("sub_bind", """fun h(x: Number) on error Error: Number {
-  y := escape Number.sqrt(x)
-  return y + 1
-}
-fun main: Number {
-  return match h(0 - 4) { Number as v => v, Error as e => Text.length(e.message) }
-}
-""", len("sqrt of a negative"))
+case("tailsub", program("test_error_bind/module_2.yon"), 7)
+case("tailsub_ok", program("test_error_bind/module_3.yon"), 3)
+case("sub_bind", program("test_error_bind/module_4.yon"), len("sqrt of a negative"))
 case("cell", """fun f(x: Number) on error DomainError: Number {
   mut y := escape Number.sqrt(x)
   y <- y + 1
@@ -165,20 +143,8 @@ case("match_branch", FAIL + """fun g(x: Number) on error DomainError: Number {
   return y + 1
 }
 """ + main_of("g(4)"), 104)
-case("and_rhs", FAIL + """fun g(x: Number) on error DomainError: Boolean {
-  return x > 0 && escape fail("ab") > 0
-}
-fun main: Number {
-  return match g(0 - 1) { Boolean as b => if b then 1 else 2, DomainError as d => 100 + Text.length(d.message) }
-}
-""", 2)
-case("and_rhs_err", FAIL + """fun g(x: Number) on error DomainError: Boolean {
-  return x > 0 && escape fail("ab") > 0
-}
-fun main: Number {
-  return match g(1) { Boolean as b => if b then 1 else 2, DomainError as d => 100 + Text.length(d.message) }
-}
-""", 102)
+case("and_rhs", program("test_error_bind/module_5.yon"), 2)
+case("and_rhs_err", program("test_error_bind/module_6.yon"), 102)
 case("iter_ok", FAIL + """fun s(n: Number) on error DomainError: Number {
   mut acc := 0
   mut i := 0
@@ -245,22 +211,13 @@ fun s(n: Number) on error DomainError: Number {
   return acc + 40
 }
 """ + main_of("s(3)"), 102)
-case("refuse_none", """fun f(x: Number): Number {
-  return escape Number.sqrt(x) + 1
-}
-fun main: Number { return f(4) }
-""", ("E2011", ["f declares no on error", "Declare on error DomainError"]))
+case("refuse_none", program("test_error_bind/module_7.yon"), ("E2011", ["f declares no on error", "Declare on error DomainError"]))
 case("refuse_lambda", """fun f(x: Number) on error DomainError: Number {
   g := fun(y: Number) => escape Number.sqrt(y) + 1
   return g(x)
 }
 """ + main_of("f(4)"), ("E2011", ["inside a lambda", "carries no on error"]))
-case("refuse_other", """place OtherError { this < Error }
-fun f(x: Number) on error OtherError: Number {
-  return escape Number.sqrt(x) + 1
-}
-fun main: Number { return match f(4) { Number as v => v, OtherError as e => 9 } }
-""", ("E2011", ["declares on error OtherError, which does not contain DomainError"]))
+case("refuse_other", program("test_error_bind/module_8.yon"), ("E2011", ["declares on error OtherError, which does not contain DomainError"]))
 
 case("if_tail_a", """fun g(x: Number) on error DomainError: Number {
   return if x > 0 then escape Number.sqrt(x) + 1 else 5
@@ -275,10 +232,7 @@ case("if_tail_c", """fun g(x: Number) on error DomainError: Number {
 }
 """ + main_of("g(9)"), 3)
 
-CHK = """fun check(i: Number) on error DomainError: Number {
-  return if i < 2 then i else .-> DomainError { message if i < 3 then "ab" else "abcd" }
-}
-"""
+CHK = program("test_error_bind/module_9.yon")
 case("when_cond", FAIL + """fun g(x: Number) on error DomainError: Number {
   mut acc := 0
   when escape Number.sqrt(x) > 2 { acc <- 1 } otherwise { acc <- 2 }
@@ -334,15 +288,7 @@ case("scope_err", FAIL + """fun s(n: Number) on error DomainError: Number {
   return acc + 40
 }
 """ + main_of("s(0)"), 105)
-case("refuse_field", """fun mk(v: Number) on error DomainError: Pt {
-  return .-> Pt { x v }
-}
-fun g(v: Number): Number {
-  p := escape mk(v)
-  return p.x
-}
-fun main: Number { return g(3) }
-""", ("E2011", ["g declares no on error"]), {"Pt.yon": "place Pt { x Number }\n"})
+case("refuse_field", program("test_error_bind/module_10.yon"), ("E2011", ["g declares no on error"]), {"Pt.yon": program("test_error_bind/module_11.yon")})
 case("refuse_produce", """fun f(x: Number) on error DomainError: Number {
   s := produce {
     emit escape Number.sqrt(x) + 1
@@ -407,12 +353,7 @@ case("tail_check", FAIL + """fun f(u: Number) on error DomainError: Number {
 }
 """ + main_of("f(0)"), 104)
 # without escape and where no S is wanted, the value stays a value of S + E
-case("value_kept", """fun f(x: Number): Number {
-  y := Number.sqrt(x)
-  return match y { Number as v => v, DomainError as d => 50 }
-}
-fun main: Number { return f(0 - 4) }
-""", 50)
+case("value_kept", program("test_error_bind/module_12.yon"), 50)
 
 
 def _project(tmp_path, name):

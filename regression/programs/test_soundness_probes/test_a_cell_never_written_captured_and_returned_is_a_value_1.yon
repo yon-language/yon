@@ -1,0 +1,5 @@
+place Entry {
+  fun mk: Number -> Number { mut c := 10  return fun(y: Number) => y + c }
+  fun user(f: Number -> Number): Number { mut d := 90  d <- 98  return f(1) + (d - d) }
+  fun main: Number { f := mk  return user(f) }
+}

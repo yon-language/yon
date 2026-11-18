@@ -1,0 +1,4 @@
+fun f(s: Sospeso<Number>): Number {
+  return match s { nord => 1, sud => 1, meridiano as a => walk i => 1 }
+}
+fun run: Number { return f(nord) * 42 }

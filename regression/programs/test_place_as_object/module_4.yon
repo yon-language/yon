@@ -1,0 +1,4 @@
+place Bit { this > O :U I }
+place Entry {
+  fun main: Number { return 0 }
+}

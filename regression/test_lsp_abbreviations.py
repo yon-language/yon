@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 LSP = ROOT / "frontend" / "_build" / "default" / "yon_lsp.exe"
@@ -73,23 +74,14 @@ def test_the_range_counts_the_symbols_before_it():
 
 
 def test_no_backslash_gives_the_names_of_the_program():
-    items = _completion("place Entry {}\n", 0, 5)
+    items = _completion(program("test_lsp_abbreviations/test_no_backslash_gives_the_names_of_the_program_1.yon"), 0, 5)
     assert all(not i["label"].startswith("\\") for i in items)
 
 
 def test_the_formatter_writes_the_ascii_forms_in_unicode(tmp_path):
     src = tmp_path / "f.yon"
     src.write_text(
-        "place Plus is algebra {\n"
-        "  operation plus(a: Plus, b: Plus): Plus as \"+\"\n"
-        "  law c ∀a : Plus, a = a &&? (a = a =>? a = a) ||? !?(a = a)\n"
-        "}\n"
-        "place Box { this > Full Number :U Empty }\n"
-        "place Entry {\n"
-        "  fun i(x: Number): Number { return x }\n"
-        "  fun mk: Box { return 1 >-> Full }\n"
-        "  fun main: Number { return 1 |-> i }\n"
-        "}\n")
+        program("test_lsp_abbreviations/test_the_formatter_writes_the_ascii_forms_in_unicode_1.yon"))
     r = subprocess.run([str(FMT), str(src)], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     out = r.stdout

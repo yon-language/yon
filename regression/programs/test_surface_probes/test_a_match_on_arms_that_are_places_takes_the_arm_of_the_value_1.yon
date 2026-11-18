@@ -1,0 +1,9 @@
+fun apri: Account { return .-> Opened { initial 1 balance 2 } }
+fun chiudi: Account { return .-> Closed { moment 3 balance 4 } }
+fun leggi(a: Account): Number {
+  return match a { Opened { initial as i } => i, Closed { moment as m } => m }
+}
+fun tag(a: Account): Number { return match a { Opened => 5, Closed => 6 } }
+fun run: Number {
+  return leggi(apri) * 100 + leggi(chiudi) * 10 + tag(chiudi)
+}

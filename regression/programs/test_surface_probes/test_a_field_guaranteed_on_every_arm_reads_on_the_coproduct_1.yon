@@ -1,0 +1,2 @@
+fun leggi(a: Account): Number { return a.balance }
+fun run: Number { return leggi(Account.prova) }

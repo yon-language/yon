@@ -1,0 +1,4 @@
+  fun bad(x: Number, q: x = 1): Σx : Number, x = 1 {
+    p := pair(0, q)
+    return p
+  }

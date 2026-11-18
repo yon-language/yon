@@ -1,0 +1,1 @@
+fun inc(y: Number): Number { return y + 1 }

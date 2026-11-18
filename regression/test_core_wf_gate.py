@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 import compiling_corpus as cc
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 FE = ROOT / "frontend"
@@ -74,7 +75,7 @@ def _bodies_checked(stderr: str) -> int | None:
 
 
 _MIN_PROJECT_TOML = '[package]\nname = "minp"\n[runtime]\nbackend = "memory"\n'
-_MIN_PROJECT_ENTRY = "place Entry {\n  fun main: Number { return 0 }\n}\n"
+_MIN_PROJECT_ENTRY = program("test_core_wf_gate/module_1.yon")
 
 
 def test_gate_runs_on_corpus_without_false_reject(tmp_path):
@@ -132,11 +133,7 @@ def test_gate_runs_on_corpus_without_false_reject(tmp_path):
 # refuses it — defense in depth: surface OR kernel, never a clean emit. The
 # kernel gate's own rejection path is pinned directly at the unit level by
 # test_core_check.ml case (c) [certify_term ... = `Type_error].
-ILL_TYPED_SRC = """\
-fun bad(A: Type, B: Type, x: El(A)): El(B) { return x }
-
-fun main: Number { return 0 }
-"""
+ILL_TYPED_SRC = program("test_core_wf_gate/module_2.yon")
 
 
 # The well-typed twin: the same signature returning El(A) at El(A). It must emit,

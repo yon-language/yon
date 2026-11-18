@@ -1,0 +1,3 @@
+place Celsius carried by i16 {
+  fun zero: Celsius { return 0 }
+}

@@ -1,0 +1,8 @@
+place Entry {}
+fun main: Number {
+  pad1 := MerkleTree.leaf(500)
+  pad2 := MerkleTree.leaf(600)
+  mut n := MerkleTree.node3(9, MerkleTree.leaf(11), MerkleTree.leaf(22), MerkleTree.leaf(33))
+  return MerkleTree.label(MerkleTree.child(n, 0)) + MerkleTree.label(MerkleTree.child(n, 1))
+       + MerkleTree.label(MerkleTree.child(n, 2))
+}

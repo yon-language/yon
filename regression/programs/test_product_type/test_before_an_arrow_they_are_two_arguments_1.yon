@@ -1,0 +1,2 @@
+  fun add(x: Number, y: Number): Number { return x + y }
+  fun apply(f: (Number, Number) -> Number): Number { return f(40, 2) }

@@ -15,35 +15,16 @@ import time
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
 
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
-_SERVER = """\
-place Entry {
-  fun instance(x: Number): Number { return Text.length(Env.get("YON_PROBE_INSTANCE")) + x * 0 }
-  fun main: Number { return 0 }
-}
-"""
+_SERVER = program("test_world_instance/module_1.yon")
 
-_CLIENT = """\
-import who::instance from Who
-
-place Entry {
-  fun main(): Number {
-    k := Text.length(Env.get("YON_PROBE_INSTANCE"))
-    mut good := 0
-    mut i := 0
-    while i < 400 do {
-      good <- good + (if instance(i) == k then 1 else 0)
-      i <- i + 1
-    }
-    return if good == 400 then k else 99
-  }
-}
-"""
+_CLIENT = program("test_world_instance/module_2.yon")
 
 
 def _build(tmp: Path):
@@ -120,27 +101,9 @@ def test_named_worlds_are_distinct(tmp_path):
 # at a directory of its own, so the registry it watches is the one its program
 # writes.
 
-_HOLDER = """\
-place Entry {
-  fun main(): Number {
-    a := Wire.make_shm(5, 1)
-    b := Wire.make_shm(6, 1)
-    mut v := Wire.await_shm(6)
-    return if v == 7 then 0 else 1
-  }
-}
-"""
+_HOLDER = program("test_world_instance/module_3.yon")
 
-_SENDER = """\
-place Entry {
-  fun main(): Number {
-    c := Wire.make_shm(6, 0)
-    s := Wire.produce_shm(6, 7)
-    e := Wire.close_shm(6)
-    return 0
-  }
-}
-"""
+_SENDER = program("test_world_instance/module_4.yon")
 
 
 def _project(tmp: Path, name: str, entry: str) -> Path:
@@ -223,32 +186,9 @@ def test_killed_launcher_releases_every_name(tmp_path):
     assert not [n for n in names if _shm_exists(n)]
 
 
-_PRODUCER = """\
-place Entry {
-  fun main(): Number {
-    c := Wire.make_shm(7, 1)
-    a := Wire.produce_shm(7, 10)
-    b := Wire.produce_shm(7, 32)
-    e := Wire.close_shm(7)
-    return 0
-  }
-}
-"""
+_PRODUCER = program("test_world_instance/module_5.yon")
 
-_CONSUMER = """\
-place Entry {
-  fun main(): Number {
-    c := Wire.make_shm(7, 0)
-    mut total := 0
-    mut v := Wire.await_shm(7)
-    while v != 4294967295 do {
-      total <- total + v
-      v <- Wire.await_shm(7)
-    }
-    return total
-  }
-}
-"""
+_CONSUMER = program("test_world_instance/module_6.yon")
 
 
 def test_consumer_removes_a_finished_stream(tmp_path):

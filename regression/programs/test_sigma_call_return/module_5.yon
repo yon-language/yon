@@ -1,0 +1,1 @@
+  fun k(g: Number -> Number, q: g = inc): g(0) = 1 { return k(g, q) }

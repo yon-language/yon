@@ -1,0 +1,8 @@
+place Entry {}
+fun main: Number {
+  mut a := HashSet.add(HashSet.add(HashSet.empty, 1), 2)
+  mut b := HashSet.add(HashSet.add(HashSet.empty, 2), 3)
+  mut u := HashSet.union(a, b)
+  mut i := HashSet.intersect(a, b)
+  return HashSet.size(u) * 1000 + HashSet.size(i) * 100 + HashSet.size(a) * 10 + HashSet.size(b)
+}

@@ -1,0 +1,3 @@
+  internal fun label(r: Region): Text { return "slot" }
+  internal fun probe_tag(r: Region, w: Int64): Int64 { return Text.length(label(r)) + w }
+  fun probe_put(r: Region, w: Int64): Int64 { return probe_tag(r, w) }

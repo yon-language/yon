@@ -1,0 +1,6 @@
+  proof fun left_of(d1: Step, d2: Step, s: Σp : Peak, (p ↦ Peak.left = d1) ∧ (p ↦ Peak.right = d2)): fst(s) ↦ Peak.left = d1 {
+    return fst(snd(s))
+  }
+  proof fun right_of(d1: Step, d2: Step, s: Σp : Peak, (p ↦ Peak.left = d1) ∧ (p ↦ Peak.right = d2)): fst(s) ↦ Peak.right = d2 {
+    return snd(snd(s))
+  }

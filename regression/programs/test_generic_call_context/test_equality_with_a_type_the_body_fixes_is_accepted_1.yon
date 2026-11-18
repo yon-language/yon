@@ -1,0 +1,2 @@
+fun same(x, y) { return x + 0 == y }
+fun main: Number { return if same(1, 1) then 42 else 0 }

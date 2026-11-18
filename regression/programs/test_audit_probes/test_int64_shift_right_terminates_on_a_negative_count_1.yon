@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    mut a := Int64.shift_right(8, 0 - 1)
+    return if a == a then 7 else 9
+  }
+}

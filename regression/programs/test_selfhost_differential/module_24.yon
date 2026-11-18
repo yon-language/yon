@@ -1,0 +1,1 @@
+fun main: Number { return Text.length(Text.concat("ab", "cde")) }

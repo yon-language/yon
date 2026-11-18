@@ -1,0 +1,8 @@
+fun g(x: Number) on error DomainError: Number {
+  mut acc := 0
+  acc <- x + 1
+  return acc
+}
+fun main: Number {
+  return match g(4) { Number as v => v, DomainError as d => 99 }
+}

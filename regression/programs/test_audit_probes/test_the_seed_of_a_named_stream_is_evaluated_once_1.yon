@@ -1,0 +1,9 @@
+place Entry {
+fun inc(y: Number): Number { return y + 1 }
+fun main(): Number {
+  s := Stream.iterate(inc, IO.print_num(7))
+  mut a := Stream.sum_take(s, 1)
+  mut b := Stream.sum_take(s, 1)
+  return 3
+}
+}

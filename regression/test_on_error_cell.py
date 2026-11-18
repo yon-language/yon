@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -21,36 +22,9 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missin
 _TOML = '[package]\nname = "probe"\n\n[runtime]\nbackend = "memory"\n'
 
 CASES = {
-    "returned": ("""fun g(x: Number) on error DomainError: Number {
-  mut acc := 0
-  acc <- x + 1
-  return acc
-}
-fun main: Number {
-  return match g(4) { Number as v => v, DomainError as d => 99 }
-}
-""", 5),
-    "after_a_loop": ("""fun g(n: Number) on error DomainError: Number {
-  mut acc := 0
-  mut i := 0
-  while i < n do {
-    acc <- acc + i
-    i <- i + 1
-  }
-  return acc
-}
-fun main: Number {
-  return match g(5) { Number as v => v, DomainError as d => 99 }
-}
-""", 10),
-    "in_a_branch": ("""fun g(x: Number) on error DomainError: Number {
-  mut acc := 7
-  return if x > 0 then acc else .-> DomainError { message "negative" }
-}
-fun main: Number {
-  return match g(1) { Number as v => v, DomainError as d => 99 }
-}
-""", 7),
+    "returned": (program("test_on_error_cell/module_1.yon"), 5),
+    "after_a_loop": (program("test_on_error_cell/module_2.yon"), 10),
+    "in_a_branch": (program("test_on_error_cell/module_3.yon"), 7),
 }
 
 

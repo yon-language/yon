@@ -1,0 +1,3 @@
+  fun witness(a: Number): Σp : Number, (p = a) ∧ (p = a) {
+    return pair(a, pair(refl(a), refl(a)))
+  }

@@ -1,0 +1,5 @@
+place Entry { }
+fun main(): Number {
+  drop D
+  return 0
+}

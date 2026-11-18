@@ -1,0 +1,8 @@
+place Entry {
+  fun main(): Number {
+    s := produce { emit 1 }
+    mut t := 0
+    for every x in s when here { t <- t + x }
+    return t
+  }
+}

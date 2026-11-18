@@ -30,6 +30,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 # The runtime drop counter (yon_xheap_drops) is printed at exit only under this
 # env var, so the automatic reclaim stays silent by default; the tests set it to
@@ -43,72 +44,25 @@ _DEBUG_ENV = {**os.environ, "YON_DEBUG_DROPS": "1"}
 # AFTER the last field read through p, never between the new and the read. The
 # program returns p.n; a reclaim scheduled before the read would zero the page on
 # platforms where MADV_DONTNEED zero-fills (Linux) and return 0 instead of 7.
-_HANDLE_ESCAPE = """\
-place Entry { }
-fun main: Number {
-  p := .-> DP { n 7 }
-  filler := 1
-  y := p.n
-  return y
-}
-"""
+_HANDLE_ESCAPE = program("test_drop_check/module_1.yon")
 
-_AUTO_NO_DROP = """\
-import svc::d_op from D
-place Entry { }
-fun main: Number {
-  r := d_op(5)
-  s := r + 1
-  return s - s
-}
-"""
+_AUTO_NO_DROP = program("test_drop_check/module_2.yon")
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
 EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
 FIXTURE = ROOT / "regression" / "keyword_coverage" / "drop_reclaim"
 
-_ILLEGAL_IMPORT = """\
-import svc::d_op from D
-place Entry { }
-fun main(): Number {
-  drop D
-  r := d_op(5)
-  return r - r
-}
-"""
+_ILLEGAL_IMPORT = program("test_drop_check/module_3.yon")
 
-_ILLEGAL_TRANSITIVE = """\
-import svc::d_op from D
-place Entry { }
-fun helper: Number { r := d_op(9)  return r }
-fun main(): Number {
-  drop D
-  r := helper
-  return r - r
-}
-"""
+_ILLEGAL_TRANSITIVE = program("test_drop_check/module_4.yon")
 
-_ILLEGAL_UNKNOWN = """\
-import svc::d_op from D
-place Entry { }
-fun main(): Number {
-  drop Zeta
-  r := d_op(5)
-  return r - r
-}
-"""
+_ILLEGAL_UNKNOWN = program("test_drop_check/module_5.yon")
 
 # A legal standalone drop of the declared Space D (nothing downstream touches D,
 # no cross-Space RPC before it), so the compiled binary runs in-process and the
 # reclaim executes. Used to prove the emission reaches the runtime.
-_LEGAL_STANDALONE = """\
-place Entry { }
-fun main(): Number {
-  drop D
-  return 0
-}
-"""
+_LEGAL_STANDALONE = program("test_drop_check/module_6.yon")
 
 
 def _compile(project: Path, out: Path) -> subprocess.CompletedProcess:

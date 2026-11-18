@@ -1,0 +1,10 @@
+fun plus(a: Number, b: Number): Number { return a + b }
+fun minus(a: Number, b: Number): Number { return a - b }
+fun lub(a: Number, b: Number): Number { return if a > b then a else b }
+fun minus5(a: Number, b: Number): Number { return Math.modulo(a - b + 5, 5) }
+fun left(a: Number, b: Number): Number { return a }
+fun is3(a: Number): Boolean { return a == 3 }
+fun is5(a: Number): Boolean { return a == 5 }
+fun report(d: DomainError): Number {
+  return if d.message == "the closure holds more than 512 elements" then 2 else 3
+}

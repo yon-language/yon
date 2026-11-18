@@ -1,0 +1,4 @@
+fun run: Number { return 0 }
+fun b(a: Account): Number {
+  return match a { Opened { nope as i } => i, Closed { moment as m } => m }
+}

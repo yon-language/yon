@@ -1,0 +1,7 @@
+import svc::d_op from D
+place Entry { }
+fun main(): Number {
+  g := fun(y: Number) => d_op(y)
+  drop D
+  return g(5)
+}

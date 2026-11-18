@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -32,12 +33,8 @@ def _run(tmp_path: Path, entry: str):
 
 @pytest.mark.parametrize("order", ["callee after", "callee before"])
 def test_a_fun_answering_one_is_called_wherever_it_is_defined(tmp_path, order):
-    outer = "fun outer(): Unit { return say(41) }\n"
-    say = ("fun say(n: Number): Unit {\n"
-           "  _ := if n == 41 then SystemOs.write_output(\"ok\\n\")\n"
-           "       else SystemOs.write_output(\"bad\\n\")\n"
-           "  return star\n"
-           "}\n")
+    outer = program("test_unit_carrier/test_a_fun_answering_one_is_called_wherever_it_is_defined_1.yon")
+    say = (program("test_unit_carrier/test_a_fun_answering_one_is_called_wherever_it_is_defined_2.yon"))
     funs = outer + say if order == "callee after" else say + outer
     r = _run(tmp_path, ("place Entry {\n"
                         "fun main(): Number {\n  _ := outer()\n  return 42\n}\n"

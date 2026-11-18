@@ -1,0 +1,7 @@
+place Entry {
+  fun main: Number {
+    w := spawn { produce { mut i := 1  i <- 2  emit i }  promote 1 }
+    mut t := 0
+    for every x in w { t <- t + x }
+    return t }
+}

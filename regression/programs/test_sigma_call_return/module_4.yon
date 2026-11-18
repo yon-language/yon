@@ -1,0 +1,1 @@
+  fun inc(n: Number): Number { return n + 1 }

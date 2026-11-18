@@ -1,0 +1,4 @@
+  proof fun gira: Number {
+    while true do { x := 1 }
+    return 0
+  }

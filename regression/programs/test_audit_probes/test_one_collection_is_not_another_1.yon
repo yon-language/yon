@@ -1,0 +1,2 @@
+fun f(s: HashSet<Number>): Number { return HashSet.size(s) }
+fun main: Number { return f(HashMap.set(HashMap.empty, 1, 2)) }

@@ -1,0 +1,1 @@
+fun wrong(h: FnvHeap<Number>): FnvHeap<Boolean> { return h }

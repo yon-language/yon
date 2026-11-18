@@ -1,0 +1,8 @@
+place Entry {
+fun inc(y: Number): Number { return y + 1 }
+fun f: Number {
+  s := Stream.iterate(inc, 1)
+  return Stream.sum_take(s, 4)
+}
+fun main(): Number { return f }
+}

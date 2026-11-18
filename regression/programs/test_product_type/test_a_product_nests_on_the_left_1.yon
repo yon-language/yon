@@ -1,0 +1,1 @@
+  fun head(p: ((Number, Number), Number)): Number { return snd(fst(p)) }

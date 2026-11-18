@@ -1,0 +1,8 @@
+place Entry {
+fun ident(y: Number): Number { return y }
+fun pick(f: Number -> Number, a: Number, b: Number): Number { return f(b) }
+fun main(): Number {
+  mut d := pick(ident, IO.print_num(1), IO.print_num(2))
+  return 3
+}
+}

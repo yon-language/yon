@@ -1,0 +1,2 @@
+fun lit: Meter { return 1.5 }
+fun far(n: Number): Number { return n }

@@ -1,0 +1,5 @@
+place Square {
+  side := Number
+  fun area(s: Square): Number { return s.side * s.side }
+  fun area(s: Square): Number { return s.side }
+}

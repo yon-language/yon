@@ -1,0 +1,14 @@
+import who::instance from Who
+
+place Entry {
+  fun main(): Number {
+    k := Text.length(Env.get("YON_PROBE_INSTANCE"))
+    mut good := 0
+    mut i := 0
+    while i < 400 do {
+      good <- good + (if instance(i) == k then 1 else 0)
+      i <- i + 1
+    }
+    return if good == 400 then k else 99
+  }
+}

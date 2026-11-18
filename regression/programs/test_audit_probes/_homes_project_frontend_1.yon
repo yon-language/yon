@@ -1,0 +1,3 @@
+internal fun helper: Number { return 1 }
+place Entry { }
+fun main: Number { return P.f }

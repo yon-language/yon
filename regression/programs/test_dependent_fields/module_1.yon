@@ -1,0 +1,5 @@
+place Iso {
+  forth Int64 -> Int64
+  left Int64 -> Int64
+  left_law Πx : Int64, left(forth(x)) = x
+}

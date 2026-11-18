@@ -1,0 +1,1 @@
+  fun low_byte(r: Region, i: Int64): Int64 { return (i & 255) | (i ^ i) }

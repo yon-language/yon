@@ -1,0 +1,5 @@
+fun to_circle(s: Suspension<Boolean>): S1 {
+  return match s { north => S1.base, south => S1.base,
+    merid as b => match b { true => walk i => loop @ i,
+                            false => walk i => S1.base } }
+}

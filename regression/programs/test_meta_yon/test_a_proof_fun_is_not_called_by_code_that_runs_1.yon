@@ -1,0 +1,7 @@
+  proof fun zr(n: Nat): plus(n, zero) = n {
+    return match n { zero => clear, succ as m => (s_, zr(m)) ↦ ap }
+  }
+  fun usa: Number {
+    w := zr(zero)
+    return 0
+  }

@@ -1,0 +1,2 @@
+fun lit: Meter { return 1.5 }
+fun as_number(m: Meter): Number { return m }

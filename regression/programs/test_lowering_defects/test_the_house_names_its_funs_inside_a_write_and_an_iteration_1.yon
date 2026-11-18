@@ -1,0 +1,5 @@
+place Entry {
+fun main: Number {
+  return if Counter.run == Counter.expected then 42 else 1
+}
+}

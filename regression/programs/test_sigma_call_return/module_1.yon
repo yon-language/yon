@@ -1,0 +1,1 @@
+  fun mk(d: Number): Σx : Number, (x = d) ∧ (x = d) { return pair(d, pair(refl(d), refl(d))) }

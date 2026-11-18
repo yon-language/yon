@@ -1,0 +1,5 @@
+place Iso<A, B> {
+  forth A -> B
+  left B -> A
+  left_law Πx : A, left(forth(x)) = x
+}

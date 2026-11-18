@@ -1,0 +1,11 @@
+place R {
+  id Number
+  body Text
+
+  fun feed(): Wire<R> {
+    s := produce {
+      emit .-> R { id 5 body "%s" }
+    }
+    return s
+  }
+}

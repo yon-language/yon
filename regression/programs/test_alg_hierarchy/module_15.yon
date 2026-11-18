@@ -1,0 +1,3 @@
+place Pass {
+  fun twice_each(xs: List<Sum>): List<Sum> { return List.map(xs, fun(s: Sum) => s + s) }
+}

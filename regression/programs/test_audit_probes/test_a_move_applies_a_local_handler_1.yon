@@ -1,0 +1,1 @@
+  fun halve(c: Number): Number { return c / 2 }

@@ -1,0 +1,4 @@
+place Entry {
+  fun describe(e: Note): Number { return Text.length(e.message) + e.line }
+  fun main: Number { return 0 }
+}

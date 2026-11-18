@@ -1,0 +1,14 @@
+place Entry {}
+fun df(b: Number): Number { return b + 1 }
+fun dg(b: Number): Number { return b + 1 }
+fun eta(b: Number): Number { return b * 2 }
+morph F from Account to AccountEU {
+  on morphism deposit via df
+}
+morph G from Account to AccountEU {
+  on morphism deposit via dg
+}
+nat transform Eta from F to G {
+  for each deposit by eta
+}
+fun main: Number { return 0 }

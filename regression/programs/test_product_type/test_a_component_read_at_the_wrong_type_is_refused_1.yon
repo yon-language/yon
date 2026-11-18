@@ -1,0 +1,1 @@
+  fun f(p: (Number, Text)): Number { return snd(p) }

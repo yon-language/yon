@@ -1,0 +1,3 @@
+  fun grab(p: Σx : Lookup<Number>, Number): Number {
+    return match fst(p) { Absent => snd(p), Found as v => v }
+  }

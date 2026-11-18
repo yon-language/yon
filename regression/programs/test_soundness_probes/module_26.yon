@@ -1,0 +1,2 @@
+fun sendit(ch: Number, g: Number -> Number): Number { _s := Wire.send(ch, g)  return 0 }
+  fun mk(): Number { ch := Wire.make(4)  mut c := 10  c <- 20  return sendit(ch, fun(y: Number) => y + c) }

@@ -1,0 +1,1 @@
+  fun fib(d: Number): Σp : (Number, Number), fst(p) = d { return pair(pair(d, 0), refl(d)) }

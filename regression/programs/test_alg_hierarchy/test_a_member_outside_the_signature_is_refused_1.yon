@@ -1,0 +1,1 @@
+fun bad<T uses Semigroup>(x: T): T { return T.unit }

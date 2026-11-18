@@ -1,0 +1,5 @@
+fun main: Number {
+  sq := .-> Square { side 5 }
+  ci := .-> Circle { r 2 }
+  return sq.area() + ci.area()
+}

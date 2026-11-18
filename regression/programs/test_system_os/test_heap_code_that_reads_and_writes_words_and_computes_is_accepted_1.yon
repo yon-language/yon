@@ -1,0 +1,5 @@
+  fun bump(r: Region, i: Int64): Word64 {
+    w := read_word(r, i) * Word64.from_int64(31) + Word64.one
+    _u := write_word(r, i, w)
+    return w
+  }

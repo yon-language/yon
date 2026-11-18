@@ -1,0 +1,7 @@
+fun succ(n: Int64): Int64 { return n + 1 }
+fun pred(n: Int64): Int64 { return n - 1 }
+fun line: Int64 = Int64 {
+  return succ <=> pred
+}
+fun go(p: Int64 = Int64, v: Int64): Int64 { return transport(p, v) }
+fun used: Int64 { return go(succ <=> pred, 10) }

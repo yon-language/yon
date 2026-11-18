@@ -1,0 +1,5 @@
+place Pointed is algebra {
+  operation point: Pointed
+  operation step(a: Pointed): Pointed
+  law returns ∀a : Pointed, step(step(a)) = a
+}

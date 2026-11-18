@@ -1,0 +1,1 @@
+  fun swap(p: (Number, Boolean)): (Boolean, Number) { return pair(snd(p), fst(p)) }

@@ -1,0 +1,4 @@
+place Idem {
+  this < Semigroup
+  law commutative ∀a : Idem, op(a, a) = a
+}

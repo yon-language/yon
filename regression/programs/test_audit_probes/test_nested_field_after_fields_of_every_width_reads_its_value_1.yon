@@ -1,0 +1,3 @@
+place Node { flag Boolean
+  k Number
+  child Leaf }

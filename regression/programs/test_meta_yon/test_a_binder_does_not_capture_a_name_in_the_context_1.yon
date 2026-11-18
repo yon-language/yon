@@ -1,0 +1,3 @@
+  fun captured(w: W, u: Term, q: (w ↦ W.inner) = u): u = u {
+    return match w { only as u => inv(q) }
+  }

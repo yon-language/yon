@@ -1,0 +1,4 @@
+place Entry {
+  fun bad<T>(x: T): Number { return x.foo }
+  fun main: Number { return 0 }
+}

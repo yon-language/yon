@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  mut a := match Number.sqrt(2) { Number as r => r, DomainError as d => 0 - 1 }
+  return if a > 1.414 then (if a < 1.415 then 1 else 0) else 0
+}
