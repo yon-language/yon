@@ -1,0 +1,7 @@
+status: reject_clean
+exit: 1
+code: E1002
+match: unexpected character `∘` (U+2218)
+note: |
+  A character of several bytes that no rule of the lexer reads is named whole, with its code point,
+  not by its first byte.

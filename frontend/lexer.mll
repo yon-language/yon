@@ -438,7 +438,20 @@ rule raw_token = parse
   | "\xe2\x88\x88"  { raise (Lexer_error "∈ is not a symbol of Yon: the type of a quantifier follows a colon, `∀x : T`") }
 
   | eof              { reset_statement (); EOF }
-  | _ as c           { raise (Lexer_error (Printf.sprintf "unexpected character %c" c)) }
+  (* a character of several bytes that no rule reads is named whole, with its code point; a byte
+     that opens no character of UTF-8 is named as a byte *)
+  | (['\xc2'-'\xdf'] ['\x80'-'\xbf']
+    | ['\xe0'-'\xef'] ['\x80'-'\xbf'] ['\x80'-'\xbf']
+    | ['\xf0'-'\xf4'] ['\x80'-'\xbf'] ['\x80'-'\xbf'] ['\x80'-'\xbf']) as u
+      { let b i = Char.code u.[i] land 0x3f in
+        let cp = match String.length u with
+          | 2 -> ((Char.code u.[0] land 0x1f) lsl 6) lor b 1
+          | 3 -> ((Char.code u.[0] land 0x0f) lsl 12) lor (b 1 lsl 6) lor b 2
+          | _ -> ((Char.code u.[0] land 0x07) lsl 18) lor (b 1 lsl 12) lor (b 2 lsl 6) lor b 3 in
+        raise (Lexer_error (Printf.sprintf "unexpected character `%s` (U+%04X)" u cp)) }
+  | _ as c           { raise (Lexer_error (if Char.code c < 0x80
+                                           then Printf.sprintf "unexpected character %c" c
+                                           else Printf.sprintf "unexpected byte \\x%02X" (Char.code c))) }
 
 and block_comment = parse
   | "*/"             { () }

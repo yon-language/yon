@@ -1,0 +1,5 @@
+[package]
+name = "dev_multibyte_char"
+
+[runtime]
+backend = "memory"

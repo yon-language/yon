@@ -1245,6 +1245,20 @@ error[E1002]: unexpected character
    = write: if c == 1 then 42 else 0
 ```
 
+### NO-188 `multibyte-char` · E1002 · grammar
+
+- book: book 22-keywords, «Word-form operators»
+- proof: `regression/canonical_forms/expression/dev_multibyte_char`
+
+```
+error[E1002]: unexpected character `∘` (U+2218)
+  --> Entry.yon:3:12
+   |
+ 3 |     c := 1 ∘ 2
+   |            ^
+   = why: a character that no rule of the lexer reads is not a symbol of Yon; it is named whole, with its code point
+```
+
 ## B. The head: modifiers and clauses a declaration does not take (grammar, E1004)
 
 ### NO-069 `constraint-given` · E1004 · grammar
@@ -2804,7 +2818,7 @@ Read from `frontend/error_codes.ml`.
 | code | variant | title | entries |
 |---|---|---|---|
 | E1001 | `Parse_syntax` | syntax error | 3 |
-| E1002 | `Lex_bad_token` | lexical error | 2 |
+| E1002 | `Lex_bad_token` | lexical error | 3 |
 | E1003 | `Form_gone` | a form of the language that is gone: the message writes the new one | 81 |
 | E1004 | `Head_refused` | a modifier or a clause that the declaration does not take (`is given` on a proof fun, a constraint fun, a law, a carrier; `internal constraint`; `proof constraint`) | 7 |
 | E2001 | `Type_check` | type error | 27 |

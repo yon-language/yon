@@ -2620,6 +2620,18 @@ E(id="wrong-arity",
   at_file="Entry.yon",
   at="match")
 
+E(id="multibyte-char",
+  section="A",
+  construct="expression",
+  dev="dev_multibyte_char",
+  band="grammar",
+  code="E1002",
+  msg="unexpected character `∘` (U+2218)",
+  why="a character that no rule of the lexer reads is not a symbol of Yon; it is named whole, with its code point",
+  book="book 22-keywords, «Word-form operators»",
+  proofs=["expression/dev_multibyte_char"],
+  at_file="Entry.yon",
+  at="∘")
 
 # ================================================================================================
 # The derived files

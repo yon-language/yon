@@ -403,7 +403,8 @@ CASE	raw_token	"¬"	gives=BANGQ
 CASE	raw_token	"↔"	gives=IFFQ
 CASE	raw_token	"∈"	refuses=∈ is not a symbol of Yon: the type of a quantifier follows a colon, `∀x : T`
 CASE	raw_token	eof	gives=EOF	writes=statement
-CASE	raw_token	_ as c	refuses=unexpected character %c
+CASE	raw_token	(['\xc2'-'\xdf'] ['\x80'-'\xbf'] | ['\xe0'-'\xef'] ['\x80'-'\xbf'] ['\x80'-'\xbf'] | ['\xf0'-'\xf4'] ['\x80'-'\xbf'] ['\x80'-'\xbf'] ['\x80'-'\xbf']) as u	refuses=unexpected character `%s` (U+%04X)
+CASE	raw_token	_ as c	refuses=unexpected character %c | unexpected byte \x%02X
 CASE	block_comment	"*/"
 CASE	block_comment	'\n'	does=counts a line | goes on in block_comment
 CASE	block_comment	eof	refuses=unterminated comment
@@ -470,6 +471,8 @@ CONTEXT	function token	code=(match !owner with | Some l when l == lexbuf -> () |
 
 # Refused by the lexer (a case that raises Lexer_error)
 REFUSED	raw_token "∈"	∈ is not a symbol of Yon: the type of a quantifier follows a colon, `∀x : T`
+REFUSED	raw_token (['\xc2'-'\xdf'] ['\x80'-'\xbf'] | ['\xe0'-'\xef'] ['\x80'-'\xbf'] ['\x80'-'\xbf'] | ['\xf0'-'\xf4'] ['\x80'-'\xbf'] ['\x80'-'\xbf'] ['\x80'-'\xbf']) as u	unexpected character `%s` (U+%04X)
 REFUSED	raw_token _ as c	unexpected character %c
+REFUSED	raw_token _ as c	unexpected byte \x%02X
 REFUSED	block_comment eof	unterminated comment
 REFUSED	string_lit eof	unterminated string

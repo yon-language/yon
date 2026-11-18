@@ -73,9 +73,13 @@ def show_pattern(pat: str) -> str:
         return (text.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")
                 .replace("\r", "\\r"))
     def lit(m):
-        if m.group(1) is not None:
-            return '"' + esc(ocaml_literal(m.group(1))) + '"'
-        return "'" + esc(ocaml_literal(m.group(2))) + "'"
+        # a byte that is not a character of UTF-8 by itself is shown as it is written
+        try:
+            if m.group(1) is not None:
+                return '"' + esc(ocaml_literal(m.group(1))) + '"'
+            return "'" + esc(ocaml_literal(m.group(2))) + "'"
+        except UnicodeDecodeError:
+            return m.group(0)
     return norm(re.sub(r'"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\x[0-9a-fA-F]{2}|\\.))\'', lit, pat))
 
 
@@ -201,7 +205,7 @@ def cases(body: str):
 # --------------------------------------------------------------------------------------------
 OCAML_WORDS = {"let", "in", "match", "with", "if", "then", "else", "when", "begin", "end", "true",
                "false", "fun", "function", "not", "and", "or", "raise", "ignore", "try", "as",
-               "Some", "None", "succ", "pred", "_", "Option.map", "List.nth_opt", "List.iter"}
+               "Some", "None", "succ", "pred", "_", "land", "lor", "lsl", "lsr", "Option.map", "List.nth_opt", "List.iter"}
 # names of the OCaml library an action may use, and what each says about the rule
 LIBRARY = {
     "lexbuf": None, "Lexing.lexeme_start_p": None, "Lexing.lexeme_end": None,
@@ -209,6 +213,7 @@ LIBRARY = {
     "lexbuf.Lexing.lex_curr_p": None, "Lexing.pos_cnum": None, "Lexing.pos_fname": None,
     "Lexing.pos_lnum": None, "Lexing.pos_bol": None,
     "float_of_string": None, "int_of_string": None, "Printf.sprintf": None,
+    "Char.code": None, "String.length": None,
     "Buffer.create": None, "Buffer.add_char": None,
     "Buffer.contents": ("does", "gives the text read so far"),
     "Lexing.new_line": ("does", "counts a line"),
@@ -226,6 +231,7 @@ def names_of(code: str):
     """The names an OCaml fragment uses, string and char literals left out."""
     code = re.sub(r'"(?:[^"\\]|\\.)*"', " ", code)
     code = re.sub(r"'(\\x[0-9a-fA-F]{2}|\\.|[^\\'])'", " ", code)
+    code = re.sub(r"\b0[xX][0-9a-fA-F]+\b|\b\d+\b", " ", code)   # numeric literals are no names
     return re.findall(r"!?[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*", code)
 
 
@@ -253,6 +259,9 @@ def read_action(rule: str, pat: str, action: str, hdr: Header, tokens: set, rule
     gives, reads, writes, does, refuses, calls = [], [], [], [], [], []
     bound = set(locals_) | set(re.findall(r"\bas ([a-z_][A-Za-z0-9_]*)", pat))
     bound |= set(re.findall(r"\blet ([a-z_][A-Za-z0-9_]*)\b", action))
+    # the parameters of a local function: `let b i = ...`
+    for params in re.findall(r"\blet [a-z_][A-Za-z0-9_]*((?: [a-z_][A-Za-z0-9_]*)+) =", action):
+        bound |= set(params.split())
     # pattern variables of a match on a state: `Inside k`
     bound |= set(re.findall(r"\b(?:%s) ([a-z_])\b" % "|".join(sorted(hdr.constructors)) if hdr.constructors else r"(?!)", action))
     for raw in names_of(action):
