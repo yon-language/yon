@@ -1,0 +1,8 @@
+[package]
+name = "dev_apply_to_arm"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["Box"]

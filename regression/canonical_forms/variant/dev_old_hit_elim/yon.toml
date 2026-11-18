@@ -1,0 +1,8 @@
+[package]
+name = "dev_old_hit_elim"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["Coin"]

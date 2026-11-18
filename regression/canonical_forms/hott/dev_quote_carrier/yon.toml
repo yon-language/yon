@@ -1,0 +1,5 @@
+[package]
+name = "dev_quote_carrier"
+
+[runtime]
+backend = "memory"

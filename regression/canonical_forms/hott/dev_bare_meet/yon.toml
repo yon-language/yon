@@ -1,0 +1,5 @@
+[package]
+name = "dev_bare_meet"
+
+[runtime]
+backend = "memory"

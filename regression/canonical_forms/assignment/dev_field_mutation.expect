@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: place sections are immutable
 note: |
   Form `x.f = e`: mutating a place field. Place sections are immutable;

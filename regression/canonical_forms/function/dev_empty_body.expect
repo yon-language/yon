@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: empty body but a return type
 note: |
   A declared return type with no body has no value to return.

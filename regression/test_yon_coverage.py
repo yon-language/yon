@@ -48,13 +48,13 @@ KERNEL_INTERNAL = {
 
 # Keywords kept only to refuse the old form: a fixture must be refused, with the new form.
 REFUSED = {
-    "Id": ("hott/dev_old_id.yon", "written x = y"),
-    "Same": ("hott/dev_old_same.yon", "written x = y"),
-    "hit": ("variant/dev_old_hit.yon", "hit is a form of the kernel"),
-    "hit_elim": ("variant/dev_old_hit_elim.yon", "hit_elim is a form of the kernel"),
-    "plam": ("variant/dev_old_plam.yon", "written walk i => e"),
-    "carry": ("hott/dev_old_carry.yon", "carry x along e is not written"),
-    "along": ("hott/dev_old_carry.yon", "carry x along e is not written"),
+    "Id": ("hott/dev_old_id", "written x = y"),
+    "Same": ("hott/dev_old_same", "written x = y"),
+    "hit": ("variant/dev_old_hit", "hit is a form of the kernel"),
+    "hit_elim": ("variant/dev_old_hit_elim", "hit_elim is a form of the kernel"),
+    "plam": ("variant/dev_old_plam", "written walk i => e"),
+    "carry": ("hott/dev_old_carry", "carry x along e is not written"),
+    "along": ("hott/dev_old_carry", "carry x along e is not written"),
 }
 
 # Lexing prefixes that are not standalone tokens: the real surface form is the

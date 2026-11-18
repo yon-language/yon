@@ -1,0 +1,8 @@
+[package]
+name = "dev_old_pattern"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["List2"]

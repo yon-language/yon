@@ -1,0 +1,5 @@
+[package]
+name = "dev_plain_fn"
+
+[runtime]
+backend = "memory"

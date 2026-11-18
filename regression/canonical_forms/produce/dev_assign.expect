@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: is not supported inside
 note: |
   <- (a cell write) into a cell declared outside a produce body is refused: a produce is a value.

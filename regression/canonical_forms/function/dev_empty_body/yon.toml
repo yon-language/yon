@@ -1,0 +1,5 @@
+[package]
+name = "dev_empty_body"
+
+[runtime]
+backend = "memory"

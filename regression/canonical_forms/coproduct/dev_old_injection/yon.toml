@@ -1,0 +1,8 @@
+[package]
+name = "dev_old_injection"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["Box"]

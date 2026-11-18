@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E1001
 match: let
 note: |
   let is not a Yon keyword; the only binding form is x := e.

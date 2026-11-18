@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: already bound in this scope
 note: |
   Defining a name already bound in scope; to change it, declare it `mut` and write it with `<-`.

@@ -1,0 +1,8 @@
+[package]
+name = "dev_old_hit_payload"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["Box"]

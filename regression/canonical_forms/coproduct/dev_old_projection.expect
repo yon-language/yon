@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E1001
 match: Full as x
 note: |
   The braces are for the fields of a place: a payload is read with as.

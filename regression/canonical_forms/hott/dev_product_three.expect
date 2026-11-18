@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E1001
 match: (A, (B, C))
 note: |
   A product has two components: three written side by side have no reading in a type, and the components nest. Before an arrow the same parentheses stay the arguments of a fun.

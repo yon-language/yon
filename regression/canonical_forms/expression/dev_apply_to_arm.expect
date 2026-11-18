@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: Full is an arm: an injection is written x ↪ Full
 note: |
   Application goes to a fun; the diagnostic shows injection.

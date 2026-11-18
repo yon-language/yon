@@ -1,0 +1,5 @@
+[package]
+name = "dev_no_model"
+
+[runtime]
+backend = "memory"

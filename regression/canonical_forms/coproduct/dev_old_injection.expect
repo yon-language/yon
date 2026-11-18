@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: written x ↪ Full
 note: |
   An injection into a payload arm is x ↪ Arm: the mediatrice is for a place with fields.

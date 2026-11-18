@@ -1,0 +1,5 @@
+[package]
+name = "dev_arity"
+
+[runtime]
+backend = "memory"

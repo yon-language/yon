@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: expected 1 arguments, got 2
 note: |
   Wrong number of arguments at a call site.

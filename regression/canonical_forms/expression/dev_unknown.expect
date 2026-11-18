@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: unknown identifier
 note: |
   A reference to a name that is not bound.

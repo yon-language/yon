@@ -1,0 +1,8 @@
+[package]
+name = "dev_wrong_arity"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["Classi"]

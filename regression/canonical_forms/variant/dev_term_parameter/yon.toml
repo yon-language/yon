@@ -1,0 +1,8 @@
+[package]
+name = "dev_term_parameter"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["Scatola"]

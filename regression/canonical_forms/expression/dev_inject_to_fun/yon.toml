@@ -1,0 +1,5 @@
+[package]
+name = "dev_inject_to_fun"
+
+[runtime]
+backend = "memory"

@@ -1,0 +1,5 @@
+[package]
+name = "dev_path_nonpath"
+
+[runtime]
+backend = "memory"

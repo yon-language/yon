@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E4002
 match: ENTRYPOINT ERROR
 note: |
   Form B. A bare `fun main` with no `place Entry` anywhere. The project has no

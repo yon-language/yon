@@ -1,0 +1,5 @@
+[package]
+name = "dev_let"
+
+[runtime]
+backend = "memory"

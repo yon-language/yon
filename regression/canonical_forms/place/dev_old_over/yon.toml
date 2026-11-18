@@ -1,0 +1,8 @@
+[package]
+name = "dev_old_over"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["Base", "Slice"]

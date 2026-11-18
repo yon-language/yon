@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: branch inj expects 1 binder(s), got 2
 note: |
   A match branch with the wrong payload arity.

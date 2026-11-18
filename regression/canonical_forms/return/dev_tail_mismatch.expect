@@ -1,5 +1,6 @@
 status: reject_clean
 exit: 1
+code: E2001
 match: declares return type Number
 note: |
   The implicit-return tail has the wrong type.

@@ -1,0 +1,5 @@
+[package]
+name = "dev_assign"
+
+[runtime]
+backend = "memory"

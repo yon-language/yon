@@ -11,13 +11,15 @@ entrypoint rule does. Each `.expect` carries:
 
   status : accept | reject_clean | accepted_deviation
   exit   : the expected exit code (from the compiler, not assumed)
+  code   : the diagnostic code the refusal MUST carry, `E1001` (reject_clean only)
   match  : an error-message fragment that MUST appear (reject_clean only)
 
-`match` is the whole point: a deviation that fails for the WRONG reason is a false green
-dressed as a true one, and `match` forbids it.
+`code` and `match` are the whole point: a deviation that fails for the WRONG reason is a
+false green dressed as a true one, and a refusal is checked by its code and by its words.
 
   accept        compile succeeds, the program runs and exits `exit`.
-  reject_clean  compile FAILS with exit `exit` and stderr containing `match`.
+  reject_clean  compile FAILS with exit `exit`, its diagnostic carries `code`, and stderr
+                contains `match`.
   accepted_deviation
                 a deviation the language should reject and the compiler accepts. The
                 gate compiles it and asserts it passes (so the ledger says what the
@@ -171,6 +173,14 @@ def test_fixture_behaves(fx, tmp_path):
     elif status == "reject_clean":
         assert crc != 0, f"{construct}/{name} (reject_clean) COMPILED but must be rejected"
         assert crc == want_exit, f"{construct}/{name} reject exit {crc} != expected {want_exit}"
+        want_code = exp.get("code", "")
+        assert re.fullmatch(r"E\d{4}", want_code), (
+            f"{construct}/{name}.expect (reject_clean) has no `code:` line: a refusal is "
+            f"checked by its code as well as by its words")
+        codes = re.findall(r"\[(E\d{4})\]", cerr)
+        assert codes and codes[0] == want_code, (
+            f"{construct}/{name} was rejected with {codes or 'no code'}, expected {want_code}"
+            f"\n--- stderr ---\n{cerr[-500:]}")
         frag = exp.get("match", "")
         assert frag and frag in cerr, (
             f"{construct}/{name} was rejected, but for the wrong reason: the error did not "
