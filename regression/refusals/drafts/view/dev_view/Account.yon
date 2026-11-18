@@ -1,0 +1,6 @@
+place Account { balance Number
+  fee Number
+  view Snapshot of Account {
+    show balance
+  }
+}

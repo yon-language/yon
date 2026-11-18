@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `main` visits Output: a fun with an effect is declared with ()

@@ -53,3 +53,4 @@ runtime/*.d
 .yonc-cache/
 /meta/DESIGN.md
 /regression/*.md
+!/regression/FLOW.md

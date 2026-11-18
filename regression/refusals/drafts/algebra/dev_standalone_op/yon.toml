@@ -1,0 +1,5 @@
+[package]
+name = "dev_standalone_op"
+
+[runtime]
+backend = "separate"

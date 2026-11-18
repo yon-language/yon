@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    p := walk i => comp (refl(Number)) [ i = I0 => walk j => 9 ] 5
+    return (p @ I0) - 9
+  }
+}

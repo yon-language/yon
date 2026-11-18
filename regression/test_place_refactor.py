@@ -59,7 +59,7 @@ def test_body_clause_is_the_header_clause(tmp_path):
     (tmp_path / "h").mkdir()
     (tmp_path / "b").mkdir()
     header = _emit(_insert_twin(tmp_path / "h", "place QueryInsert on error QueryError {\n  sql Number\n}\n"))
-    body = _emit(_insert_twin(tmp_path / "b", "place QueryInsert {\n  on error QueryError\n  sql Number\n}\n"))
+    body = _emit(_insert_twin(tmp_path / "b", 'place QueryInsert {\n  on error QueryError\n  sql Number\n}\n'))
     assert header.returncode == 0 and body.returncode == 0, body.stderr[-300:]
     assert header.stdout == body.stdout, "body clause emits different MLIR than the header"
 
@@ -75,7 +75,7 @@ def test_duplicate_clause_rejected(tmp_path):
 def test_a_place_over_a_base_is_refused(tmp_path, text):
     r = _emit(_slice_twin(tmp_path, text))
     out = r.stderr + r.stdout
-    assert r.returncode != 0 and b"E1001" in out and b"a place with a projection" in out, out
+    assert r.returncode != 0 and b"[E1003]" in out and b"a place with a projection" in out, out
 
 
 # ---- world-guard rule (f): the site of a union is DERIVED from its arms ----
@@ -119,7 +119,7 @@ def test_path_constructor_slot_is_refused_and_the_law_shown(tmp_path):
     r = _twin(tmp_path, "place NumList {\n  this > Nil :U dup : Nil = Nil\n}\n"
                         "place Entry { }\nfun main: Number { return 0 }\n")
     out = r.stderr + r.stdout
-    assert r.returncode != 0 and b"E1001" in out and b"law dup" in out, out
+    assert r.returncode != 0 and b"[E1003]" in out and b"law dup" in out, out
 
 
 def test_record_pattern_on_a_payload_is_refused_and_the_tuple_shown(tmp_path):
@@ -134,9 +134,7 @@ def test_record_pattern_on_a_payload_is_refused_and_the_tuple_shown(tmp_path):
 
 
 def test_mediatrice_on_arm_is_refused_and_the_injection_shown(tmp_path):
-    r = _twin(tmp_path, "place NumList { this > Nil :U Cons Number NumList }\n"
-                        "place Entry { }\nfun main: Number {\n"
-                        "  c := .-> Cons { _1 1 }\n  return 0\n}\n")
+    r = _twin(tmp_path, 'place NumList { this > Nil :U Cons Number NumList }\nplace Entry { }\nfun main: Number {\n  c := .-> Cons { _1 1 }\n  return 0\n}\n')
     out = (r.stderr + r.stdout).decode()
     assert r.returncode != 0 and "E2001" in out and "(x1, x2) ↪ Cons" in out, out
 
@@ -147,11 +145,7 @@ def test_injection_needs_the_whole_payload(tmp_path):
     twin = tmp_path / "twin"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place NumList { this > Nil :U Cons Number NumList }\n"
-        "place Entry { }\n"
-        "fun main: Number {\n"
-        "  c := 1 ↪ NumList.Cons\n"
-        "  return 0\n}\n")
+        'place NumList { this > Nil :U Cons Number NumList }\nplace Entry { }\nfun main: Number {\n  c := 1 ↪ NumList.Cons\n  return 0\n}\n')
     r = _emit(twin)
     assert r.returncode != 0
     assert b"arm Cons: expected 2 payload(s), got 1" in r.stderr + r.stdout
@@ -180,15 +174,6 @@ def test_full_circle_no_constructors(tmp_path):
     twin = tmp_path / "circle"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place NumList { this > Nil :U Cons Number NumList }\n"
-        "place Entry { }\n"
-        "fun sum(xs: NumList): Number {\n"
-        "  return match xs {\n"
-        "    Nil => 0,\n"
-        "    Cons as (h, t) => h + sum(t)\n"
-        "  }\n}\n"
-        "fun main: Number {\n"
-        "  xs := (5, ((37, NumList.Nil) ↪ NumList.Cons)) ↪ NumList.Cons\n"
-        "  return sum(xs)\n}\n")
+        'place NumList { this > Nil :U Cons Number NumList }\nplace Entry { }\nfun sum(xs: NumList): Number {\n  return match xs {\n    Nil => 0,\n    Cons as (h, t) => h + sum(t)\n  }\n}\nfun main: Number {\n  xs := (5, ((37, NumList.Nil) ↪ NumList.Cons)) ↪ NumList.Cons\n  return sum(xs)\n}\n')
     r = _emit(twin)
     assert r.returncode == 0, r.stderr.decode(errors="replace")[-400:]

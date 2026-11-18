@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: `on error` belongs on a fun, not on a place

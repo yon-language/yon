@@ -1,0 +1,5 @@
+[package]
+name = "dev_law_bare"
+
+[runtime]
+backend = "separate"

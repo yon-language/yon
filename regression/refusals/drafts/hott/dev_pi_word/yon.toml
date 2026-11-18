@@ -1,0 +1,5 @@
+[package]
+name = "dev_pi_word"
+
+[runtime]
+backend = "separate"

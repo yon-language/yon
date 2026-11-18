@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    xs := HashSet.to_stream(s)
+    return 0
+  }
+}

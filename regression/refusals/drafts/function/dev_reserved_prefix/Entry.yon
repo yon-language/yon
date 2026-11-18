@@ -1,0 +1,6 @@
+place Entry {
+  fun __band(a: Number, b: Number): Number { return a }
+  fun main: ExitCode {
+    return 0
+  }
+}

@@ -29,6 +29,7 @@ let parse_string (source : string) : (Surface_ast.program, string) result =
   try Ok (Parser.program Lexer.token lexbuf)
   with
   | Parser.Error -> Error "parse"
+  | Error_codes.Refused _ -> Error "parse"
   | Failure _ -> Error "lex"
   | Lexer.Lexer_error _ -> Error "lex"   (* now caught by the drivers too (fixed) *)
 

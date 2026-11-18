@@ -1,0 +1,9 @@
+place Entry {
+  fun crea: Number -> Number {
+    mut acc := 1
+    return fun(x: Number) => acc
+  }
+  fun main: ExitCode {
+    return 0
+  }
+}

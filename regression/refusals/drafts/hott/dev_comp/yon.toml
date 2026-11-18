@@ -1,0 +1,5 @@
+[package]
+name = "dev_comp"
+
+[runtime]
+backend = "separate"

@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2001
+match: `message` is a field of Error: Mine already has it

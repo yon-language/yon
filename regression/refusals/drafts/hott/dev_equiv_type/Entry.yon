@@ -1,0 +1,6 @@
+place Entry {
+  fun prende(e: Equiv<Number, Number>): Number { return 0 }
+  fun main: ExitCode {
+    return 0
+  }
+}

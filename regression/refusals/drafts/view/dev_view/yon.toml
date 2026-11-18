@@ -1,0 +1,5 @@
+[package]
+name = "dev_view"
+
+[runtime]
+backend = "separate"

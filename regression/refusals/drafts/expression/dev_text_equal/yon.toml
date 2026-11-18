@@ -1,0 +1,5 @@
+[package]
+name = "dev_text_equal"
+
+[runtime]
+backend = "separate"

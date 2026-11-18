@@ -1,0 +1,196 @@
+# The category of each word and each spelling of the lexer, for the highlighters.
+# A source, written by hand, in one place: tools/gen_highlighters.py reads it with
+# regression/GRAMMAR.tokens and stops if a live word or spelling of the lexer has no category, or
+# if a line here names a word or a spelling the lexer does not give.
+#
+# Categories of the words:
+#   declaration  heads a declaration and binds the name after it (VS Code: storage.type, and the
+#                declarations rule that colors the name)
+#   storage      a word of the structure of a declaration (storage.type)
+#   control      the flow of a body (keyword.control)
+#   binding      a binding (keyword.other.binding)
+#   word         a word that relates two parts (keyword.operator.word)
+#   constant     a constant of the language (constant.language)
+#   boolean      true and false (constant.language; Prism: boolean)
+#   hott         a form of paths and of the cubical layer (keyword.other.hott)
+#   type         a type of the language (support.type.primitive)
+# Categories of the spellings:
+#   operator, operator-heyting (the intuitionistic connectives and bit operators), punctuation (not
+#   colored), and a word category for a glyph that is a word (Π Σ ∀ ∃).
+
+# words
+word	absent	constant
+word	aggregates	word
+word	algebra	word
+word	and	word
+word	as	word
+word	at	control
+word	back	hott
+word	by	word
+word	carried	word
+word	cell	declaration
+word	clear	hott
+word	comp	word
+word	compose	word
+word	converts	word
+word	do	control
+word	drop	word
+word	each	word
+word	El	type
+word	el_match	hott
+word	else	control
+word	emit	control
+word	error	declaration
+word	escape	control
+word	every	control
+word	exact	word
+word	false	boolean
+word	fold	word
+word	for	control
+word	forces	control
+word	forever	control
+word	from	word
+word	fst	hott
+word	fun	declaration
+word	functor	declaration
+word	geomorph	declaration
+word	given	word
+word	hcomp	word
+word	here	control
+word	heyting	type
+word	I0	hott
+word	I1	hott
+word	if	control
+word	import	storage
+word	in	word
+word	ind_path	hott
+word	induct	hott
+word	internal	storage
+word	is	word
+word	iter	control
+word	law	word
+word	maps	word
+word	match	control
+word	morph	declaration
+word	morphism	storage
+word	most	control
+word	move	declaration
+word	multishot	word
+word	mut	binding
+word	nat	storage
+word	not	word
+word	of	word
+word	operation	declaration
+word	or	word
+word	otherwise	control
+word	over	word
+word	pair	hott
+word	parallel	word
+word	PathP	type
+word	Pi	type
+word	place	declaration
+word	present	constant
+word	produce	control
+word	promote	word
+word	proof	storage
+word	prop	declaration
+word	pull	word
+word	push	word
+word	quote	hott
+word	reduction	declaration
+word	refl	hott
+word	repeat	control
+word	requires	word
+word	resolves	word
+word	return	control
+word	scope	control
+word	sequence	control
+word	share	word
+word	show	word
+word	Sigma	type
+word	snd	hott
+word	space	declaration
+word	spawn	word
+word	stream	type
+word	then	control
+word	this	storage
+word	through	word
+word	times	control
+word	to	word
+word	topos	declaration
+word	true	boolean
+word	Type	type
+word	unifies	word
+word	unknown	constant
+word	uses	word
+word	via	word
+word	view	declaration
+word	visits	word
+word	walk	hott
+word	when	control
+word	where	word
+word	while	control
+word	wire	type
+word	with	word
+
+# spellings
+spelling	<=	operator
+spelling	<-	operator
+spelling	>=	operator
+spelling	!=	operator
+spelling	==	operator
+spelling	&&?	operator-heyting
+spelling	||?	operator-heyting
+spelling	=>?	operator-heyting
+spelling	<=>	operator
+spelling	!?	operator-heyting
+spelling	&?	operator-heyting
+spelling	|?	operator-heyting
+spelling	^?	operator-heyting
+spelling	~?	operator-heyting
+spelling	&&	operator
+spelling	||	operator
+spelling	|->	operator
+spelling	↦	operator
+spelling	>->	operator
+spelling	↪	operator
+spelling	|>	operator
+spelling	=>	operator
+spelling	.->	operator
+spelling	->	operator
+spelling	@	operator
+spelling	[	punctuation
+spelling	]	punctuation
+spelling	!	operator
+spelling	&	operator
+spelling	^	operator
+spelling	~	operator
+spelling	++	operator
+spelling	+	operator
+spelling	-	operator
+spelling	*	operator
+spelling	/	operator
+spelling	%	operator
+spelling	<	operator
+spelling	>	operator
+spelling	=	operator
+spelling	|	operator
+spelling	.	punctuation
+spelling	,	punctuation
+spelling	:U	operator
+spelling	:=	operator
+spelling	:	punctuation
+spelling	(	punctuation
+spelling	)	punctuation
+spelling	{	punctuation
+spelling	}	punctuation
+spelling	Π	type
+spelling	Σ	type
+spelling	∀	word
+spelling	∃	word
+spelling	≠	operator
+spelling	∧	operator-heyting
+spelling	∨	operator-heyting
+spelling	→	operator-heyting
+spelling	¬	operator-heyting
+spelling	↔	operator-heyting

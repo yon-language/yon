@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    r := ind_path(d, p)
+    return 0
+  }
+}

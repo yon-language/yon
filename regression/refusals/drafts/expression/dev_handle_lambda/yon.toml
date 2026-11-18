@@ -1,0 +1,5 @@
+[package]
+name = "dev_handle_lambda"
+
+[runtime]
+backend = "separate"

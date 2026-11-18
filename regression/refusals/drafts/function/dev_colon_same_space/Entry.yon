@@ -1,0 +1,5 @@
+place Entry {
+  fun main: ExitCode {
+    return match Bit::b2bit(tt) { one => 1, zero => 0 }
+  }
+}

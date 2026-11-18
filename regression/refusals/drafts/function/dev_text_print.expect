@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `Text.print` is not a fun of Yon

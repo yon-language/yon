@@ -1,0 +1,5 @@
+[package]
+name = "dev_div_zero"
+
+[runtime]
+backend = "separate"

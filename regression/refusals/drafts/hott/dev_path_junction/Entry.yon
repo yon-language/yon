@@ -1,0 +1,10 @@
+place Bool { this > tt :U ff }
+place Bit  { this > one :U zero }
+place Entry {
+fun main(): Number {
+  p := stay tt
+  q := stay ff
+  r := concat(p, q)
+  return 0
+}
+}

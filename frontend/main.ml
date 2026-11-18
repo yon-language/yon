@@ -202,6 +202,8 @@ let parse_string (source : string) : (Surface_ast.program, string) result =
                p.Lexing.pos_lnum
                (p.Lexing.pos_cnum - p.Lexing.pos_bol)
                context)
+  | Error_codes.Refused (code, msg) ->
+      Error (Printf.sprintf "Parse error [%s]: %s" (Error_codes.id code) msg)
   | Lexer.Lexer_error msg ->
       Error (Printf.sprintf "Lexer error: %s" msg)
 

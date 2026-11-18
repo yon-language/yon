@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    i := Intervallo ⟨ lo 5 hi 1 ⟩
+    return 0
+  }
+}

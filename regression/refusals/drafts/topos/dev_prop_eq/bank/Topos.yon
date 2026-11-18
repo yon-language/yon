@@ -1,0 +1,3 @@
+topos {
+  prop is_overdrawn(s: State) = s.balance < 0
+}

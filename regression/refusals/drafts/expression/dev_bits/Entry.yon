@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    b := Bits.shl(1, 5)
+    return 0
+  }
+}

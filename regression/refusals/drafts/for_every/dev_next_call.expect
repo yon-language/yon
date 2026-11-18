@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `s.next` takes no argument: it is read without (star)

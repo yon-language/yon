@@ -1,0 +1,5 @@
+[package]
+name = "dev_rebind_nested"
+
+[runtime]
+backend = "separate"

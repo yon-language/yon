@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2017
+match: a law lives only in an algebra: Entry is not an algebra

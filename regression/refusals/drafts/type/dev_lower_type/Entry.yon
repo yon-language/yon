@@ -1,0 +1,6 @@
+place Entry {
+  fun one(x: number): Number { return x }
+  fun main: ExitCode {
+    return 0
+  }
+}

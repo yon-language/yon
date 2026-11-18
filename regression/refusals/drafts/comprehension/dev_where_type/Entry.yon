@@ -1,0 +1,6 @@
+place Entry {
+  fun five(x: { n : Number where n = 5 }): Number { return 0 }
+  fun main: ExitCode {
+    return 0
+  }
+}

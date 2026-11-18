@@ -1,0 +1,6 @@
+place Entry {
+  fun ignored(s: A | B(Number)): Number { return 0 }
+  fun main: ExitCode {
+    return 0
+  }
+}

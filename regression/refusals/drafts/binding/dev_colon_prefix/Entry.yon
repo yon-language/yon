@@ -1,0 +1,6 @@
+import svc::d_op
+place Entry {
+  fun main: ExitCode {
+    return 0
+  }
+}

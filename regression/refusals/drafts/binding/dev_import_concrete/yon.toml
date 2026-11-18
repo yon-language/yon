@@ -1,0 +1,8 @@
+[package]
+name = "dev_import_concrete"
+
+[world.W]
+spaces = ["Bank"]
+
+[runtime]
+backend = "separate"

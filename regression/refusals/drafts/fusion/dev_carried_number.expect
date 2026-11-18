@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `number` is not a layout

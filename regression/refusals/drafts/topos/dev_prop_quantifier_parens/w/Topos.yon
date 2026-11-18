@@ -1,0 +1,3 @@
+topos {
+  prop some_other(x: Coin) := ∃ y : Coin (x != y)
+}

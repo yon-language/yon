@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `d_op` lives in place DP of Space D, a concrete Space: it is called through a wire

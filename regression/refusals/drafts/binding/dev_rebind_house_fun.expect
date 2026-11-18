@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2015
+match: `one` is a fun of this place: a binding does not take its name

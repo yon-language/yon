@@ -1,0 +1,7 @@
+place Entry {
+  fun main: ExitCode {
+    base := 40
+    scope Hermetic { sealed := base }
+    return 0
+  }
+}

@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    Vote ⟨ value 7 ⟩
+    return 0
+  }
+}

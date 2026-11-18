@@ -17,6 +17,10 @@
 
 %{
   open Surface_ast
+
+  (* A form of the language that is gone: the refusal carries its code, and the
+     message writes the form to use instead. *)
+  let form_gone msg = raise (Error_codes.Refused (Error_codes.Form_gone, msg))
   
   let mk_loc start_pos end_pos =
     { start_line = start_pos.Lexing.pos_lnum;
@@ -43,7 +47,7 @@
      among the endpoints. *)
   let refuse_bare_meet endpoints =
     if List.exists bare_meet endpoints then
-      failwith "in a type \xe2\x88\xa7 does not stand bare among the endpoints of a path: a conjunction of paths is written (a = b) \xe2\x88\xa7 (c = d), and an endpoint that is a meet keeps its parentheses, a = (b \xe2\x88\xa7 c)"
+      form_gone "in a type \xe2\x88\xa7 does not stand bare among the endpoints of a path: a conjunction of paths is written (a = b) \xe2\x88\xa7 (c = d), and an endpoint that is a meet keeps its parentheses, a = (b \xe2\x88\xa7 c)"
 
   let path_type x y =
     refuse_bare_meet [x; y];
@@ -72,7 +76,7 @@
   (* `law l ∀a (..)`: a quantifier carries its type. *)
   let untyped_quantifier l q =
     let sym = function Forall -> "\xe2\x88\x80" | Exists -> "\xe2\x88\x83" in
-    failwith (Printf.sprintf
+    form_gone (Printf.sprintf
       "law %s: a quantifier carries its type: write %s, then the statement"
       l (String.concat " " (List.map (fun (k, x) -> sym k ^ x ^ " : T") q) ^ ","))
 
@@ -772,10 +776,10 @@ carrier_and_is:
 is_clause:
   | IS ALGEBRA             { `Algebra }
   | IS c = IDENT
-    { failwith (Printf.sprintf
+    { form_gone (Printf.sprintf
         "`is %s` after a place name is no longer the carrier: write `place P carried by %s`" c c) }
   | IS INTERNAL c = IDENT
-    { failwith (Printf.sprintf
+    { form_gone (Printf.sprintf
         "`is internal %s` after a place name is no longer the carrier: write `internal place P carried by %s`" c c) }
 
 (* `uses algebra A, B`: the place is a model of each, on the one carrier *)
@@ -886,7 +890,7 @@ place_decl:
  * canonical reference to an instance of X. *)
 over_clause:
   | OVER IDENT
-    { (failwith "place P over X is gone: a family over X is a place with a projection to X, a field or a fun; its fibres are said in the laws" : unit) }
+    { (form_gone "place P over X is gone: a family over X is a place with a projection to X, a field or a fun; its fibres are said in the laws" : unit) }
 
 (* place P ... on error E — an error morphism P -> E. `on` is read as a
  * plain identifier and validated contextually, the same scheme used by
@@ -950,7 +954,7 @@ place_member:
   /* the canonical clauses as body lines. `on` stays a bare IDENT
      (the header's contextual-keyword tactic), validated in the action. */
   | OVER IDENT
-    { failwith "place P over X is gone: a family over X is a place with a projection to X, a field or a fun; its fibres are said in the laws"  }
+    { form_gone "place P over X is gone: a family over X is a place with a projection to X, a field or a fun; its fibres are said in the laws"  }
   /* the mono as containment arrow: `this < B` = this ⊂ B, a sub-object of B
      (mirror of the coproduct's `this > arms` = this ⊃ arms). The AST clause
      is PcSubcontains. */
@@ -1104,7 +1108,7 @@ type_expr:
   (* a path has two ends *)
   | PATH_TYPE x = expr EQ y = expr EQ z = expr
     { refuse_bare_meet [x; y; z];
-      failwith "a path has two ends: a = b = c has no reading in a type" }
+      form_gone "a path has two ends: a = b = c has no reading in a type" }
   (* a conjunction of paths: the meet is the product *)
   | PATH_TYPE m = path_meet
     { m }
@@ -1177,18 +1181,18 @@ type_atom:
   | n = TYPE_LEVEL
     { TyUniverse n }
   | PI LPAREN
-    { failwith "Pi(x: A). B is gone: a dependent function is written \xce\xa0x : A, B" }
+    { form_gone "Pi(x: A). B is gone: a dependent function is written \xce\xa0x : A, B" }
   | SIGMA LPAREN
-    { failwith "Sigma(x: A). B is gone: a dependent pair is written \xce\xa3x : A, B" }
+    { form_gone "Sigma(x: A). B is gone: a dependent pair is written \xce\xa3x : A, B" }
   | PI x = IDENT COLON a = type_expr COMMA b = type_expr
     { TyPi (x, a, b) }
   | SIGMA x = IDENT COLON a = type_expr COMMA b = type_expr
     { TySigma (x, a, b) }
   (* the old forms *)
   | ID LPAREN type_expr COMMA expr COMMA expr RPAREN
-    { failwith "the type of a path is written x = y: Id(A, x, y) is gone, its carrier is read off the endpoints" }
+    { form_gone "the type of a path is written x = y: Id(A, x, y) is gone, its carrier is read off the endpoints" }
   | SAME LPAREN expr COMMA expr RPAREN
-    { failwith "the type of a path is written x = y: Same(x, y) is gone" }
+    { form_gone "the type of a path is written x = y: Same(x, y) is gone" }
   | PATHP LPAREN i = IDENT COMMA a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
     { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
   | EL LPAREN c = expr RPAREN
@@ -1227,7 +1231,7 @@ type_atom:
     %prec CLAUSE_END
     { match rest with
       | [b] -> TySigma ("_", a, b)
-      | _ -> failwith "a product has two components: (A, B, C) has no reading in a type, the components nest as (A, (B, C))" }
+      | _ -> form_gone "a product has two components: (A, B, C) has no reading in a type, the components nest as (A, (B, C))" }
   (* Comprehension { x : A where P }: the subobject of A carved out by the
      mere-proposition fibre P (which may mention x). Desugars to the dependent
      pair Sigma(x:A). P, whose first projection is a mono exactly when P is a
@@ -1251,7 +1255,7 @@ hit_branch:
     { (ctor, PatVars vars, v) }
   (* the old form: the parentheses are for products *)
   | ctor = IDENT LPAREN vars = separated_list(COMMA, IDENT) RPAREN FATARROW expr
-    { failwith (match vars with
+    { form_gone (match vars with
         | [] -> Printf.sprintf "a pattern with no payload is the bare name: %s =>" ctor
         | [x] -> Printf.sprintf "a pattern on a payload is written %s as %s =>" ctor x
         | _ -> Printf.sprintf "a pattern on a payload is written %s as (%s) =>" ctor
@@ -1292,7 +1296,7 @@ arm:
     { { v_name = (if b then "true" else "false"); v_args = [] } }
   (* a path is no arm: it is a cell, a law of the place *)
   | name = IDENT list(named_type) COLON PATH_TYPE expr EQ expr
-    { failwith (Printf.sprintf
+    { form_gone (Printf.sprintf
         "a path is not an arm: it is a cell of the place: write law %s source = target" name) }
   (* the old form: the parentheses are for products *)
   | name = IDENT LPAREN first = separated_list(COMMA, type_expr) RPAREN
@@ -1301,7 +1305,7 @@ arm:
         | TyPrim p -> String.capitalize_ascii p
         | TyApp (n, _) -> n ^ "<..>"
         | _ -> "T" in
-      failwith (Printf.sprintf
+      form_gone (Printf.sprintf
         "the payload of arm %s is written after its name, without parentheses: this > %s %s"
         name name (String.concat " " (List.map show first))) }
 
@@ -1935,7 +1939,7 @@ expr_atom:
   | BACK e = expr_atom
     { ECall ("inv", [e], mk_loc $startpos $endpos) }
   | CARRY expr_atom ALONG expr_atom
-    { failwith "carry x along e is not written: the transport is the application of the equivalence, x \xe2\x86\xa6 e" }
+    { form_gone "carry x along e is not written: the transport is the application of the equivalence, x \xe2\x86\xa6 e" }
   | PAIR LPAREN a = expr COMMA b = expr RPAREN
     { EPair (a, b, mk_loc $startpos $endpos) }
   /* a tuple, a product: right-nested pairs of one location */
@@ -1963,7 +1967,7 @@ expr_atom:
     { EElMatch (t, r, b, mk_loc $startpos $endpos) }
   (* the kernel's forms, refused on the surface *)
   | HIT_ELIM LPAREN expr COMMA LBRACKET separated_list(COMMA, hit_branch) RBRACKET COMMA expr RPAREN
-    { failwith "hit_elim is a form of the kernel: the eliminator is written match x { arm => .. }" }
+    { form_gone "hit_elim is a form of the kernel: the eliminator is written match x { arm => .. }" }
   (* Metonymic: `match x { ctor => .., loop => walk i => .. }` = hit_elim with a
      SYNTHESIZED motive (non-dependent). The sentinel motive __match tells the
      type checker to infer the result type from the branches. *)
@@ -1973,9 +1977,9 @@ expr_atom:
   | walk_kw i = IDENT FATARROW body = expr
     { EPathAbs (i, body, mk_loc $startpos $endpos) }
   | HIT_KW LPAREN ctor = IDENT RPAREN
-    { failwith (Printf.sprintf "hit is a form of the kernel: a nullary arm is its name: %s" ctor) }
+    { form_gone (Printf.sprintf "hit is a form of the kernel: a nullary arm is its name: %s" ctor) }
   | HIT_KW LPAREN ctor = IDENT COMMA separated_nonempty_list(COMMA, expr) RPAREN
-    { failwith (Printf.sprintf
+    { form_gone (Printf.sprintf
         "hit is a form of the kernel: an injection is written x \xe2\x86\xaa %s, a cell is applied with x \xe2\x86\xa6 %s"
         ctor ctor) }
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
@@ -2067,7 +2071,7 @@ expr_atom:
 
 walk_kw:
   | WALK { () }
-  | PLAM { failwith "plam is refused: the abstraction of a path is written walk i => e" }
+  | PLAM { form_gone "plam is refused: the abstraction of a path is written walk i => e" }
 
 hcomp_side:
   | face_var = IDENT EQ I0 FATARROW walk_kw binder = IDENT FATARROW body = expr

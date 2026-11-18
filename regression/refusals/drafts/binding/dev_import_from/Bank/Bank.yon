@@ -1,0 +1,3 @@
+place Bank {
+  fun deposit_net(x: Number): Number { return x }
+}

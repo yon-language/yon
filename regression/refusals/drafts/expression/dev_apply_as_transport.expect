@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `↦` carries a value along a bridge: `add` is a fun

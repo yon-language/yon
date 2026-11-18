@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    p := !? absent
+    return 0
+  }
+}

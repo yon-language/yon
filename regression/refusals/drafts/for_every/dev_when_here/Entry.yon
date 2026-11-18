@@ -1,0 +1,8 @@
+place Entry {
+  fun xs: List<Number> { return (1, Nil) ↪ Cons }
+  fun main: ExitCode {
+    mut r := 0
+    for every x in xs when here { r <- x }
+    return 0
+  }
+}

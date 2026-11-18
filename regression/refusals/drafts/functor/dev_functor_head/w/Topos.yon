@@ -1,0 +1,3 @@
+topos {
+}
+functor Identity(x: Number) from W to V { return x }

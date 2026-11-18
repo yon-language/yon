@@ -1,0 +1,5 @@
+[package]
+name = "dev_import_as"
+
+[runtime]
+backend = "separate"

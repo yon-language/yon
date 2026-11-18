@@ -18,15 +18,16 @@ Two legs, both cheap:
          `: unit`) appears in a type position. They are the kernel codes; the
          surface writes Number, Text, Boolean, Unit.
 
-  leg C  the two highlighters color exactly the words the lexer reserves: the
-         site's Prism keyword list is the lexer's lowercase table (minus
-         true/false), and the VS Code grammar names no word the lexer lacks.
+  leg C  the lists of the two highlighters and the keyword index are derived from
+         regression/GRAMMAR.tokens by tools/gen_highlighters.py: regenerated and
+         compared byte for byte.
 
 All legs read the live lexer for the keyword set, so a word that comes BACK
 stops being flagged without touching this file.
 """
-import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -130,25 +131,12 @@ def test_no_lowercase_primitive_in_type_position(path):
     )
 
 
-PRISM = SITE / "src" / "theme" / "prism-include-languages.js"
-VSCODE = ROOT / "lsp" / "editors" / "vscode" / "syntaxes" / "yon.tmLanguage.json"
 
 
-def test_prism_keywords_are_the_lexer_keywords():
-    m = re.search(r"keyword: new RegExp\((.*?)\)\\\\b", PRISM.read_text(), re.S)
-    assert m, f"{PRISM}: keyword RegExp not found"
-    words = set("".join(re.findall(r"'([^']*)'", m.group(1))).replace("\\\\b(?:", "").split("|"))
-    words.discard("")
-    want = live_keywords() - {"true", "false"}
-    assert words == want, (
-        f"site highlighter vs lexer: extra {sorted(words - want)}, missing {sorted(want - words)}")
-
-
-def test_vscode_grammar_names_only_live_words():
-    grammar = json.loads(VSCODE.read_text())
-    pats = [grammar["repository"]["declarations"]["match"]]
-    pats += [p["match"] for p in grammar["repository"]["keywords"]["patterns"]]
-    live = live_keywords() | set(re.findall(r'^\s*"([A-Za-z_][A-Za-z0-9_]*)",\s*[A-Z]',
-                                            LEXER.read_text(), re.M))
-    named = {w for p in pats for w in re.search(r"\\b\(([^)]*)\)", p).group(1).split("|")}
-    assert named <= live, f"VS Code grammar colors words the lexer lacks: {sorted(named - live)}"
+def test_the_lists_of_the_highlighters_are_generated():
+    """The keywords of Prism, of the VS Code grammar and of the keyword index are derived from
+    regression/GRAMMAR.tokens (tools/gen_highlighters.py): regenerated here and compared byte for
+    byte. A word that leaves the lexer, or whose every form the parser refuses, leaves them too."""
+    gen = ROOT / "tools" / "gen_highlighters.py"
+    r = subprocess.run([sys.executable, str(gen), "--check"], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, (r.stdout + r.stderr).strip()

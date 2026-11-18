@@ -1,0 +1,11 @@
+[package]
+name = "dev_nat_given"
+
+[world.W]
+spaces = ["w"]
+
+[world.V]
+spaces = ["v"]
+
+[runtime]
+backend = "separate"

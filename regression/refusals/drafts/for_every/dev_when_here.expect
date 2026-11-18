@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: `when here` is not a clause of `for every`

@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: the inverse of a path is written `back p`

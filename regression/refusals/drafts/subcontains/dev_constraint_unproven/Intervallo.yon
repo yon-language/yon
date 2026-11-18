@@ -1,0 +1,6 @@
+place Intervallo {
+  lo Number
+  hi Number
+  constraint fun ordinato(i: Intervallo): Boolean { return i.lo <= i.hi }
+  fun crea(a: Number, b: Number): Intervallo { return Intervallo ⟨ lo a hi b ⟩ }
+}

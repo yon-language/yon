@@ -1,0 +1,9 @@
+place Entry {
+  fun ident(x: Number): Number { return x }
+  move Squeeze from Wide to Narrow {
+    x maps to x by ident
+  }
+  fun main: ExitCode {
+    return 0
+  }
+}

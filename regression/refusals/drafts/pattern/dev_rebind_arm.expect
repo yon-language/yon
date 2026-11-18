@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2015
+match: `h` is already bound: the arm binds it again

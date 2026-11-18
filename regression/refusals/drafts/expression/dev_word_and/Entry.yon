@@ -1,0 +1,8 @@
+place Entry {
+  fun main: ExitCode {
+    a := true
+    b := false
+    c := a and b
+    return 0
+  }
+}

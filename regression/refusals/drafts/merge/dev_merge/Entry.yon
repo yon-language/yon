@@ -1,0 +1,10 @@
+place Entry {
+  fun pick(a: Number, b: Number): Number { return a }
+  move Merge unifies A, B {
+    share v
+    conflict on w resolves to pick
+  }
+  fun main: ExitCode {
+    return 0
+  }
+}

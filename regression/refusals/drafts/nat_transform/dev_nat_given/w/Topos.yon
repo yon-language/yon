@@ -1,0 +1,7 @@
+topos {
+}
+functor F from W to V { on object(x: Number): Number { return x } }
+functor G from W to V { on object(x: Number): Number { return x } }
+nat transform Eta from F to G is given {
+  for each X by F
+}

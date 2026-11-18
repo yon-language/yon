@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2011
+match: `crea` may build an Intervallo that breaks `ordinato`: it declares `on error ConstraintError`

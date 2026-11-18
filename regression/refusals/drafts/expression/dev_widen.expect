@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `widen_i32_i64` is not a fun of Yon

@@ -1,0 +1,7 @@
+place Entry {
+  fun main: ExitCode {
+    mut acc := 0
+    iter -1 do { acc <- 1 }
+    return 0
+  }
+}

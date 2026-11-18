@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    u := s.next(star)
+    return 0
+  }
+}

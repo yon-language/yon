@@ -1,0 +1,5 @@
+[package]
+name = "dev_main_effect_bare"
+
+[runtime]
+backend = "separate"

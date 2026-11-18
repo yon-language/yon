@@ -1,0 +1,5 @@
+[package]
+name = "dev_law_outside"
+
+[runtime]
+backend = "separate"

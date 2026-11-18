@@ -1,0 +1,7 @@
+place Entry {
+  fun xs: List<Number> { return (1, Nil) ↪ Cons }
+  fun main: ExitCode {
+    m := Sequence.map(xs, fun(v: Number) => v)
+    return 0
+  }
+}

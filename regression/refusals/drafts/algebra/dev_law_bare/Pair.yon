@@ -1,0 +1,5 @@
+place Pair {
+  this < Group
+  operation op(a: Pair, b: Pair): Pair as "+"
+  law commutative
+}

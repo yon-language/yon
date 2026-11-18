@@ -1,0 +1,8 @@
+[package]
+name = "dev_prop_quantifier_parens"
+
+[world.W]
+spaces = ["w"]
+
+[runtime]
+backend = "memory"

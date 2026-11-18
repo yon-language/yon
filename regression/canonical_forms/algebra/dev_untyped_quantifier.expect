@@ -1,6 +1,6 @@
 status: reject_clean
 exit: 1
-code: E1001
+code: E1003
 match: a quantifier carries its type
 covers: quantifiers quantifier
 note: |

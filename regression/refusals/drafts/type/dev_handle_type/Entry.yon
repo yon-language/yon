@@ -1,0 +1,6 @@
+place Entry {
+  fun usa(m: move from W to V): Number { return 0 }
+  fun main: ExitCode {
+    return 0
+  }
+}

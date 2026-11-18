@@ -1,0 +1,6 @@
+place Coin { value Number }
+place Entry {
+  fun main: ExitCode {
+    return 0
+  }
+}

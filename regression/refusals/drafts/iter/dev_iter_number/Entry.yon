@@ -1,0 +1,10 @@
+place Entry {
+  fun giri(n: Number): Number {
+    mut acc := 0
+    iter n do { acc <- 1 }
+    return acc
+  }
+  fun main: ExitCode {
+    return 0
+  }
+}

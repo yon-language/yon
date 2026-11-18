@@ -1,0 +1,8 @@
+[package]
+name = "dev_import_from"
+
+[world.W]
+spaces = ["Bank"]
+
+[runtime]
+backend = "separate"

@@ -288,6 +288,10 @@ let () =
           Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Parse_syntax
             (Printf.sprintf "%s:%d:%d" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol))));
           exit 2
+      | Error_codes.Refused (code, msg) ->
+          Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make code
+            (Printf.sprintf "%s: %s" filename msg)));
+          exit 2
       | Failure msg ->
           Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Parse_syntax
             (Printf.sprintf "%s: %s" filename msg)));

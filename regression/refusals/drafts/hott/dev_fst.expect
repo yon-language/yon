@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: `fst(p)` is not a fun of Yon

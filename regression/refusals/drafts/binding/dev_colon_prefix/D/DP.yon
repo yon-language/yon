@@ -1,0 +1,3 @@
+place DP {
+  fun d_op(x: Number): Number { return x + 1 }
+}

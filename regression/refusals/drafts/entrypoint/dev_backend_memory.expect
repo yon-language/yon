@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E4004
+match: `memory` is not a backend

@@ -1,0 +1,6 @@
+place Entry {
+  fun total(a: Number, b: Number): Number { return a + b }
+  fun main: ExitCode {
+    return 0
+  }
+}

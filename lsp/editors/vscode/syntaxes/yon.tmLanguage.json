@@ -38,46 +38,67 @@
       "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
     },
     "declarations": {
-      "comment": "A declaration keyword followed by the name it binds.",
-      "match": "\\b(place|fun|move|view|reduction|operation|functor|morph|geomorph|topos|prop|space|cell|error)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "comment": "A declaration keyword followed by the name it binds; generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
+      "match": "\\b(cell|error|fun|functor|geomorph|morph|move|operation|place|prop|reduction|space|topos|view)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
-        "1": { "name": "storage.type.yon" },
-        "2": { "name": "entity.name.type.yon" }
+        "1": {
+          "name": "storage.type.yon"
+        },
+        "2": {
+          "name": "entity.name.type.yon"
+        }
       }
     },
     "keywords": {
       "patterns": [
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "keyword.control.yon",
-          "match": "\\b(when|otherwise|forces|for|every|here|sequence|repeat|at|most|times|forever|scope|return|escape|produce|emit|if|then|else|iter|do|while)\\b"
+          "match": "\\b(at|do|else|emit|escape|every|for|forces|forever|here|if|iter|match|most|otherwise|produce|repeat|return|scope|sequence|then|times|when|while)\\b"
         },
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "storage.type.yon",
-          "match": "\\b(import|internal|proof|place|space|fun|move|view|reduction|operation|cell|geomorph|functor|topos|morphism|prop|nat|morph|error)\\b"
+          "match": "\\b(cell|error|fun|functor|geomorph|import|internal|morph|morphism|move|nat|operation|place|proof|prop|reduction|space|this|topos|view)\\b"
         },
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "keyword.other.binding.yon",
           "match": "\\b(mut)\\b"
         },
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "keyword.operator.word.yon",
-          "match": "\\b(of|in|to|by|from|with|as|where|over|uses|algebra|law|fold|compose|hcomp|comp|unifies|requires|share|resolves|maps|converts|aggregates|via|exact|pull|push|visits|promote|spawn|parallel|show|each|and|or|not|is|multishot|drop)\\b"
+          "match": "\\b(aggregates|algebra|and|as|by|carried|comp|compose|converts|drop|each|exact|fold|from|given|hcomp|in|is|law|maps|multishot|not|of|or|over|parallel|promote|pull|push|requires|resolves|share|show|spawn|through|to|unifies|uses|via|visits|where|with)\\b"
         },
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "constant.language.yon",
-          "match": "\\b(true|false|present|absent|unknown)\\b"
+          "match": "\\b(absent|false|present|true|unknown)\\b"
         },
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "keyword.other.hott.yon",
-          "match": "\\b(refl|pair|fst|snd|ind_path|quote|el_match|hit_elim|hit|I0|I1|walk)\\b"
+          "match": "\\b(back|clear|el_match|fst|I0|I1|ind_path|induct|pair|quote|refl|snd|walk)\\b"
+        },
+        {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
+          "name": "keyword.operator.word.yon",
+          "match": "∀|∃"
         }
       ]
     },
     "types": {
       "patterns": [
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "support.type.primitive.yon",
-          "match": "\\b(number|text|boolean|proposition|unit|money|person|address|tensor|cryptographic|duration|sum|list|map|stream|wire|heyting|Type|Pi|Sigma|Id|PathP|El)\\b"
+          "match": "\\b(El|heyting|PathP|Pi|Sigma|stream|Type|wire)\\b"
+        },
+        {
+          "name": "support.type.primitive.yon",
+          "comment": "Names of places that no lexer gives, written by hand: kept for lotto W.",
+          "match": "\\b(number|text|boolean|proposition|unit|money|person|address|tensor|cryptographic|duration|sum|list|map)\\b"
         },
         {
           "comment": "Upper-case head = a place, module or type (Text, List, Generated, ...).",
@@ -89,12 +110,19 @@
     "operators": {
       "patterns": [
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "keyword.operator.intuitionistic.yon",
-          "match": "&&\\?|\\|\\|\\?|=>\\?|!\\?|&\\?|\\|\\?|\\^\\?|~\\?"
+          "match": "&&\\?|=>\\?|\\|\\|\\?|!\\?|&\\?|\\^\\?|\\|\\?|~\\?|¬|→|↔|∧|∨"
         },
         {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
           "name": "keyword.operator.yon",
-          "match": "&&|\\|\\||↦|↪|\\|->|>->|=>|->|<=|>=|==|!=|[-+*/%<>=!&|\\^~@]"
+          "match": "\\.->|<=>|>->|\\|->|!=|&&|\\+\\+|->|:=|:U|<-|<=|==|=>|>=|\\|>|\\|\\||!|%|&|\\*|\\+|-|/|<|=|>|@|\\^|\\||~|↦|↪|≠"
+        },
+        {
+          "comment": "generated from regression/GRAMMAR.tokens, do not edit (python3 tools/gen_highlighters.py)",
+          "name": "support.type.primitive.yon",
+          "match": "Π|Σ"
         }
       ]
     }

@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `List.cons` is a second way to write `↪ Cons`

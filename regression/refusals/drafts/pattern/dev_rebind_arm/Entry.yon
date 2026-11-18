@@ -1,0 +1,8 @@
+place Entry {
+  fun xs: List<Number> { return (1, Nil) ↪ Cons }
+  fun main: ExitCode {
+    h := 7
+    r := match xs { Nil => 0, Cons as (h, t) => h }
+    return 0
+  }
+}

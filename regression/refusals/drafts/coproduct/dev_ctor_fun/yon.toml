@@ -1,0 +1,5 @@
+[package]
+name = "dev_ctor_fun"
+
+[runtime]
+backend = "separate"

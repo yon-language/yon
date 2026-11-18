@@ -1,0 +1,7 @@
+place Entry {
+  fun xs: List<Number> { return (1, Nil) ↪ Cons }
+  fun main: ExitCode {
+    t := xs.fold(0, fun(a: Number, v: Number) => a)
+    return 0
+  }
+}

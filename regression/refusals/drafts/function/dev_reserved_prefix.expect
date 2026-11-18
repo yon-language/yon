@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E1002
+match: a name of the program does not begin with `__`

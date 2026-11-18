@@ -1,0 +1,5 @@
+place Intervallo {
+  lo Number
+  hi Number
+  proof constraint fun ordinato(i: Intervallo): Boolean { return i.lo <= i.hi }
+}

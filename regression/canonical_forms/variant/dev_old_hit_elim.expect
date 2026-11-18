@@ -1,6 +1,6 @@
 status: reject_clean
 exit: 1
-code: E1001
+code: E1003
 match: the eliminator is written match x
 note: |
   hit_elim stays in the kernel: the eliminator on the surface is match.

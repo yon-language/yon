@@ -1,0 +1,6 @@
+place Rates {
+  fun quote(x: Number): Number {
+    w := wire to space Bank
+    return x
+  }
+}

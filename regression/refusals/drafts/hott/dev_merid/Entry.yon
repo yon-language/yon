@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    m := merid(a)
+    return 0
+  }
+}

@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2016
+match: Intervallo ⟨ lo 5 hi 1 ⟩ breaks `ordinato`

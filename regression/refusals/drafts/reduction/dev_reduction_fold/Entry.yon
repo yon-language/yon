@@ -1,0 +1,11 @@
+place Entry {
+  reduction Sum<T> of Tally with multishot fold "sum_f64" {
+    seed := 0
+    on add(x: Number) {
+      return x
+    }
+  }
+  fun main: ExitCode {
+    return 0
+  }
+}

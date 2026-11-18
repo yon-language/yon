@@ -1,0 +1,12 @@
+place Entry {
+  fun guard(): Number {
+    mut r := 0
+    forces NodeA value is Number {
+      r <- 1
+    }
+    return r
+  }
+  fun main: ExitCode {
+    return 0
+  }
+}

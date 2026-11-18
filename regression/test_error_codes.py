@@ -38,6 +38,20 @@ EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
 # listed here gains a producer (remove it then) or when a code is missing a
 # producer and is not listed (write the fixture, or list it with a reason).
 NO_PRODUCER = {
+    # The codes of the catalogue of refusals (notes/yonmd/catalogo-no.md), registered
+    # before their producers: each leaves this list in the step that produces it.
+    "E1004": "Head_refused: produced by the refusals of a clause a declaration does not take",
+    "E2014": "Stream_read_twice: produced when the second read of a Stream is refused (ROADMAP B10.17 (af))",
+    "E2015": "Name_rebound: produced when the checker refuses a name bound again",
+    "E2016": "Constraint_refuted: produced with the constraint funs",
+    "E2017": "Law_outside_algebra: produced when a law outside an algebra is refused",
+    "E2018": "Algebra_carried: produced when an algebra with a carrier is refused",
+    "E2019": "Writing_refused: produced by the second writings the checker refuses",
+    "E2020": "Place_not_positive: produced with the positivity check",
+    "E2021": "Index_impure: produced with the purity check of an index",
+    "E2022": "Reduction_unfinished: produced when the bound of the reducer is a refusal",
+    "E2023": "Value_discarded: produced when a discarded value is refused",
+    "E2024": "Abstract_holds_state: produced with the abstract Spaces",
     # Error_codes.File_layout is constructed nowhere in frontend/: the per-file
     # layout rules (Manifest.check_file_layout) are reported under Topos_layout
     # (E4001) by project.ml, so E4003 is registered but unreachable.
@@ -45,7 +59,7 @@ NO_PRODUCER = {
 }
 
 _TOML = '[package]\nname = "{name}"\n{extra}[runtime]\nbackend = "memory"\n'
-_ENTRY_OK = "place Entry {\n  fun main: Number { return 0 }\n}\n"
+_ENTRY_OK = 'place Entry {\n  fun main: Number { return 0 }\n}\n'
 
 # Producers that live in THIS module (the grep below skips this file, whose
 # NO_PRODUCER table would otherwise count as a producer of what it lists).
@@ -87,7 +101,7 @@ def test_lexer_error_carries_e1002(tmp_path):
     """A character the lexer has no token for is a LEXICAL error (E1002), not a
     parse error (E1001): the input never reaches the parser."""
     (tmp_path / "ok").mkdir()
-    rc, out = _emit(_project(tmp_path / "ok", "place Entry {\n  fun main: Number { return 0 + 1 }\n}\n"))
+    rc, out = _emit(_project(tmp_path / "ok", 'place Entry {\n  fun main: Number { return 0 + 1 }\n}\n'))
     assert rc == 0, f"the control (`+` for `$`) must emit:\n{out[-600:]}"
     proj = _project(tmp_path, "place Entry {\n  fun main: Number { return 0 $ 1 }\n}\n")
     rc, out = _emit(proj)
@@ -102,7 +116,7 @@ def test_manifest_error_carries_e4004(tmp_path):
     world = '[world.W]\nobjects = ["X"]\nspaces  = ["w{close}]\n'
     bad = _project(tmp_path, _ENTRY_OK, world.format(close=""))
     (bad / "w").mkdir()
-    (bad / "w" / "Topos.yon").write_text("topos T where {\n}\n")
+    (bad / "w" / "Topos.yon").write_text('topos T where {\n}\n')
     rc, out = _emit(bad)
     assert rc != 0 and "Fatal error: exception" not in out, out
     assert "MANIFEST ERROR [E4004]:" in out and "unterminated string" in out, out

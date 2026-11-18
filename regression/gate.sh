@@ -167,6 +167,11 @@ echo "   conflicts $g_conf, useless/unused $g_unused, warnings $g_warn (declared
 if [ $grc -ne 0 ] || [ "$g_warn" -ne 0 ] || [ "$g_conf" -ne 0 ] || [ "$g_unused" -ne 0 ]; then
   echo "$GOUT"; die "grammar" "$GOUT"
 fi
+say "tier 0: the derived files are current (regression/FLOW.md: the grammar, the tokens, the highlighters, the catalogue of refusals)"
+# Nothing enters or leaves the syntax without its diff: the EBNF of parser.mly
+# (Obelisk), the census of the lexer and the lists the highlighters read from it
+# are derived files; one that is stale stops the gate here, with its command.
+YOUT=$(python3 "$ROOT/tools/regen.py" --check 2>&1) || { echo "$YOUT"; die "derived files" "$YOUT"; }
 say "tier 0: smoke (one example compiles and runs)"
 SOUT=$("$ROOT/toolchain/yonc" "$ROOT/examples/vec_basic" -o /tmp/gate_smoke 2>&1) || die "smoke compile" "$SOUT"
 /tmp/gate_smoke >/dev/null 2>&1
@@ -194,9 +199,16 @@ for f in $DIRTY; do
   case "$f" in
     frontend/parser.mly|frontend/lexer.mll|frontend/parser_state.ml|frontend/surface_ast.ml|frontend/formatter.ml)
       add regression/test_syntax_triangle.py; add regression/test_canonical_forms.py
+      add regression/test_grammar_guard.py; add regression/test_gen_highlighters.py
+      add regression/test_website_surface.py; add regression/test_keyword_docs.py
       # the formatter is the most demanding gate (round-trip + idempotence
       # + 100% corpus coverage)
       add regression/test_formatter.py ;;
+    regression/refusals/*|regression/canonical_forms/*|frontend/error_codes.ml|regression/test_error_codes.py)
+      add regression/test_refusal_catalogue.py ;;
+    tools/gen_highlighters.py|tools/keyword_categories.txt|tools/regen.py|regression/lexer_census.py|lsp/editors/vscode/syntaxes/*|website/src/theme/*|website/docs/syntax-reference.md|website/docs/book/22-keywords.md)
+      add regression/test_grammar_guard.py; add regression/test_gen_highlighters.py
+      add regression/test_website_surface.py; add regression/test_keyword_docs.py ;;
     frontend/tycheck.ml|frontend/desugar.ml|frontend/dispatcher.ml)
       add regression/test_project_diff.py; add regression/test_canonical_forms.py
       add regression/test_projects.py

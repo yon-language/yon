@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `for_every` is not a method of Yon

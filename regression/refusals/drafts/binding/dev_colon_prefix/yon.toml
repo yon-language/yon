@@ -1,0 +1,8 @@
+[package]
+name = "dev_colon_prefix"
+
+[world.W]
+spaces = ["D"]
+
+[runtime]
+backend = "separate"

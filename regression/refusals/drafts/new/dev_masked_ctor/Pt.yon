@@ -1,0 +1,3 @@
+place Pt { x Number
+  fun mk(v: Number): Pt { return Pt ⟨ x v ⟩ }
+}

@@ -1,0 +1,5 @@
+[package]
+name = "dev_inline_sum"
+
+[runtime]
+backend = "separate"

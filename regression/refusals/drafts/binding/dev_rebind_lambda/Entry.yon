@@ -1,0 +1,7 @@
+place Entry {
+  fun main: ExitCode {
+    x := 1
+    f := fun(x: Number) => x
+    return 0
+  }
+}

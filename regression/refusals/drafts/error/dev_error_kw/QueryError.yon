@@ -1,0 +1,1 @@
+error QueryError { this < Error  sqlstate Number }

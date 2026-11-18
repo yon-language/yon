@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `merid` is not a name of Yon

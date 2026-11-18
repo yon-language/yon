@@ -1,6 +1,6 @@
 status: reject_clean
 exit: 1
-code: E1001
+code: E1003
 match: a place with a projection
 note: |
   A family over X is a place with a projection to X; its fibres are said in the laws.

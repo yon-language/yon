@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2024
+match: an abstract Space holds no wire: `wire to space Bank` opens one

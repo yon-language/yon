@@ -1,0 +1,3 @@
+place Vote { value Number
+  fun value(v: Vote): Number { return 0 }
+}

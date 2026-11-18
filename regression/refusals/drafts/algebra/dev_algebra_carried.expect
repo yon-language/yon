@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2018
+match: an algebra has no layout

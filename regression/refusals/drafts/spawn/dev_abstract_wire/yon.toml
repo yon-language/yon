@@ -1,0 +1,8 @@
+[package]
+name = "dev_abstract_wire"
+
+[world.W]
+spaces = ["Rates", "Bank"]
+
+[runtime]
+backend = "separate"

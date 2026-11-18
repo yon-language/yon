@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    s := Stream.iterate(fun(v: Number) => v, 0)
+    return 0
+  }
+}

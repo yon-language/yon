@@ -1,0 +1,8 @@
+place Entry {
+  fun main: ExitCode {
+    p := stay 5
+    q := stay 5
+    j := p ++ q
+    return 0
+  }
+}

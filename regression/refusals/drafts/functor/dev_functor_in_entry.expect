@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E4001
+match: a functor belongs in the Topos.yon of its package

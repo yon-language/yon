@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    h := heyting(5)
+    return 0
+  }
+}

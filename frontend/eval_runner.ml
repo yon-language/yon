@@ -78,6 +78,7 @@ let parse_string (source : string) : (Surface_ast.program, string) result =
       Error (Printf.sprintf "Parse error at line %d, column %d"
                p.Lexing.pos_lnum
                (p.Lexing.pos_cnum - p.Lexing.pos_bol))
+  | Error_codes.Refused (code, m) -> Error (Printf.sprintf "Parse error [%s]: %s" (Error_codes.id code) m)
   | Failure m -> Error ("Lex error: " ^ m)
   | Lexer.Lexer_error msg -> Error ("Lexer error: " ^ msg)
 
@@ -202,6 +203,7 @@ let () =
        with
        | Parser.Error -> Error "Parse error in project"
        | Manifest.Manifest_error m -> Error ("Manifest error: " ^ m)
+       | Error_codes.Refused (code, m) -> Error (Printf.sprintf "Parse error [%s]: %s" (Error_codes.id code) m)
        | Failure m -> Error ("Lex/assembly error: " ^ m)
        | Sys_error m -> Error ("File error: " ^ m))
     else

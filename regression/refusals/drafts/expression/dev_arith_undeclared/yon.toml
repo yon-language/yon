@@ -1,0 +1,5 @@
+[package]
+name = "dev_arith_undeclared"
+
+[runtime]
+backend = "separate"

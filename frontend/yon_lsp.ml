@@ -37,6 +37,15 @@ let parse_source (source : string)
               d_severity = 1;
               d_msg = "Syntax error";
               d_code = Some (Error_codes.id Error_codes.Parse_syntax) }
+  | Error_codes.Refused (code, msg) ->
+      let p = lexbuf.Lexing.lex_curr_p in
+      let line = p.Lexing.pos_lnum - 1 in
+      let col = p.Lexing.pos_cnum - p.Lexing.pos_bol in
+      Error { d_line = line; d_col = col;
+              d_end_line = line; d_end_col = col + 1;
+              d_severity = 1;
+              d_msg = msg;
+              d_code = Some (Error_codes.id code) }
   | Lexer.Lexer_error msg ->
       let p = lexbuf.Lexing.lex_curr_p in
       let line = p.Lexing.pos_lnum - 1 in

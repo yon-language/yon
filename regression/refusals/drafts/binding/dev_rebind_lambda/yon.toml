@@ -1,0 +1,5 @@
+[package]
+name = "dev_rebind_lambda"
+
+[runtime]
+backend = "separate"

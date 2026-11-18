@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `Int64.div` is a second way to write `/`

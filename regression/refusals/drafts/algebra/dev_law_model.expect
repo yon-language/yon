@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2017
+match: a model declares no law: its algebra does

@@ -1,0 +1,5 @@
+[package]
+name = "dev_reduction_fold"
+
+[runtime]
+backend = "separate"

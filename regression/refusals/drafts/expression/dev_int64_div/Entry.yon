@@ -1,0 +1,6 @@
+place Entry {
+  fun dividi(a: Int64, b: NonZero): Int64 { return Int64.div(a, b) }
+  fun main: ExitCode {
+    return 0
+  }
+}

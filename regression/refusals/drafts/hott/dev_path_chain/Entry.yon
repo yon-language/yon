@@ -1,0 +1,6 @@
+place Entry {
+  fun f(a: Number, q: a = a = a): Number { return 0 }
+  fun main: ExitCode {
+    return 0
+  }
+}

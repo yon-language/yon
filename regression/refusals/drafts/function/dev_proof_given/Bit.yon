@@ -1,0 +1,4 @@
+place Bit { this > one :U zero
+  fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }
+  proof fun eps(b: Bit): b2bit(Bool.bit2b(b)) = b { return match b { one => stay one, zero => stay zero } }
+}

@@ -1,0 +1,8 @@
+// coverage: a parameter of dependent path type `PathP(i, A, x, y)` (TyPathP).
+// Grammar: PATHP LPAREN IDENT COMMA type_expr COMMA IDENT COMMA IDENT RPAREN.
+// Well-formedness only checks the carrier type A (tycheck.ml); the endpoints
+// x, y are free term identifiers.
+place Entry {
+  fun usePath(p: PathP(i, Number, a, b)): Number { return 0 }
+  fun main: Number { return 0 }
+}

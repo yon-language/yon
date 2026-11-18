@@ -1,0 +1,6 @@
+place Entry {
+  fun one: List<Number> { return (1, Nil) >-> Cons }
+  fun main: ExitCode {
+    return 0
+  }
+}

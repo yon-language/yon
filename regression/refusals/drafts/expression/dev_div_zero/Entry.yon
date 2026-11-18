@@ -1,0 +1,6 @@
+place Entry {
+  fun dividi(a: Int64): Int64 { return a / 0 }
+  fun main: ExitCode {
+    return 0
+  }
+}

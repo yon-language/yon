@@ -1,0 +1,6 @@
+import "rates"
+place Entry {
+  fun main: ExitCode {
+    return 0
+  }
+}

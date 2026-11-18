@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    s.for_every(fun(v: Number) => v)
+    return 0
+  }
+}

@@ -1,0 +1,7 @@
+place Entry {
+  fun main: ExitCode {
+    d := decide(present)
+    b := to_bool_dec(d)
+    return 0
+  }
+}

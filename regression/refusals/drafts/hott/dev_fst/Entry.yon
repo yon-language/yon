@@ -1,0 +1,7 @@
+place Entry {
+  fun main: ExitCode {
+    p := (1, 2)
+    x := fst(p)
+    return 0
+  }
+}

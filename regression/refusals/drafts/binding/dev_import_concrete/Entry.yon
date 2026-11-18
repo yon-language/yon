@@ -1,0 +1,6 @@
+import Bank::deposit_net
+place Entry {
+  fun main: ExitCode {
+    return 0
+  }
+}

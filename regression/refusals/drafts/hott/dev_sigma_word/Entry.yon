@@ -1,0 +1,6 @@
+place Entry {
+  fun prende(f: Sigma x : Number, x = x): Number { return 0 }
+  fun main: ExitCode {
+    return 0
+  }
+}

@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    same := Text.equal("ciao", "mondo")
+    return 0
+  }
+}

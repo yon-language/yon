@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode visits Output {
+    _p := Output.print("ciao")
+    return 0
+  }
+}

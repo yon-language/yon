@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2012
+match: `crea(a, b)` may be a ConstraintError: it is read with escape

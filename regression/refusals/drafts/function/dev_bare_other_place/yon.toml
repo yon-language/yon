@@ -1,0 +1,5 @@
+[package]
+name = "dev_bare_other_place"
+
+[runtime]
+backend = "separate"

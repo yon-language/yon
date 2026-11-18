@@ -1,0 +1,7 @@
+place AccountEU { balance Number
+  morph LiftEU from Account to AccountEU {
+    on object(s: Account): AccountEU {
+      return AccountEU ⟨ balance s.balance ⟩
+    }
+  }
+}

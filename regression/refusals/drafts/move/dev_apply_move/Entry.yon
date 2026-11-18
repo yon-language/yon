@@ -1,0 +1,11 @@
+place Entry {
+  fun ident(x: Number): Number { return x }
+  move Squeeze from Wide to Narrow {
+    x to x by ident
+  }
+  fun main: ExitCode {
+    w := Wide ⟨ x 4 ⟩
+    n := apply_move(Squeeze, w)
+    return 0
+  }
+}

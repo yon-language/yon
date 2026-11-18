@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2023
+match: the value of `one(1)` is computed and thrown away

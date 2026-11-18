@@ -1,0 +1,13 @@
+place Account { balance Number
+  geomorph Lift from Account to AccountEU {
+    exact push
+    pull(a: AccountEU): Account {
+      tmp := a
+      return tmp
+    }
+    push(a: Account): AccountEU {
+      tmp := a
+      return tmp
+    }
+  }
+}

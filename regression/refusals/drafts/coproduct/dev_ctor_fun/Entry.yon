@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    l := List.cons(1, Nil)
+    return 0
+  }
+}

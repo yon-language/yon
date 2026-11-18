@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2020
+match: Bad appears left of an arrow in its own field

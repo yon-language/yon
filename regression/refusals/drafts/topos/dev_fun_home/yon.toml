@@ -1,0 +1,5 @@
+[package]
+name = "dev_fun_home"
+
+[runtime]
+backend = "separate"

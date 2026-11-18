@@ -1,0 +1,5 @@
+[package]
+name = "dev_toplevel_bind"
+
+[runtime]
+backend = "separate"

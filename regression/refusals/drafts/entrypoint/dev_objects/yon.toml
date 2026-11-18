@@ -1,0 +1,9 @@
+[package]
+name = "dev_objects"
+
+[world.W]
+objects = ["Coin"]
+spaces  = ["w"]
+
+[runtime]
+backend = "separate"

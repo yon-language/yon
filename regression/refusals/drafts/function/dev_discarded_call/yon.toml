@@ -1,0 +1,5 @@
+[package]
+name = "dev_discarded_call"
+
+[runtime]
+backend = "separate"

@@ -1,0 +1,4 @@
+place Entry {
+  law riflessiva ∀x : Number, x = x
+  fun main: ExitCode { return 0 }
+}

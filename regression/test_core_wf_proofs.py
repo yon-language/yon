@@ -143,6 +143,9 @@ def _units():
     units = {}
     for top in CORPUS:
         for f in (ROOT / top).rglob("*.yon"):
+            if (ROOT / "regression" / "refusals") in f.parents or (ROOT / "regression" / "programs") in f.parents:
+                continue    # the drafts of the catalogue of refusals (not compiled yet), and the programs
+                            # of the Python tests (each test compiles its own, in its own project)
             names = PROOF.findall(f.read_text(errors="replace"))
             if not names:
                 continue

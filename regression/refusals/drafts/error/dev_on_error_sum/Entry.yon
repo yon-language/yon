@@ -1,0 +1,6 @@
+place Entry {
+  fun k(x: Number) on error DomainError | Overflow: Number { return x }
+  fun main: ExitCode {
+    return 0
+  }
+}

@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E4001
+match: a file holds one place: `Coin` belongs in Coin.yon

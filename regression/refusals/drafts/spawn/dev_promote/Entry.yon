@@ -1,0 +1,7 @@
+place Entry {
+  fun rep(i: Number): Number visits Output { return 21 }
+  fun main(): ExitCode visits Output {
+    results := spawn in 2 parallel { promote rep(spawn_index) }
+    return 0
+  }
+}

@@ -1,0 +1,5 @@
+place Intervallo {
+  lo Number
+  hi Number
+  constraint fun ordinato(i: Intervallo): Boolean visits Output { return i.lo <= i.hi }
+}

@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    p := pair(1, 2)
+    return 0
+  }
+}

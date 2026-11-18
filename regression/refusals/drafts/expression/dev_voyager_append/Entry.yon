@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    l2 := VoyagerList.append(l, 1)
+    return 0
+  }
+}

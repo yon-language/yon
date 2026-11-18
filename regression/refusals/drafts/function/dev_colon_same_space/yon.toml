@@ -1,0 +1,5 @@
+[package]
+name = "dev_colon_same_space"
+
+[runtime]
+backend = "separate"

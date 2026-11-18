@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: `el_match` is a form of the kernel

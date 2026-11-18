@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `bit2b` is a fun of place Bool: it is named `Bool.bit2b`

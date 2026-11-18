@@ -1,0 +1,4 @@
+place Pair carried by i64 {
+  this < Group
+  operation op(a: Pair, b: Pair): Pair as "+"
+}

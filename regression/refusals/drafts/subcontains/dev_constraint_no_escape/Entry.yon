@@ -1,0 +1,9 @@
+place Entry {
+  fun usa(a: Number) on error ConstraintError: Number {
+    i := Intervallo.crea(a, 4)
+    return a
+  }
+  fun main: ExitCode {
+    return 0
+  }
+}

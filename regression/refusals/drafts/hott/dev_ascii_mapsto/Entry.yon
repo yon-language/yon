@@ -1,0 +1,7 @@
+place Entry {
+  fun main: ExitCode {
+    bridge := Bit.b2bit <=> Bool.bit2b by Bool.eta, Bit.eps
+    y := tt |-> bridge
+    return match y { one => 1, zero => 0 }
+  }
+}

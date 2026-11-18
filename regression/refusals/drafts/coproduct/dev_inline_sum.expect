@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: a sum has a name: `A | B` is not a type

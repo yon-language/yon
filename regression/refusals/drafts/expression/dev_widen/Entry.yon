@@ -1,0 +1,6 @@
+place Entry {
+  fun allarga(x: Int32): Int64 { return widen_i32_i64(x) }
+  fun main: ExitCode {
+    return 0
+  }
+}

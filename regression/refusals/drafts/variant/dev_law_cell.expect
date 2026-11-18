@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2017
+match: a law in a place with arms is not a cell: write `cell`

@@ -1,0 +1,4 @@
+place Or {
+  operation op(a: Number, b: Number): Number uses algebra BooleanOr
+  law commutative ∀a : Number ∀b : Number, op(a, b) = op(b, a)
+}

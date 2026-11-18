@@ -1,0 +1,5 @@
+[package]
+name = "dev_word_or"
+
+[runtime]
+backend = "separate"

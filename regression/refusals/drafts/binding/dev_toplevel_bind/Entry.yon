@@ -1,0 +1,6 @@
+base := 40
+place Entry {
+  fun main: ExitCode {
+    return 0
+  }
+}

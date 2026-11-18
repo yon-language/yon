@@ -17,27 +17,19 @@ _TOML = ('[package]\nname = "equiv"\n\n[world.W]\nobjects = ["Bool", "Bit", "Tri
          '[runtime]\nbackend = "memory"\n')
 LSP = ROOT / "frontend" / "_build" / "default" / "yon_lsp.exe"
 
-_BOOL_BIT = """\
-fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }
-fun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }
-fun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }
-fun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }
-"""
+_BOOL_BIT = 'fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }\nfun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }\nfun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }\nfun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }\n'
 
-_SUCC_PRED = """\
-fun succ(n: Int64): Int64 { return n + 1 }
-fun pred(n: Int64): Int64 { return n - 1 }
-"""
+_SUCC_PRED = 'fun succ(n: Int64): Int64 { return n + 1 }\nfun pred(n: Int64): Int64 { return n - 1 }\n'
 
 
 def _build(tmp_path: Path, top: str, body: str):
     proj = tmp_path / "proj"
     proj.mkdir(parents=True)
     (proj / "yon.toml").write_text(_TOML)
-    (proj / "Bool.yon").write_text("place Bool { this > tt :U ff }\n")
-    (proj / "Bit.yon").write_text("place Bit { this > one :U zero }\n")
-    (proj / "Tri.yon").write_text("place Tri { this > ta :U tb :U tc }\n")
-    (proj / "Ter.yon").write_text("place Ter { this > xa :U xb :U xc }\n")
+    (proj / "Bool.yon").write_text('place Bool { this > tt :U ff }\n')
+    (proj / "Bit.yon").write_text('place Bit { this > one :U zero }\n')
+    (proj / "Tri.yon").write_text('place Tri { this > ta :U tb :U tc }\n')
+    (proj / "Ter.yon").write_text('place Ter { this > xa :U xb :U xc }\n')
     (proj / "Entry.yon").write_text(
         "place Entry {\n" + top + "fun main: Number {\n" + body + "\n}\n}\n")
     exe = tmp_path / "exe"
@@ -96,28 +88,24 @@ def test_a_value_of_neither_end_is_not_carried(tmp_path):
     assert "bridge is an equivalence between Bool and Bit, and the value carried along it has type" in out, out
 
 
-@pytest.mark.parametrize("body,words", [
-    ("  y := transport(ua(succ <=> pred), 41)\n  return 42",
+@pytest.mark.parametrize("body,code,words", [
+    ("  y := transport(ua(succ <=> pred), 41)\n  return 42", "E1001",
      "ua(e) is not written: by univalence an equivalence is the path between its types"),
-    ("  bridge := equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)\n  return 42",
+    ("  bridge := equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)\n  return 42", "E1001",
      "equiv(f, g, eta, eps) is not written: an equivalence is f <=> g by eta, eps"),
-    ("  bridge := succ <=> pred\n  y := carry 41 along bridge\n  return 42",
+    # a form that is gone: the refusal carries its code
+    ("  bridge := succ <=> pred\n  y := carry 41 along bridge\n  return 42", "E1003",
      "carry x along e is not written: the transport is the application of the equivalence"),
 ])
-def test_the_primitives_of_the_kernel_are_not_written(tmp_path, body, words):
+def test_the_primitives_of_the_kernel_are_not_written(tmp_path, body, code, words):
     rc, out, _ = _build(tmp_path, _SUCC_PRED, body)
-    assert rc != 0 and "E1001" in out, out
+    assert rc != 0 and f"[{code}]" in out, out
     assert words in out, out
 
 
 # a turn of three points: forth is not its own inverse, so forth and back tell
 # apart what they give
-_TURN = """\
-fun f(t: Tri): Ter { return match t { ta => xb, tb => xc, tc => xa } }
-fun g(x: Ter): Tri { return match x { xa => tc, xb => ta, xc => tb } }
-fun eta(a: Tri): g(f(a)) = a { return match a { ta => clear ta, tb => clear tb, tc => clear tc } }
-fun eps(b: Ter): f(g(b)) = b { return match b { xa => clear xa, xb => clear xb, xc => clear xc } }
-"""
+_TURN = 'fun f(t: Tri): Ter { return match t { ta => xb, tb => xc, tc => xa } }\nfun g(x: Ter): Tri { return match x { xa => tc, xb => ta, xc => tb } }\nfun eta(a: Tri): g(f(a)) = a { return match a { ta => clear ta, tb => clear tb, tc => clear tc } }\nfun eps(b: Ter): f(g(b)) = b { return match b { xa => clear xa, xb => clear xb, xc => clear xc } }\n'
 
 
 def test_back_from_the_target_is_the_undo_and_not_the_forth(tmp_path):
@@ -142,7 +130,7 @@ def test_a_fun_of_the_program_named_undo_is_called_once_as_a_fun(tmp_path):
 
 
 def test_a_fun_of_the_program_named_undo_leaves_the_transport_back_to_the_equivalence(tmp_path):
-    top = _BOOL_BIT + "fun undo(n: Int64): Int64 { return n + 1 }\n"
+    top = 'fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }\nfun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }\nfun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }\nfun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }\nfun undo(n: Int64): Int64 { return n + 1 }\n'
     body = ("  bridge := b2bit <=> bit2b by eta, eps\n"
             "  near := zero ↦ bridge\n"
             "  return match near { tt => 1, ff => 42 }")
@@ -166,10 +154,7 @@ def test_an_equivalence_is_a_path_returned_or_passed_where_one_is_asked(tmp_path
     # univalence against the declared type of a return and of a parameter: the
     # types check; a path received as a parameter has no line known at compile
     # time to transport along (test_audit_probes.py)
-    top = (_SUCC_PRED
-           + "fun line: Int64 = Int64 {\n  return succ <=> pred\n}\n"
-           + "fun go(p: Int64 = Int64, v: Int64): Int64 { return transport(p, v) }\n"
-           + "fun used: Int64 { return go(succ <=> pred, 10) }\n")
+    top = ('fun succ(n: Int64): Int64 { return n + 1 }\nfun pred(n: Int64): Int64 { return n - 1 }\nfun line: Int64 = Int64 {\n  return succ <=> pred\n}\nfun go(p: Int64 = Int64, v: Int64): Int64 { return transport(p, v) }\nfun used: Int64 { return go(succ <=> pred, 10) }\n')
     out = _types(tmp_path, top)
     # the server ran (it lints the fun nothing calls) and found no error
     assert "function 'line' is never used" in out and "error" not in out, out

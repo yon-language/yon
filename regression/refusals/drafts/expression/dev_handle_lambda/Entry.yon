@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    m1 := move(s: P) => P ⟨ v 1 ⟩ from P to P
+    return 0
+  }
+}

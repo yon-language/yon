@@ -1,0 +1,4 @@
+status: reject_clean
+exit: 1
+code: E2019
+match: `Bank` is a concrete Space: it is reached through a wire, not imported

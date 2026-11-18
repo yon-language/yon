@@ -1,0 +1,10 @@
+place Entry {
+  fun main: ExitCode {
+    mut c := 5
+    p := stay c
+    c <- 6
+    q := stay c
+    j := concat(p, q)
+    return 0
+  }
+}

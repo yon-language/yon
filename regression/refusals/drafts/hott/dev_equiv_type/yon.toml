@@ -1,0 +1,5 @@
+[package]
+name = "dev_equiv_type"
+
+[runtime]
+backend = "separate"

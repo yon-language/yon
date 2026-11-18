@@ -1,0 +1,7 @@
+place Entry {
+  fun main: ExitCode {
+    mut acc := 0
+    repeat at most 3 times { acc <- acc + 1 }
+    return 0
+  }
+}

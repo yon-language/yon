@@ -1,0 +1,6 @@
+place Entry {
+  functor Identity from W to V { on object(x: Number): Number { return x } }
+  fun main: ExitCode {
+    return 0
+  }
+}

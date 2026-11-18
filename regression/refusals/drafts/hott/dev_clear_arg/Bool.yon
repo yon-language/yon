@@ -1,0 +1,4 @@
+place Bool { this > tt :U ff
+  fun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }
+  proof fun eta(a: Bool): bit2b(Bit.b2bit(a)) = a { return match a { tt => clear tt, ff => stay ff } }
+}

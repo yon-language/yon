@@ -1,0 +1,6 @@
+place Entry {
+  fun main: ExitCode {
+    y := transport(p, x)
+    return 0
+  }
+}

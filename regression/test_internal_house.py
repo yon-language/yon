@@ -42,26 +42,22 @@ def _value(tmp_path, house, main_expr):
     return subprocess.run([str(exe)], timeout=30).returncode
 
 
-_MAKE = "  fun make(n: Int64): Word { return n }\n"
+_MAKE = '  fun make(n: Int64): Word { return n }\n'
 
 
 def test_inside_the_house_the_place_and_its_carrier_convert_both_ways(tmp_path):
-    house = (_MAKE + "  fun to_int(w: Word): Int64 { return w }\n")
+    house = ('  fun make(n: Int64): Word { return n }\n  fun to_int(w: Word): Int64 { return w }\n')
     assert _value(tmp_path, house,
                   "if Word.to_int(Word.make(41)) + 1 == 42 then 42 else 1") == 42
 
 
 def test_inside_the_house_the_sum_wraps(tmp_path):
-    house = (_MAKE
-             + "  fun wrap: Word { return make(Int64.max_value) + make(1) }\n"
-             + "  fun is_min(w: Word): Boolean { return w == Int64.min_value }\n")
+    house = ('  fun make(n: Int64): Word { return n }\n  fun wrap: Word { return make(Int64.max_value) + make(1) }\n  fun is_min(w: Word): Boolean { return w == Int64.min_value }\n')
     assert _value(tmp_path, house, "if Word.is_min(Word.wrap) then 42 else 1") == 42
 
 
 def test_inside_the_house_the_product_wraps(tmp_path):
-    house = (_MAKE
-             + "  fun sq(a: Word): Word { return a * a }\n"
-             + "  fun is_zero(w: Word): Boolean { return w == 0 }\n")
+    house = ('  fun make(n: Int64): Word { return n }\n  fun sq(a: Word): Word { return a * a }\n  fun is_zero(w: Word): Boolean { return w == 0 }\n')
     assert _value(tmp_path, house,
                   "if Word.is_zero(Word.sq(Word.make(4294967296))) then 42 else 1") == 42
 
@@ -73,7 +69,7 @@ def test_outside_the_house_the_place_takes_no_arithmetic(tmp_path):
 
 
 def test_outside_the_house_a_carrier_value_is_not_the_place(tmp_path):
-    rc, out, _ = _build(tmp_path, "  fun same(w: Word): Word { return w }\n",
+    rc, out, _ = _build(tmp_path, '  fun same(w: Word): Word { return w }\n',
                         "if Word.same(Int64.max_value) == Word.same(Int64.max_value) then 1 else 2")
     assert rc != 0 and "[E2001]" in out and "Fatal error" not in out, out
 
@@ -94,7 +90,7 @@ def _header(tmp_path, header):
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Word.yon").write_text(header + " { }\n")
-    (proj / "Entry.yon").write_text("place Entry {\nfun main: Number {\n  return 42\n}\n}\n")
+    (proj / "Entry.yon").write_text('place Entry {\nfun main: Number {\n  return 42\n}\n}\n')
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=180)
     return r.returncode, r.stdout + r.stderr
@@ -111,7 +107,7 @@ def test_the_carrier_is_written_carried_by(tmp_path):
 ])
 def test_the_old_carrier_form_is_refused_with_the_new_one(tmp_path, header, new):
     rc, out = _header(tmp_path, header)
-    assert rc != 0 and "E1001" in out and "is no longer the carrier" in out and new in out, out
+    assert rc != 0 and "[E1003]" in out and "is no longer the carrier" in out and new in out, out
 
 
 def test_an_internal_place_without_a_carrier_is_refused(tmp_path):

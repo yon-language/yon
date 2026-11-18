@@ -1,0 +1,7 @@
+place Entry {
+  fun add(a: Number, b: Number): Number { return a }
+  fun main: ExitCode {
+    y := (40, 2) ↦ add
+    return 0
+  }
+}

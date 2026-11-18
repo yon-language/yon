@@ -1,0 +1,5 @@
+[package]
+name = "dev_cell_in_index"
+
+[runtime]
+backend = "separate"

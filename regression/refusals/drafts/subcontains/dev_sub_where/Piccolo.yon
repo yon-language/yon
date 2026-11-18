@@ -1,0 +1,1 @@
+place Piccolo { this < Int64 where 0 <= this && this < 10 }
