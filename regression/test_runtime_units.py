@@ -95,6 +95,9 @@ C_UNIT_TESTS = [
     # call attaches the rings of a session at every call, and a new session
     # must still find handles for its own rings after any number of calls.
     ("shm_reopen",    "test_unit_shm_reopen.c",   b"SHM_REOPEN: PASS",    True),
+    # The rings of the sessions of a server of typed calls: one server serves
+    # 200 sessions, each through the server's own handling of the rings.
+    ("rpc_rings",     "test_unit_rpc_rings.c",    b"RPC_RINGS: PASS",     True),
     # Extensionality under load: 300k distinct contents (> the 196,560 Leech
     # kissing number) chain past one heap, each on a DISTINCT ref (no false dedup
     # even under heavy 64-bit-hash collisions — memcmp settles them), dedup stable.

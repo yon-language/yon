@@ -2198,6 +2198,13 @@ static void yon_shm_stream_release_slot(int slot) {
     g_shm_stream_handles[slot] = NULL;
 }
 
+/* A process done with a channel lets go of its handle and of its entry in the
+ * map of ids; the channel itself stays, for the processes that still hold it. */
+static void yon_shm_stream_release_id(uint32_t id) {
+    int slot = yon_rt_shm_slot_of(id);
+    if (slot >= 0) yon_shm_stream_release_slot(slot);
+}
+
 /* Open/attach a cross-process stream identified by an integer id. create=1
  * makes it. Returns the id as f64, or -1.0 on failure. Both processes call
  * with the same id to rendezvous on the same shared region. */
@@ -3306,6 +3313,9 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
                 yon_rt_wire_buf_free(&msg);
                 yon_rt_stream_shm_close_write_f64(attach);
             }
+            /* the subscription is over for the server: its handle of the
+               channel goes, the consumer still holds the channel */
+            yon_shm_stream_release_id((uint32_t)chan_id);
             continue;
         }
         if (req.argc & YON_RPC2_TYPED) {
@@ -3632,28 +3642,49 @@ static const uint64_t *rpc2_op(uint32_t sel) {
     return NULL;
 }
 
-/* The server's half of a typed call. */
-static void rpc2_serve_typed(const yon_rpc2_req_t *req) {
-    uint32_t n_framed = req->argc & 0xFFu;
-    uint32_t ring_a = (uint32_t)req->args[4], ring_r = (uint32_t)req->args[5];
-    uint64_t awaited = yon_root_of_halves(req->args[6], req->args[7]);
-    const uint64_t *sig = rpc2_op(req->selector);
-    int framed = n_framed > 0 || (sig && sig[3]);
-    if (framed) {   /* the rings exist only once a call of the session framed a value */
-        yon_rt_stream_shm_open_sized_f64(ring_a, 0.0, 0.0);
-        yon_rt_stream_shm_open_sized_f64(ring_r, 0.0, 0.0);
+/* The server's half of a call, with the rings of its session. The rings are
+ * attached for the call, when it carries a frame, and let go after it: a
+ * server keeps no handle of a session past its calls, so it serves any number
+ * of sessions in its life. 0, or the reason the rings could not be opened (an
+ * errno), and then `body` does not run. */
+int yon_rt_rpc2_with_rings(uint32_t ring_a, uint32_t ring_r, int framed,
+                           void (*body)(void *ctx, int cha, int chr), void *ctx) {
+    int err = 0;
+    if (framed) {
+        errno = 0;
+        if (yon_rt_stream_shm_open_sized_f64((double)ring_a, 0.0, 0.0) < 0.0
+            || yon_rt_stream_shm_open_sized_f64((double)ring_r, 0.0, 0.0) < 0.0)
+            err = errno ? errno : EMFILE;
     }
-    int cha = yon_rt_shm_slot_of(ring_a), chr = yon_rt_shm_slot_of(ring_r);
+    if (!err) body(ctx, yon_rt_shm_slot_of(ring_a), yon_rt_shm_slot_of(ring_r));
+    if (framed) {
+        yon_shm_stream_release_id(ring_a);
+        yon_shm_stream_release_id(ring_r);
+    }
+    return err;
+}
+
+typedef struct {
+    const yon_rpc2_req_t *req;
+    const uint64_t       *sig;
+    uint32_t              n_framed;
+    uint64_t              awaited;
+} rpc2_serve_t;
+
+static void rpc2_serve_typed_body(void *p, int cha, int chr) {
+    const rpc2_serve_t *c = (const rpc2_serve_t *)p;
+    const yon_rpc2_req_t *req = c->req;
+    const uint64_t *sig = c->sig;
     yon_wire_buf_t msg = { 0 };
-    if (!sig || sig[0] != awaited || (framed && (cha < 0 || chr < 0))) {
+    if (!sig || sig[0] != c->awaited) {
         /* refused: the caller's framed arguments are read and dropped, so
            the ring is clean for its next call */
-        for (uint32_t i = 0; i < n_framed && cha >= 0; i++)
+        for (uint32_t i = 0; i < c->n_framed && cha >= 0; i++)
             if (yon_rt_stream_shm_recv_message(g_shm_stream_handles[cha], &msg) != 0) break;
         yon_rt_wire_buf_free(&msg);
         fprintf(stderr, "error: a call to operation %u awaits signature root %016llx, "
                 "and this Space declares %016llx: refused\n", (unsigned)req->selector,
-                (unsigned long long)awaited, (unsigned long long)(sig ? sig[0] : 0));
+                (unsigned long long)c->awaited, (unsigned long long)(sig ? sig[0] : 0));
         yon_rt_rpc2_reply(req, YON_WIRE_TYPE_REFUSED);
         return;
     }
@@ -3683,6 +3714,22 @@ static void rpc2_serve_typed(const yon_rpc2_req_t *req) {
         yon_rt_stream_shm_send_message(g_shm_stream_handles[chr], msg.p, msg.len);
     }
     yon_rt_wire_buf_free(&msg);
+}
+
+/* The server's half of a typed call. */
+static void rpc2_serve_typed(const yon_rpc2_req_t *req) {
+    rpc2_serve_t c = { req, rpc2_op(req->selector), req->argc & 0xFFu,
+                       yon_root_of_halves(req->args[6], req->args[7]) };
+    int framed = c.n_framed > 0 || (c.sig && c.sig[3]);
+    int err = yon_rt_rpc2_with_rings((uint32_t)req->args[4], (uint32_t)req->args[5], framed,
+                                     rpc2_serve_typed_body, &c);
+    if (err) {
+        /* the rings could not be opened: refused, as a call the server cannot serve */
+        fprintf(stderr, "error: a call to operation %u awaits signature root %016llx, "
+                "and this Space declares %016llx: refused\n", (unsigned)req->selector,
+                (unsigned long long)c.awaited, (unsigned long long)(c.sig ? c.sig[0] : 0));
+        yon_rt_rpc2_reply(req, YON_WIRE_TYPE_REFUSED);
+    }
 }
 
 /* `--serve2 <SpaceName>` detection, mirroring yon_rt_should_serve (v1):
