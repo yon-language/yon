@@ -1,0 +1,4 @@
+place Entry {
+  fun keys<K, V>(xs: List<Σx : K, V>): Number { return List.length(xs) }
+  fun main: Number { return 42 }
+}

@@ -1,0 +1,5 @@
+[package]
+name = "dev_type_in"
+
+[runtime]
+backend = "memory"

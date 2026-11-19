@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: closed_open_type last_type_argument
+note: |
+  A Σ as the last argument of a type: its body ends at the `>` that closes the arguments.

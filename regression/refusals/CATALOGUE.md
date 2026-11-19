@@ -751,10 +751,14 @@ error[E1003]: `comp` is not a word of Yon
 ### NO-053 `type-in` · E1003 · grammar
 
 - book: PROPOSAL: no page of the book says it (the type `T in A, B`)
-- proof to write: no use in the corpus to copy
+- proof: `regression/canonical_forms/type/dev_type_in`
 
 ```
 error[E1003]: `T in A, B` is not a type
+  --> Entry.yon:2:23
+   |
+ 2 |   fun price(x: Number in EUR, USD): Number {
+   |                       ^^^^^^
    = why: a currency is a place, not an annotation on a type
    = write: this form has no successor
 ```

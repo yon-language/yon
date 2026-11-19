@@ -1,0 +1,7 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: `T in A, B` is not a type
+note: |
+  A type annotated with a list of labels, `T in A, B`, had no reading the checker kept: a currency
+  is a place, not an annotation on a type. The form is refused with its code.

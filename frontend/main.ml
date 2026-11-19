@@ -1379,24 +1379,23 @@ let test_catt_term_equiv () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 67: parser — multi-world `in` list works at end of param.
- * The greedy `in` list consumes commas until a non-IDENT token.
- * We avoid the ambiguity by putting the `in` list at the end. *)
+(* Test 67: parser — a type annotated with labels, `T in A, B`, is refused with its code and
+ * the words of its reason. *)
 let test_parser_world_list () =
   let src = {|
     fun process(y: Number, x: money in EUR): Number {
       return y
     }
   |} in
-  Printf.printf "\n=== Test 67: parser — `in` world list ===\n";
+  Printf.printf "\n=== Test 67: parser — `T in A, B` is refused ===\n";
   match parse_string src with
-  | Error msg -> Printf.printf "FAIL — %s\n" msg; false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      Printf.printf "  Note: multi-world `in` (e.g., `in EUR, USD`) is greedy;\n";
-      Printf.printf "  put such params last in the param list to avoid issues.\n";
-      Printf.printf "Status: PASS\n";
-      true
+  | Error msg
+    when (let has sub = let n = String.length sub and m = String.length msg in
+            let rec go i = i + n <= m && (String.sub msg i n = sub || go (i + 1)) in go 0 in
+          has "E1003" && has "is not a type") ->
+      Printf.printf "REFUSED — %s\n" msg; Printf.printf "Status: PASS\n"; true
+  | Error msg -> Printf.printf "FAIL — refused for another reason: %s\n" msg; false
+  | Ok _ -> Printf.printf "FAIL — parsed\n"; false
 
 (* Test 68: parser — chained when/elif/otherwise parses without
  * ambiguity. Verifies the dangling-elif fix. *)

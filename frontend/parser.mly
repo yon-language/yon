@@ -336,10 +336,6 @@
  * wins over closing them, so a condition is as long as it can be. */
 %nonassoc LOWEST
 
-/* The level the path of a type, at LOWEST, is weighed against: the second `=`
- * of a = b = c is shifted, and that reaches the refusal that says why. */
-%nonassoc EQ
-
 /* A statement has no terminator, so a construct that may end with an
  * optional part meets the next token undecided. CLAUSE_END is the closing of
  * such a construct; the tokens below CONTINUE it, and continuing wins: the
@@ -354,7 +350,7 @@
  *     application belongs to the last operand / to the body;
  *   - `clear e`: reflexivity on e; bare `clear` only when no atom follows. */
 %nonassoc CLAUSE_END
-%nonassoc ON_ERROR LAW IN COMMA ARROW DOT IDENT QIDENT VIEW REDUCTION PRODUCE
+%nonassoc ON_ERROR LAW IN DOT IDENT QIDENT VIEW REDUCTION PRODUCE
           MOVE MORPH_KW FUNCTOR FUN DOTARROW
 /* From the weakest: <-> , -> , or, and, = and !=, @, |> , then the arithmetic. So
    x + 1 ↦ f is (x + 1) ↦ f, and true ↦ merid @ i is (true ↦ merid) @ i. */
@@ -608,7 +604,7 @@ morph_item:
    * { return expr }. *)
   | tag = IDENT kind = IDENT COLON FUN
     LPAREN params = param_list RPAREN
-    ret = option(return_type_decl)
+    ret = option(preceded(COLON, closed_type))
     FATARROW body_expr = expr
     { if tag <> "on" || kind <> "object" then
         failwith ("expected 'on object' clause in morph body, got '"
@@ -733,10 +729,20 @@ place_param:
   | x = IDENT                     { (x, None) }
   | x = IDENT COLON t = type_expr { (x, Some t) }
 
+(* The last parameter is closed by `>`: the endpoint of a bare path would take it as a comparison,
+   so a bare path is a parameter only before a comma. *)
+last_place_param:
+  | x = IDENT                       { (x, None) }
+  | x = IDENT COLON t = closed_type { (x, Some t) }
+
+place_param_list:
+  | p = last_place_param                           { [p] }
+  | p = place_param COMMA rest = place_param_list  { p :: rest }
+
 place_params:
   | (* empty *)                                        { (None, []) }
   | LT n = NUM_LIT GT                                  { (Some (int_of_float n), []) }
-  | LT ps = separated_nonempty_list(COMMA, place_param) GT
+  | LT ps = place_param_list GT
     { (None, ps) }
 
 (* `place Number carried by number { }` — the carrier clause: the place is the
@@ -1103,22 +1109,71 @@ lambda_param:
  * Syntax: T -> U -> V parses as T -> (U -> V) (right-associative). */
 type_expr:
   (* a path: the carrier is inferred from the endpoints (Tycheck.elaborate_id_sugar) *)
-  | PATH_TYPE x = expr EQ y = expr %prec LOWEST
+  | PATH_TYPE x = expr EQ y = expr
     { path_type x y }
   (* a path has two ends *)
   | PATH_TYPE x = expr EQ y = expr EQ z = expr
     { refuse_bare_meet [x; y; z];
       form_gone "a path has two ends: a = b = c has no reading in a type" }
+  | PATH_TYPE m = path_meet
+    { m }
+  | t = open_type
+    { t }
+  | t = arrow_type
+    { t }
+
+(* A type that does not end with the endpoint of a bare path, which would take a `>` or a `=>`
+   that follows as a comparison or an implication. *)
+(* before a `>` that closes, and before the `=>` of a lambda's body *)
+closed_type:
   (* a conjunction of paths: the meet is the product *)
   | PATH_TYPE m = path_meet
     { m }
-  | a = type_atom ARROW b = type_expr
-    { TyArrow (a, b) }
-  (* a product as a domain: the arguments of a fun *)
-  | LPAREN a = type_expr COMMA rest = separated_nonempty_list(COMMA, type_expr) RPAREN ARROW b = type_expr
-    { List.fold_right (fun d c -> TyArrow (d, c)) (a :: rest) b }
-  | a = type_atom %prec CLAUSE_END
+  | t = closed_open_type
+    { t }
+  | t = closed_arrow_type
+    { t }
+
+(* The same forms, closed: their last body is a closed type. *)
+closed_open_type:
+  | PI x = IDENT COLON a = type_expr COMMA b = closed_type
+    { TyPi (x, a, b) }
+  | SIGMA x = IDENT COLON a = type_expr COMMA b = closed_type
+    { TySigma (x, a, b) }
+
+closed_arrow_type:
+  | a = type_atom
     { a }
+  | a = arrow_domain ARROW b = closed_arrow_codomain
+    { TyArrow (a, b) }
+  | LPAREN a = type_expr COMMA rest = separated_nonempty_list(COMMA, type_expr) RPAREN ARROW b = closed_arrow_codomain
+    { List.fold_right (fun d c -> TyArrow (d, c)) (a :: rest) b }
+
+closed_arrow_codomain:
+  | t = closed_arrow_type { t }
+  | t = closed_open_type { t }
+
+(* The forms whose body extends to the right as far as it can: at the top of the types, and as
+   the codomain of an arrow. *)
+open_type:
+  | PI x = IDENT COLON a = type_expr COMMA b = type_expr
+    { TyPi (x, a, b) }
+  | SIGMA x = IDENT COLON a = type_expr COMMA b = type_expr
+    { TySigma (x, a, b) }
+
+(* The arrow, to the right: T -> U -> V is T -> (U -> V). The arguments of a fun are a product
+   as a domain, `(A, B) -> C`; the same parentheses with no arrow are the product. *)
+arrow_type:
+  | a = type_atom
+    { a }
+  | a = arrow_domain ARROW b = arrow_codomain
+    { TyArrow (a, b) }
+  | LPAREN a = type_expr COMMA rest = separated_nonempty_list(COMMA, type_expr) RPAREN ARROW b = arrow_codomain
+    { List.fold_right (fun d c -> TyArrow (d, c)) (a :: rest) b }
+
+arrow_codomain:
+  | t = arrow_type { t }
+  | t = open_type { t }
 
 (* (a = b) ∧ (c = d) in a type is the non-dependent product of the two paths: its
    values are built with pair and read with fst and snd. Left-associative, as ∧
@@ -1141,7 +1196,7 @@ named_type:
      List/Map/Wire map to their own nodes; any other name applied to
      arguments is a TyApp. Wrong arity on List/Map/Wire fails at parse
      time. *)
-  | name = IDENT LT args = separated_nonempty_list(COMMA, type_atom) GT
+  | name = IDENT LT args = type_argument_list GT
     { (* The container types ARE generics: List<T>, Map<K,V> and Wire<T>,
          the channel (what produce, spawn and a subscription give), have
          dedicated nodes. Wrong arity is an honest parse-time failure, not a
@@ -1175,7 +1230,32 @@ named_type:
             name (String.capitalize_ascii name))
       | None, _ -> TyUser name }
 
+(* An atom of a type: a domain of an arrow is one, but for the product, whose parentheses before an
+   arrow are the arguments of a fun. *)
+(* An argument of a type: an atom, or a Π or a Σ, whose body ends at the comma or at `>`; the last
+   is closed by `>`, which the endpoint of a bare path would take as a comparison. *)
+type_argument:
+  | t = type_atom { t }
+  | t = open_type { t }
+
+last_type_argument:
+  | t = type_atom { t }
+  | t = closed_open_type { t }
+
+type_argument_list:
+  | t = last_type_argument                            { [t] }
+  | t = type_argument COMMA rest = type_argument_list { t :: rest }
+
 type_atom:
+  | t = arrow_domain { t }
+  (* (K, V) is the non-dependent product, the Sigma whose fibre ignores its point: values
+     by pair, read by fst and snd. *)
+  | LPAREN a = type_expr COMMA rest = separated_nonempty_list(COMMA, type_expr) RPAREN
+    { match rest with
+      | [b] -> TySigma ("_", a, b)
+      | _ -> form_gone "a product has two components: (A, B, C) has no reading in a type, the components nest as (A, (B, C))" }
+
+arrow_domain:
   | TYPE_KW
     { TyUniverse 0 }
   | n = TYPE_LEVEL
@@ -1184,10 +1264,6 @@ type_atom:
     { form_gone "Pi(x: A). B is gone: a dependent function is written \xce\xa0x : A, B" }
   | SIGMA LPAREN
     { form_gone "Sigma(x: A). B is gone: a dependent pair is written \xce\xa3x : A, B" }
-  | PI x = IDENT COLON a = type_expr COMMA b = type_expr
-    { TyPi (x, a, b) }
-  | SIGMA x = IDENT COLON a = type_expr COMMA b = type_expr
-    { TySigma (x, a, b) }
   (* the old forms *)
   | ID LPAREN type_expr COMMA expr COMMA expr RPAREN
     { form_gone "the type of a path is written x = y: Id(A, x, y) is gone, its carrier is read off the endpoints" }
@@ -1198,8 +1274,8 @@ type_atom:
   | EL LPAREN c = expr RPAREN
     { TyEl (TyTermExpr c) }   (* c may be an APPLIED code El(Fam(x)), not just a bare name *)
   | t = named_type { t }
-  | name = IDENT IN ids = ident_list
-    { TyPrimIn (name, ids) }
+  | IDENT IN
+    { form_gone "`T in A, B` is not a type: a currency is a place, not an annotation on a type" }
   | first = IDENT PIPE rest = separated_nonempty_list(PIPE, variant)
     { TySum ({v_name = first; v_args = []} :: rest) }
   | name = IDENT LPAREN args = separated_list(COMMA, type_expr) RPAREN
@@ -1224,14 +1300,6 @@ type_atom:
     { TyViewHandle (Some p) }
   | LPAREN t = type_expr RPAREN
     { t }
-  (* (K, V) is the non-dependent product, the Sigma whose fibre ignores its point: values
-     by pair, read by fst and snd. Before an arrow the same parentheses are the arguments
-     of a fun: the arrow is shifted, because CLAUSE_END is weaker than ARROW. *)
-  | LPAREN a = type_expr COMMA rest = separated_nonempty_list(COMMA, type_expr) RPAREN
-    %prec CLAUSE_END
-    { match rest with
-      | [b] -> TySigma ("_", a, b)
-      | _ -> form_gone "a product has two components: (A, B, C) has no reading in a type, the components nest as (A, (B, C))" }
   (* Comprehension { x : A where P }: the subobject of A carved out by the
      mere-proposition fibre P (which may mention x). Desugars to the dependent
      pair Sigma(x:A). P, whose first projection is a mono exactly when P is a
@@ -1323,7 +1391,7 @@ field_path:
   | f = IDENT DOT rest = field_path                { f :: rest }
 
 ident_list:
-  | x = IDENT %prec CLAUSE_END                     { [x] }
+  | x = IDENT                                      { [x] }
   | x = IDENT COMMA rest = ident_list              { x :: rest }
 
 /* ─── Function declaration ──────────────────────────────────────────── */

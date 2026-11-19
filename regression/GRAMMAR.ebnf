@@ -50,8 +50,8 @@ morph_decl ::= MORPH_KW IDENT FROM IDENT TO IDENT LBRACE morph_item* RBRACE
 
 morph_item ::= IDENT IDENT LPAREN param_list RPAREN return_type_decl? LBRACE
                stmt* RBRACE
-             | IDENT IDENT COLON FUN LPAREN param_list RPAREN
-               return_type_decl? FATARROW expr
+             | IDENT IDENT COLON FUN LPAREN param_list RPAREN (COLON
+               closed_type)? FATARROW expr
              | IDENT MORPHISM_KW IDENT VIA_KW IDENT
              | LAW IDENT
 
@@ -77,9 +77,15 @@ place_kw ::= PLACE
 place_param ::= IDENT
               | IDENT COLON type_expr
 
+last_place_param ::= IDENT
+                   | IDENT COLON closed_type
+
+place_param_list ::= last_place_param
+                   | place_param COMMA place_param_list
+
 place_params ::= 
                | LT NUM_LIT GT
-               | LT place_param (COMMA place_param)* GT
+               | LT place_param_list GT
 
 carried_clause ::= CARRIED BY IDENT
 
@@ -174,10 +180,34 @@ lambda_param ::= IDENT COLON type_expr
 type_expr ::= PATH_TYPE expr EQ expr
             | PATH_TYPE expr EQ expr EQ expr
             | PATH_TYPE path_meet
-            | type_atom ARROW type_expr
-            | LPAREN type_expr COMMA type_expr (COMMA type_expr)* RPAREN
-              ARROW type_expr
-            | type_atom
+            | open_type
+            | arrow_type
+
+closed_type ::= PATH_TYPE path_meet
+              | closed_open_type
+              | closed_arrow_type
+
+closed_open_type ::= PI IDENT COLON type_expr COMMA closed_type
+                   | SIGMA IDENT COLON type_expr COMMA closed_type
+
+closed_arrow_type ::= type_atom
+                    | arrow_domain ARROW closed_arrow_codomain
+                    | LPAREN type_expr COMMA type_expr (COMMA type_expr)*
+                      RPAREN ARROW closed_arrow_codomain
+
+closed_arrow_codomain ::= closed_arrow_type
+                        | closed_open_type
+
+open_type ::= PI IDENT COLON type_expr COMMA type_expr
+            | SIGMA IDENT COLON type_expr COMMA type_expr
+
+arrow_type ::= type_atom
+             | arrow_domain ARROW arrow_codomain
+             | LPAREN type_expr COMMA type_expr (COMMA type_expr)* RPAREN
+               ARROW arrow_codomain
+
+arrow_codomain ::= arrow_type
+                 | open_type
 
 path_meet ::= parenthesized_path AMPAMPQ parenthesized_path
             | path_meet AMPAMPQ parenthesized_path
@@ -185,33 +215,42 @@ path_meet ::= parenthesized_path AMPAMPQ parenthesized_path
 parenthesized_path ::= LPAREN expr EQ expr RPAREN
 
 named_type ::= IDENT DOT IDENT
-             | IDENT LT type_atom (COMMA type_atom)* GT
+             | IDENT LT type_argument_list GT
              | IDENT
 
-type_atom ::= TYPE_KW
-            | TYPE_LEVEL
-            | PI LPAREN
-            | SIGMA LPAREN
-            | PI IDENT COLON type_expr COMMA type_expr
-            | SIGMA IDENT COLON type_expr COMMA type_expr
-            | ID LPAREN type_expr COMMA expr COMMA expr RPAREN
-            | SAME LPAREN expr COMMA expr RPAREN
-            | PATHP LPAREN IDENT COMMA type_expr COMMA IDENT COMMA IDENT
-              RPAREN
-            | EL LPAREN expr RPAREN
-            | named_type
-            | IDENT IN ident_list
-            | IDENT PIPE variant (PIPE variant)*
-            | IDENT LPAREN (type_expr (COMMA type_expr)*)? RPAREN PIPE
-              variant (PIPE variant)*
-            | HEYT_INT_KW LT NUM_LIT GT
-            | MOVE FROM IDENT TO IDENT
-            | REDUCTION OF IDENT
-            | MORPH_KW FROM IDENT TO IDENT
-            | VIEW OF IDENT
-            | LPAREN type_expr RPAREN
+type_argument ::= type_atom
+                | open_type
+
+last_type_argument ::= type_atom
+                     | closed_open_type
+
+type_argument_list ::= last_type_argument
+                     | type_argument COMMA type_argument_list
+
+type_atom ::= arrow_domain
             | LPAREN type_expr COMMA type_expr (COMMA type_expr)* RPAREN
-            | LBRACE IDENT COLON type_expr WHERE type_expr RBRACE
+
+arrow_domain ::= TYPE_KW
+               | TYPE_LEVEL
+               | PI LPAREN
+               | SIGMA LPAREN
+               | ID LPAREN type_expr COMMA expr COMMA expr RPAREN
+               | SAME LPAREN expr COMMA expr RPAREN
+               | PATHP LPAREN IDENT COMMA type_expr COMMA IDENT COMMA IDENT
+                 RPAREN
+               | EL LPAREN expr RPAREN
+               | named_type
+               | IDENT IN
+               | IDENT PIPE variant (PIPE variant)*
+               | IDENT LPAREN (type_expr (COMMA type_expr)*)? RPAREN PIPE
+                 variant (PIPE variant)*
+               | HEYT_INT_KW LT NUM_LIT GT
+               | MOVE FROM IDENT TO IDENT
+               | REDUCTION OF IDENT
+               | MORPH_KW FROM IDENT TO IDENT
+               | VIEW OF IDENT
+               | LPAREN type_expr RPAREN
+               | LBRACE IDENT COLON type_expr WHERE type_expr RBRACE
 
 hit_branch ::= IDENT FATARROW expr
              | IDENT AS IDENT FATARROW expr
