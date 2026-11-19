@@ -7551,6 +7551,16 @@ double yon_rt_bits_fold(double value_d, double op_id_d, double init_d) {
 }
 
 /* Time */
+/* The clock of the nanoseconds: on macOS CLOCK_MONOTONIC counts whole
+ * microseconds, CLOCK_MONOTONIC_RAW counts the ticks of the machine (tens of
+ * nanoseconds); elsewhere CLOCK_MONOTONIC already counts nanoseconds. */
+#ifndef YON_CLOCK_MONOTONIC_NS
+#if defined(__APPLE__)
+#define YON_CLOCK_MONOTONIC_NS CLOCK_MONOTONIC_RAW
+#else
+#define YON_CLOCK_MONOTONIC_NS CLOCK_MONOTONIC
+#endif
+#endif
 double yon_rt_time_now_ms(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -7559,7 +7569,7 @@ double yon_rt_time_now_ms(void) {
 
 double yon_rt_time_now_ns(void) {
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+    clock_gettime(YON_CLOCK_MONOTONIC_NS, &ts);
     return (double)(ts.tv_sec * 1000000000ull + ts.tv_nsec);
 }
 

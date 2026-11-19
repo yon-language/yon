@@ -260,7 +260,13 @@ static int64_t yon_sys_clock(clockid_t c) {
     return (int64_t)ts.tv_sec * 1000000000 + (int64_t)ts.tv_nsec;
 }
 
+/* on macOS CLOCK_MONOTONIC counts whole microseconds; CLOCK_MONOTONIC_RAW
+ * counts the ticks of the machine */
+#if defined(__APPLE__)
+int64_t yon_rt_sys_monotonic_ns(void) { return yon_sys_clock(CLOCK_MONOTONIC_RAW); }
+#else
 int64_t yon_rt_sys_monotonic_ns(void) { return yon_sys_clock(CLOCK_MONOTONIC); }
+#endif
 int64_t yon_rt_sys_wall_ns(void) { return yon_sys_clock(CLOCK_REALTIME); }
 
 /* ─── The standard streams ───────────────────────────────────────────── */
