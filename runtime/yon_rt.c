@@ -1732,6 +1732,21 @@ double Stream__close(double s)       { return (double)yon_rt_stream_close((uint3
  * process boundary. SHM is same-machine only. */
 
 
+/* The doorbell of a channel (runtime/yon_sys.c, beside the wait on a word):
+ * a count that changes at every ring, the number of its sleepers, and the
+ * condition shared between processes where the system has no wait on a word. */
+typedef struct {
+    uint32_t count;
+    uint32_t sleepers;
+    pthread_mutex_t mu;
+    pthread_cond_t cv;
+} yon_bell_t;
+int      yon_bell_init(yon_bell_t *b);
+uint32_t yon_bell_count(yon_bell_t *b);
+int      yon_bell_wait(yon_bell_t *b, uint32_t seen, int64_t deadline_ns);
+void     yon_bell_ring(yon_bell_t *b);
+int64_t  yon_bell_deadline_ms(uint32_t ms);
+
 /* Layout of the shared region: a fixed header followed by the ring buffer.
  * All fields are plain integers/bytes (no pointers) so the region is
  * position-independent across processes. */
@@ -1748,6 +1763,8 @@ typedef struct {
                             * processes. flock() on an shm fd does not serialize
                             * across processes on macOS, so a mutex is used.
                             * Inited by the creator, used by every attacher. */
+    yon_bell_t filled;     /* rung when a value goes in, and at the close */
+    yon_bell_t drained;    /* rung when a value comes out */
     /* ring buffer bytes follow immediately after this header */
 } yon_shm_stream_hdr_t;
 
@@ -1757,8 +1774,22 @@ typedef struct {
 /* Bounded acquire of the header mutex. Robust mutexes are absent on macOS, so a
  * peer that dies holding the lock must not hang us forever: trylock in a 1ms
  * poll up to the bound. 0 = locked, -1 = timeout/corrupt. Mirrors the discipline
- * of yon_rpc2_lock_timed used by the spawn-collect queue. */
+ * of yon_rpc2_lock_timed used by the spawn-collect queue. The lock is held for
+ * the copy of one value, so a lock found taken is tried again at once for
+ * YON_SHM_LOCK_SPINS turns before the first sleep: a sleep of 1 ms would cost a
+ * round trip of the wire thousands of times its length. */
+#define YON_SHM_LOCK_SPINS 4096u
 static int yon_shm_hdr_lock(pthread_mutex_t *mu) {
+    for (uint32_t i = 0; i < YON_SHM_LOCK_SPINS; i++) {
+        int rc = pthread_mutex_trylock(mu);
+        if (rc == 0) return 0;
+        if (rc != EBUSY) return -1;
+#if defined(__aarch64__)
+        __asm__ __volatile__("yield");
+#elif defined(__x86_64__) || defined(__i386__)
+        __asm__ __volatile__("pause");
+#endif
+    }
     for (uint32_t i = 0; i < YON_SHM_LOCK_MS; i++) {
         int rc = pthread_mutex_trylock(mu);
         if (rc == 0) return 0;
@@ -1831,6 +1862,12 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
         pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED);
         pthread_mutex_init(&hdr->mu, &ma);
         pthread_mutexattr_destroy(&ma);
+        if (yon_bell_init(&hdr->filled) != 0 || yon_bell_init(&hdr->drained) != 0) {
+            munmap(region, region_size);
+            close(fd);
+            shm_unlink(shm_name);
+            return NULL;
+        }
         hdr->slot_size = slot_size;
         hdr->capacity = capacity;
         hdr->head = 0; hdr->tail = 0; hdr->count = 0;
@@ -1873,6 +1910,7 @@ int yon_rt_stream_shm_emit(yon_shm_stream_t *s, const void *value_ptr) {
         rc = 0;
     }
     pthread_mutex_unlock(&hdr->mu);
+    if (rc == 0) yon_bell_ring(&hdr->filled);
     return rc;
 }
 
@@ -1893,26 +1931,28 @@ int yon_rt_stream_shm_await(yon_shm_stream_t *s, void *out_ptr) {
         rc = 0;
     }
     pthread_mutex_unlock(&hdr->mu);
+    if (rc == 0) yon_bell_ring(&hdr->drained);
     return rc;
 }
 
 /* ---- (3) Back-pressure: blocking variants. produce_blocking waits until there
  * is room (the consumer has drained enough); await_blocking waits until a value
- * is present. We poll with a short sleep + a bounded number of attempts so a
- * dead peer cannot hang forever (timeout -> -1). This realizes the L2 semantics
- * the code anticipated ("In L2+ produce attendera' ack del consumer"): produce
- * no longer drops on full, it back-pressures the producer. ---- */
-#define YON_SHM_POLL_USEC   1000      /* 1ms between polls */
-#define YON_SHM_MAX_POLLS   60000     /* ~60s bound */
+ * is present. The wait is on the doorbells of the header: who waits reads the
+ * bell, tries, and if it must wait sleeps until the bell changes (a short spin
+ * first, then asleep on the bell, yon_bell_wait); who sends or takes rings.
+ * A dead peer cannot hang us forever: a wait ends after YON_SHM_WAIT_MS
+ * (-1, timeout). ---- */
+#define YON_SHM_WAIT_MS   60000u      /* the bound of a blocking wait: 60 s */
 
 int yon_rt_stream_shm_produce_blocking(yon_shm_stream_t *s, const void *value_ptr) {
     if (!s) return -1;
-    for (uint32_t i = 0; i < YON_SHM_MAX_POLLS; i++) {
-        int rc = yon_rt_stream_shm_emit(s, value_ptr);
-        if (rc == 0) return 0;          /* sent */
-        usleep(YON_SHM_POLL_USEC);      /* full: back-pressure, wait for room */
+    yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
+    int64_t deadline = yon_bell_deadline_ms(YON_SHM_WAIT_MS);
+    for (;;) {
+        uint32_t seen = yon_bell_count(&hdr->drained);
+        if (yon_rt_stream_shm_emit(s, value_ptr) == 0) return 0;      /* sent */
+        if (yon_bell_wait(&hdr->drained, seen, deadline) == 2) return -1;   /* timed out */
     }
-    return -1;                          /* timed out */
 }
 
 /* The consumer is the last to need a stream's name: at the end of the stream,
@@ -1926,7 +1966,9 @@ static int yon_shm_consumer_done(yon_shm_stream_t *s, int rc) {
 int yon_rt_stream_shm_await_blocking(yon_shm_stream_t *s, void *out_ptr) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
-    for (uint32_t i = 0; i < YON_SHM_MAX_POLLS; i++) {
+    int64_t deadline = yon_bell_deadline_ms(YON_SHM_WAIT_MS);
+    for (;;) {
+        uint32_t seen = yon_bell_count(&hdr->filled);
         int rc = yon_rt_stream_shm_await(s, out_ptr);
         if (rc == 0) return 0;          /* got a value */
         /* If the producer has closed and the buffer is drained, this is a clean
@@ -1937,9 +1979,9 @@ int yon_rt_stream_shm_await_blocking(yon_shm_stream_t *s, void *out_ptr) {
             pthread_mutex_unlock(&hdr->mu);
             if (eof) return yon_shm_consumer_done(s, -2);   /* EOF: closed + empty */
         }
-        usleep(YON_SHM_POLL_USEC);      /* empty but open: wait for a value */
+        if (yon_bell_wait(&hdr->filled, seen, deadline) == 2)  /* empty but open */
+            return yon_shm_consumer_done(s, -1);   /* timed out (peer alive but silent) */
     }
-    return yon_shm_consumer_done(s, -1);   /* timed out (peer alive but silent) */
 }
 
 /* Producer announces it will send no more: a clean shutdown so consumers can
@@ -1968,6 +2010,7 @@ int yon_rt_stream_shm_close_write(yon_shm_stream_t *s) {
     if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     hdr->closed = 1;
     pthread_mutex_unlock(&hdr->mu);
+    yon_bell_ring(&hdr->filled);   /* a consumer asleep on an empty ring sees the end */
     return 0;
 }
 
@@ -2043,6 +2086,7 @@ static int shm_emit_piece(yon_shm_stream_t *s, const void *piece, uint32_t n,
         rc = 0;
     }
     pthread_mutex_unlock(&hdr->mu);
+    if (rc == 0) yon_bell_ring(&hdr->filled);
     return rc;
 }
 
@@ -2077,6 +2121,7 @@ static int shm_await_piece(yon_shm_stream_t *s, yon_wire_buf_t *b, int *more) {
         }
     }
     pthread_mutex_unlock(&hdr->mu);
+    if (rc == 0) yon_bell_ring(&hdr->drained);
     return rc;
 }
 
@@ -2084,15 +2129,17 @@ static int shm_await_piece(yon_shm_stream_t *s, yon_wire_buf_t *b, int *more) {
 int yon_rt_stream_shm_send_message(yon_shm_stream_t *s, const void *msg, size_t len) {
     if (!s) return -1;
     const uint8_t *p = (const uint8_t *)msg;
+    yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
+    int64_t deadline = yon_bell_deadline_ms(YON_SHM_WAIT_MS);
     size_t off = 0;
     do {
         uint32_t n = (uint32_t)(len - off < YON_PIECE_BYTES ? len - off : YON_PIECE_BYTES);
         int more = off + n < len;
-        uint32_t i = 0;
         int rc;
-        while ((rc = shm_emit_piece(s, p + off, n, more)) == -1) {
-            if (++i >= YON_SHM_MAX_POLLS) return -1;
-            usleep(YON_SHM_POLL_USEC);            /* full: back-pressure */
+        for (;;) {
+            uint32_t seen = yon_bell_count(&hdr->drained);
+            if ((rc = shm_emit_piece(s, p + off, n, more)) != -1) break;
+            if (yon_bell_wait(&hdr->drained, seen, deadline) == 2) return -1;  /* full */
         }
         if (rc != 0) return -1;
         off += n;
@@ -2105,13 +2152,16 @@ int yon_rt_stream_shm_send_message(yon_shm_stream_t *s, const void *msg, size_t 
 int yon_rt_stream_shm_recv_message(yon_shm_stream_t *s, yon_wire_buf_t *b) {
     if (!s) return -1;
     b->len = 0;
+    yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
+    int64_t deadline = yon_bell_deadline_ms(YON_SHM_WAIT_MS);
     int more = 1;
     while (more) {
-        uint32_t i = 0;
         int rc;
-        while ((rc = shm_await_piece(s, b, &more)) == -1) {
-            if (++i >= YON_SHM_MAX_POLLS) return yon_shm_consumer_done(s, -1);
-            usleep(YON_SHM_POLL_USEC);            /* empty but open: wait */
+        for (;;) {
+            uint32_t seen = yon_bell_count(&hdr->filled);
+            if ((rc = shm_await_piece(s, b, &more)) != -1) break;
+            if (yon_bell_wait(&hdr->filled, seen, deadline) == 2)   /* empty but open */
+                return yon_shm_consumer_done(s, -1);
         }
         if (rc == -2 && b->len != 0) return yon_shm_consumer_done(s, -3);  /* cut */
         if (rc != 0) return yon_shm_consumer_done(s, rc);

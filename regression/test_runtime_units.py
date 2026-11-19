@@ -86,6 +86,11 @@ C_UNIT_TESTS = [
     # mutex serializes head/tail/count where flock() on an shm fd did not on
     # macOS. Self-provides __yon_dispatch -> no shared stub.
     ("wire_race",     "test_unit_wire_race.c",    b"WIRE_RACE: PASS",     False),
+    # The doorbell of the wire: two processes play ping-pong on two bells in
+    # shared memory, on the wait on a word of this system and on the condition
+    # shared between processes, with rings that come after the spin; a ring
+    # before the wait is not missed; a wait nobody rings ends at its deadline.
+    ("bell",          "test_unit_bell.c",         b"BELL: PASS",          True),
     # A channel opened again by its id keeps one mapping: the server of a typed
     # call attaches the rings of a session at every call, and a new session
     # must still find handles for its own rings after any number of calls.

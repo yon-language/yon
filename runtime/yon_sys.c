@@ -25,29 +25,20 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <time.h>
+#include <pthread.h>
 #if defined(__APPLE__)
-/* The wait on a word on macOS is os_sync_wait_on_address, the system's
- * public primitive, from macOS 14.4 on: it is used when the build's minimum
- * target is at least 14.4. Below that the fallback is __ulock_wait /
- * __ulock_wake, the kernel's compare-and-wait under it, which libc++ uses for
- * atomic wait: not a public interface, declared here by hand. Both wait on
- * the word shared between processes and compare its low 32 bits. */
-#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) \
-    && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 140400 \
-    && defined(__has_include)
+/* The wait on a word on macOS is os_sync_wait_on_address, the system's public
+ * primitive, from macOS 14.4 on; the runtime asks the system whether it has it
+ * (__builtin_available) rather than trusting the build's minimum target. Where
+ * it is missing, the doorbell of the wire waits on a condition shared between
+ * the processes, and the wait on a word of SystemOs looks at the word again
+ * after a short sleep. No private interface of the kernel is used. */
+#if defined(__has_include)
 #if __has_include(<os/os_sync_wait_on_address.h>)
 #define YON_OS_SYNC 1
 #include <os/os_sync_wait_on_address.h>
 #include <os/clock.h>
 #endif
-#endif
-#ifndef YON_OS_SYNC
-extern int __ulock_wait(uint32_t operation, void *addr, uint64_t value,
-                        uint32_t timeout_us);
-extern int __ulock_wake(uint32_t operation, void *addr, uint64_t wake_value);
-#define YON_UL_COMPARE_AND_WAIT_SHARED 3u
-#define YON_ULF_WAKE_ALL               0x00000100u
-#define YON_ULF_NO_ERRNO               0x01000000u
 #endif
 #elif defined(__linux__)
 #include <linux/futex.h>
@@ -190,43 +181,98 @@ double yon_rt_sys_shared_remove(double name_d) {
 }
 
 /* ─── The wait on a word ─────────────────────────────────────────────── */
-/* The kernel compares the low 32 bits of the word (the width every kernel
- * waits on); the prelude keeps the expected value inside them. The answer:
- * 0 woken (the word changed, or a wake came), 1 the word was not the
- * expected value, 2 the time ran out. */
+/* One interface for every wait of the runtime on a word shared between
+ * processes: yon_word_wait sleeps while the low 32 bits of the word are the
+ * expected value, until a wake, the end of the time, or a spurious return;
+ * yon_word_wake wakes every sleeper. The kernel's primitive: the futex on
+ * Linux, os_sync_wait_on_address on macOS (both on memory shared between
+ * processes). The answer of a wait: 0 woken (or the word changed), 2 the time
+ * ran out, -1 the system has no wait on a word (macOS before 14.4). */
+
+static int yon_word_wait_available(void) {
+#if defined(__APPLE__) && defined(YON_OS_SYNC)
+    if (__builtin_available(macOS 14.4, *)) return 1;
+    return 0;
+#elif defined(__APPLE__)
+    return 0;
+#elif defined(__linux__)
+    return 1;
+#else
+#error "the wait on a word needs a kernel primitive on this platform"
+#endif
+}
+
+/* timeout_ns < 0: no end */
+static int yon_word_wait(uint32_t *w, uint32_t expected, int64_t timeout_ns) {
+#if defined(__APPLE__) && defined(YON_OS_SYNC)
+    if (__builtin_available(macOS 14.4, *)) {
+        int rc = timeout_ns >= 0
+            ? os_sync_wait_on_address_with_timeout(w, (uint64_t)expected, 4,
+                  OS_SYNC_WAIT_ON_ADDRESS_SHARED, OS_CLOCK_MACH_ABSOLUTE_TIME,
+                  (uint64_t)(timeout_ns > 0 ? timeout_ns : 1))
+            : os_sync_wait_on_address(w, (uint64_t)expected, 4,
+                  OS_SYNC_WAIT_ON_ADDRESS_SHARED);
+        return (rc < 0 && errno == ETIMEDOUT) ? 2 : 0;
+    }
+    return -1;
+#elif defined(__APPLE__)
+    (void)w; (void)expected; (void)timeout_ns;
+    return -1;
+#elif defined(__linux__)
+    struct timespec ts, *tp = NULL;
+    if (timeout_ns >= 0) {
+        ts.tv_sec = timeout_ns / 1000000000; ts.tv_nsec = timeout_ns % 1000000000; tp = &ts;
+    }
+    long rc = syscall(SYS_futex, w, FUTEX_WAIT, expected, tp, NULL, 0);
+    return (rc != 0 && errno == ETIMEDOUT) ? 2 : 0;
+#endif
+}
+
+/* how many sleepers the kernel reports woken (macOS says only whether one was
+ * there: 1 or 0); -1 the system has no wait on a word */
+static int yon_word_wake(uint32_t *w) {
+#if defined(__APPLE__) && defined(YON_OS_SYNC)
+    if (__builtin_available(macOS 14.4, *))
+        return os_sync_wake_by_address_all(w, 4, OS_SYNC_WAKE_BY_ADDRESS_SHARED) == 0 ? 1 : 0;
+    return -1;
+#elif defined(__APPLE__)
+    (void)w;
+    return -1;
+#elif defined(__linux__)
+    long rc = syscall(SYS_futex, w, FUTEX_WAKE, INT32_MAX, NULL, NULL, 0);
+    return rc < 0 ? 0 : (int)rc;
+#endif
+}
+
+static int64_t yon_word_now_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000 + (int64_t)ts.tv_nsec;
+}
+
+/* The wait on a word of SystemOs. The kernel compares the low 32 bits of the
+ * word (the width every kernel waits on); the prelude keeps the expected value
+ * inside them. The answer: 0 woken (the word changed, or a wake came), 1 the
+ * word was not the expected value, 2 the time ran out. Where the system has no
+ * wait on a word, the word is looked at again every YON_WORD_LOOK_NS: the same
+ * answers, later. */
+#define YON_WORD_LOOK_NS 50000
 
 static double yon_sys_wait(int64_t r, int64_t at, int64_t expected,
                            int timed, int64_t timeout_ns) {
     int64_t *w = yon_sys_header(r) + 1 + at;
     if (__atomic_load_n(w, __ATOMIC_SEQ_CST) != expected) return 1.0;
-#if defined(__APPLE__) && defined(YON_OS_SYNC)
-    int rc = timed
-        ? os_sync_wait_on_address_with_timeout(w, (uint64_t)(uint32_t)expected, 4,
-              OS_SYNC_WAIT_ON_ADDRESS_SHARED, OS_CLOCK_MACH_ABSOLUTE_TIME,
-              (uint64_t)timeout_ns)
-        : os_sync_wait_on_address(w, (uint64_t)(uint32_t)expected, 4,
-              OS_SYNC_WAIT_ON_ADDRESS_SHARED);
-    if (rc < 0 && errno == ETIMEDOUT) return 2.0;
-    return 0.0;
-#elif defined(__APPLE__)
-    uint32_t us = 0;
-    if (timed) {
-        int64_t q = timeout_ns / 1000;
-        us = (uint32_t)(q < 1 ? 1 : q);
+    if (yon_word_wait_available()) {
+        int rc = yon_word_wait((uint32_t *)w, (uint32_t)expected, timed ? timeout_ns : -1);
+        return rc == 2 ? 2.0 : 0.0;
     }
-    int rc = __ulock_wait(YON_UL_COMPARE_AND_WAIT_SHARED | YON_ULF_NO_ERRNO,
-                          w, (uint64_t)(uint32_t)expected, us);
-    if (rc == -ETIMEDOUT) return 2.0;
-    return 0.0;
-#elif defined(__linux__)
-    struct timespec ts, *tp = NULL;
-    if (timed) { ts.tv_sec = timeout_ns / 1000000000; ts.tv_nsec = timeout_ns % 1000000000; tp = &ts; }
-    long rc = syscall(SYS_futex, (uint32_t *)w, FUTEX_WAIT, (uint32_t)expected, tp, NULL, 0);
-    if (rc != 0 && errno == ETIMEDOUT) return 2.0;
-    return 0.0;
-#else
-#error "the wait on a word needs a kernel primitive on this platform"
-#endif
+    int64_t end = timed ? yon_word_now_ns() + timeout_ns : 0;
+    for (;;) {
+        struct timespec ts = { 0, YON_WORD_LOOK_NS };
+        nanosleep(&ts, NULL);
+        if (__atomic_load_n(w, __ATOMIC_SEQ_CST) != expected) return 0.0;
+        if (timed && yon_word_now_ns() >= end) return 2.0;
+    }
 }
 
 double yon_rt_sys_wait(int64_t r, int64_t at, int64_t expected) {
@@ -238,18 +284,134 @@ double yon_rt_sys_wait_for(int64_t r, int64_t at, int64_t expected, int64_t time
 }
 
 /* wakes the waiters on the word; the answer is how many the kernel reports
- * (macOS says only whether one was there: 1 or 0) */
+ * (macOS says only whether one was there: 1 or 0); where the system has no wait
+ * on a word the waiters look at the word themselves, and the answer is 0 */
 double yon_rt_sys_wake(int64_t r, int64_t at) {
     int64_t *w = yon_sys_header(r) + 1 + at;
-#if defined(__APPLE__) && defined(YON_OS_SYNC)
-    return os_sync_wake_by_address_all(w, 4, OS_SYNC_WAKE_BY_ADDRESS_SHARED) == 0 ? 1.0 : 0.0;
-#elif defined(__APPLE__)
-    int rc = __ulock_wake(YON_UL_COMPARE_AND_WAIT_SHARED | YON_ULF_WAKE_ALL | YON_ULF_NO_ERRNO, w, 0);
-    return rc == 0 ? 1.0 : 0.0;
-#elif defined(__linux__)
-    long rc = syscall(SYS_futex, (uint32_t *)w, FUTEX_WAKE, INT32_MAX, NULL, NULL, 0);
-    return rc < 0 ? 0.0 : (double)rc;
+    int n = yon_word_wake((uint32_t *)w);
+    return n < 0 ? 0.0 : (double)n;
+}
+
+/* ─── The doorbell of the wire ───────────────────────────────────────── */
+/* A doorbell lives in memory shared between processes (the header of a
+ * channel). Who waits reads the bell's count, tries what it waits for, and if
+ * it must wait, waits for the count to change: first a short spin on the
+ * count, then asleep on it. Who rings changes the count, and wakes the
+ * sleepers only if there is one. The order of the two sides (the sleeper
+ * counts itself, then reads the count; the ringer changes the count, then
+ * reads the sleepers; all sequentially consistent) leaves no wake lost. Where
+ * the system has no wait on a word, the sleep is on the bell's condition,
+ * shared between the processes. */
+
+/* How long a waiter spins on the count before it sleeps. The rule of the
+ * waits in two phases: spin for as long as a sleep and its wake cost, so the
+ * wait costs at most twice the best of the two (Karlin, Li, Manasse, Owicki,
+ * SOSP 1991). Measured on the round trip of the wire
+ * (tools/bench/wire_pingpong.py): asleep at once, a round trip costs about
+ * 5 us more than when the answer is caught spinning; with a spin of 5 us the
+ * p99 of the round trip is the p50's, and a longer spin buys nothing. */
+#ifndef YON_BELL_SPIN_NS
+#define YON_BELL_SPIN_NS 5000
 #endif
+
+/* the fallback of the condition is forced by the unit test of the bell, so
+ * the path of the systems without a wait on a word runs on every machine */
+int yon_bell_force_condition = 0;
+
+static int yon_bell_on_word(void) {
+    return !yon_bell_force_condition && yon_word_wait_available();
+}
+
+const char *yon_rt_wait_mechanism(void) {
+    if (!yon_bell_on_word()) return "the condition shared between processes";
+#if defined(__APPLE__)
+    return "os_sync_wait_on_address";
+#else
+    return "futex";
+#endif
+}
+
+size_t yon_bell_size(void) { return sizeof(yon_bell_t); }
+
+int yon_bell_init(yon_bell_t *b) {
+    __atomic_store_n(&b->count, 0u, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&b->sleepers, 0u, __ATOMIC_SEQ_CST);
+    pthread_mutexattr_t ma;
+    pthread_condattr_t ca;
+    if (pthread_mutexattr_init(&ma) != 0) return -1;
+    pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED);
+    int rc = pthread_mutex_init(&b->mu, &ma);
+    pthread_mutexattr_destroy(&ma);
+    if (rc != 0) return -1;
+    if (pthread_condattr_init(&ca) != 0) return -1;
+    pthread_condattr_setpshared(&ca, PTHREAD_PROCESS_SHARED);
+    rc = pthread_cond_init(&b->cv, &ca);
+    pthread_condattr_destroy(&ca);
+    return rc == 0 ? 0 : -1;
+}
+
+uint32_t yon_bell_count(yon_bell_t *b) {
+    return __atomic_load_n(&b->count, __ATOMIC_SEQ_CST);
+}
+
+static inline void yon_bell_relax(void) {
+#if defined(__aarch64__)
+    __asm__ __volatile__("yield");
+#elif defined(__x86_64__) || defined(__i386__)
+    __asm__ __volatile__("pause");
+#endif
+}
+
+/* Waits for the count to differ from `seen`, until `deadline_ns` (on
+ * yon_word_now_ns). 0 the count changed (or a spurious wake: the caller tries
+ * again), 2 the time ran out. */
+int yon_bell_wait(yon_bell_t *b, uint32_t seen, int64_t deadline_ns) {
+    if (YON_BELL_SPIN_NS > 0) {
+        int64_t end = yon_word_now_ns() + YON_BELL_SPIN_NS;
+        for (uint32_t i = 1;; i++) {
+            if (__atomic_load_n(&b->count, __ATOMIC_ACQUIRE) != seen) return 0;
+            yon_bell_relax();
+            if ((i & 63u) == 0 && yon_word_now_ns() >= end) break;
+        }
+    }
+    int64_t left = deadline_ns - yon_word_now_ns();
+    if (left <= 0) return 2;
+    __atomic_fetch_add(&b->sleepers, 1u, __ATOMIC_SEQ_CST);
+    int rc = 0;
+    if (__atomic_load_n(&b->count, __ATOMIC_SEQ_CST) == seen) {
+        if (yon_bell_on_word()) {
+            rc = yon_word_wait(&b->count, seen, left);
+        } else if (pthread_mutex_lock(&b->mu) == 0) {
+            struct timespec now, abs;
+            clock_gettime(CLOCK_REALTIME, &now);
+            int64_t t = (int64_t)now.tv_nsec + left % 1000000000;
+            abs.tv_sec = now.tv_sec + (time_t)(left / 1000000000) + (time_t)(t / 1000000000);
+            abs.tv_nsec = (long)(t % 1000000000);
+            while (__atomic_load_n(&b->count, __ATOMIC_SEQ_CST) == seen) {
+                if (pthread_cond_timedwait(&b->cv, &b->mu, &abs) == ETIMEDOUT) { rc = 2; break; }
+            }
+            pthread_mutex_unlock(&b->mu);
+        }
+    }
+    __atomic_fetch_sub(&b->sleepers, 1u, __ATOMIC_SEQ_CST);
+    if (rc == 2 && __atomic_load_n(&b->count, __ATOMIC_SEQ_CST) != seen) rc = 0;
+    return rc;
+}
+
+void yon_bell_ring(yon_bell_t *b) {
+    __atomic_fetch_add(&b->count, 1u, __ATOMIC_SEQ_CST);
+    if (__atomic_load_n(&b->sleepers, __ATOMIC_SEQ_CST) == 0u) return;
+    if (yon_bell_on_word()) {
+        yon_word_wake(&b->count);
+    } else if (pthread_mutex_lock(&b->mu) == 0) {
+        pthread_cond_broadcast(&b->cv);
+        pthread_mutex_unlock(&b->mu);
+    }
+}
+
+/* the deadline of a wait that starts now and lasts `ms` milliseconds */
+int64_t yon_bell_deadline_ms(uint32_t ms) {
+    return yon_word_now_ns() + (int64_t)ms * 1000000;
 }
 
 /* ─── Clocks ─────────────────────────────────────────────────────────── */
