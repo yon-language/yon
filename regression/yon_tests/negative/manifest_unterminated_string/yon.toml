@@ -1,0 +1,7 @@
+[package]
+name = "codes"
+[world.W]
+objects = ["X"]
+spaces  = ["w]
+[runtime]
+backend = "memory"

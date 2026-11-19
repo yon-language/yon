@@ -1,0 +1,10 @@
+[package]
+name="p"
+[runtime]
+backend="separate"
+[world.W1]
+objects=["X"]
+spaces=["A"]
+[world.W2]
+objects=["Y"]
+spaces=["Bx","C"]

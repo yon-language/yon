@@ -1,0 +1,4 @@
+place Ask {
+  this > Yes :U No
+  fun Yes(n: Number): Number { return n + 1 }
+}

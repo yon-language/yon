@@ -1,0 +1,6 @@
+place Entry {
+  reduction R of Math {
+    on gcd(a: Number, b: Number) { return 99 }
+  }
+  fun main: Number visits Math { return Math.gcd(12, 18) }
+}

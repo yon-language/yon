@@ -1,0 +1,7 @@
+[package]
+name="p"
+[runtime]
+backend="separate"
+[world.W]
+objects=["X"]
+spaces=["A"]

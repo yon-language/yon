@@ -1,0 +1,8 @@
+place Entry {
+  fun plus(a: Nat, b: Nat): Nat {
+    return match a { zero => b, succ as n => (n, b) ↦ plus ↪ succ }
+  }
+  fun s_(n: Nat): Nat { return n ↪ succ }
+  proof fun giro(n: Nat): Nat { return giro(n) }
+  fun main: Number { return 0 }
+}

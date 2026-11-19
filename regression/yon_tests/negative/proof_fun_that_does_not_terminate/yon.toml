@@ -1,0 +1,9 @@
+[package]
+name = "nat"
+
+[world.W]
+objects = ["Nat"]
+spaces = ["w"]
+
+[runtime]
+backend = "memory"

@@ -1,0 +1,4 @@
+place Math {
+  count Number
+  operation gcd(a: Number, b: Number): Number
+}

@@ -1,0 +1,9 @@
+[package]
+name = "drop_reclaim"
+
+[runtime]
+backend = "separate"
+
+[world.W]
+objects = ["X"]
+spaces  = ["D"]

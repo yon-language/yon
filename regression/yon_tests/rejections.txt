@@ -43,3 +43,24 @@ regression/yon_tests/negative/neg_return_tail_mismatch.yon | E2001 | function de
 regression/yon_tests/negative/neg_return_type_mismatch.yon | E2001 | type mismatch: expected Number, got Text
 regression/yon_tests/negative/neg_unknown_var.yon | E2001 | unknown identifier: nonexistent
 regression/yon_tests/negative/sum_payload_wrong_type.yon | E2001 | type mismatch: expected Number, got Text
+
+# --- one fixture per code of the registry (frontend/error_codes.ml): the producer of each
+#     code is a fixture the suite runs, never a test that names the code
+regression/yon_tests/negative/return_outside_the_tail | E2002 | this `return` is not at the end of its body
+regression/yon_tests/negative/operation_without_a_handler | E2003 | main calls the operation Counter.tick, but no reduction of Counter handles it
+regression/yon_tests/negative/shared_arm_without_an_expected_type | E2004 | nothing here says which coproduct it injects into
+regression/yon_tests/negative/arm_and_arrow_with_one_name | E2005 | `Ask.Yes` names two arrows
+regression/yon_tests/negative/place_named_like_a_library_place | E2006 | place Math takes the name of a place of the library
+regression/yon_tests/negative/is_given_in_a_user_file | E2007 | the primitives of the runtime are declared in the prelude only
+regression/yon_tests/negative/store_into_a_value | E2008 | `x` is a value, defined with `:=`, and a value does not change
+regression/yon_tests/negative/proof_fun_that_does_not_terminate | E2010 | proof fun giro: it does not pass the termination check
+regression/yon_tests/negative/error_bind_without_on_error | E2011 | f declares no on error, so the error has no way out
+regression/yon_tests/negative/error_bind_without_escape | E2012 | it is read where a Number is wanted without escape
+regression/yon_tests/negative/error_bind_needless_escape | E2013 | there is nothing to escape: this value is a Number, which cannot fail
+regression/yon_tests/negative/law_of_an_algebra_not_held | E2101 | law neutral of algebra Monoid on place Left is refuted
+regression/yon_tests/negative/operation_of_an_unknown_algebra | E2102 | BooleanOrr is no algebra
+regression/yon_tests/negative/drop_before_a_use | E3001 | cannot drop Space D at 4:2: an arc toward it is still reachable downstream
+regression/yon_tests/negative/drop_of_an_unknown_space | E3002 | unknown Space Zeta at 4:2
+regression/yon_tests/negative/import_across_worlds | E3010 | wire crosses a world boundary
+regression/yon_tests/negative/topos_layout | E4001 | space 'A' declares 2 topos files
+regression/yon_tests/negative/manifest_unterminated_string | E4004 | unterminated string

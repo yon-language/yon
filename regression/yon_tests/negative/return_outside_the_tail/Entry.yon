@@ -1,0 +1,6 @@
+place Entry {}
+fun f(c: Number): Number {
+  when c == 1 { return 5 } otherwise { return 7 }
+  return 9
+}
+fun main: Number { return f(1) }

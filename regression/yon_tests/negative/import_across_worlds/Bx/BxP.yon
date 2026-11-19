@@ -1,0 +1,2 @@
+fun b_op(x: Number): Number { return x + 1 }
+place BxP { }

@@ -1,0 +1,5 @@
+[package]
+name = "needless_total"
+
+[runtime]
+backend = "memory"

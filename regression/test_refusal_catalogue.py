@@ -30,7 +30,7 @@ def test_the_catalogue_and_its_proofs_match():
 
 
 def test_an_unregistered_code_is_a_problem(cat):
-    bad = "E" + str(2999)   # built, not written: the registry of codes reads written codes
+    bad = "E2999"
     cat.ENTRIES[0]["code"] = bad
     problems = cat.check_proofs(cat.error_codes())
     assert any(bad in p and "not registered" in p for p in problems), problems

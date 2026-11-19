@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import compiling_corpus as cc
 from yon_programs import program
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -64,6 +65,26 @@ def test_lint_underscore_and_clean_are_quiet(tmp_path):
     out = _lint(tmp_path,
                 program("test_lint/test_lint_underscore_and_clean_are_quiet_1.yon"))
     assert "no lint warnings" in out, out
+
+
+WARNINGS = cc.warnings()
+
+
+@pytest.mark.skipif(not LINT.exists(), reason="yon_lint not built")
+@pytest.mark.parametrize("fixture", sorted(WARNINGS))
+def test_a_warning_fixture_carries_its_code(fixture):
+    """Each fixture of yon_tests/warnings/ warns with its code, for the reason its line names."""
+    code, frag = WARNINGS[fixture]
+    r = subprocess.run([str(LINT), str(ROOT / fixture)], capture_output=True, text=True, timeout=60)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0 and f"[{code}]" in out and frag in out, out
+
+
+def test_every_warning_fixture_has_an_expectation():
+    on_disk = {str(p.relative_to(ROOT)) for p in (ROOT / "regression" / "yon_tests" / "warnings").glob("*.yon")}
+    assert on_disk == set(WARNINGS), (
+        f"fixtures without a line: {sorted(on_disk - set(WARNINGS))}; "
+        f"lines without a fixture: {sorted(set(WARNINGS) - on_disk)}")
 
 
 @pytest.mark.skipif(not LINT.exists(), reason="yon_lint not built")

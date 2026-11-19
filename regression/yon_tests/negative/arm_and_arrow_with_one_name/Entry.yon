@@ -1,0 +1,4 @@
+place Entry {}
+fun main: Number {
+  return 4 ↪ Ask.Yes
+}

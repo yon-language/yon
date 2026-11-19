@@ -1,0 +1,3 @@
+place Or {
+  operation join(a: Number, b: Number): Number uses algebra BooleanOrr
+}

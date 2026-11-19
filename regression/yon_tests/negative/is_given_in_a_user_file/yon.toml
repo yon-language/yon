@@ -1,0 +1,8 @@
+[package]
+name = "hier"
+
+[world.W]
+objects = ["Left"]
+
+[runtime]
+backend = "memory"

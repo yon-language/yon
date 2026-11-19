@@ -7,9 +7,13 @@ grabs the code (E3001), not the fragile prose. The invariants checked here:
   1. Every assigned code is UNIQUE and inside its assigned range. Hand-numbering
      invites a collision, and two diagnostics sharing one code silently break the
      tool that keys on it.
-  2. Every registered code has a PRODUCER: some test of the suite asserts that a
-     real program renders it (or the code sits in NO_PRODUCER, with the reason).
-     A registered code nothing can emit is a promise to tools that never holds.
+  2. Every registered code has a PRODUCER: a fixture the suite runs renders it,
+     with the words of its reason (a line of yon_tests/rejections.txt or
+     yon_tests/warnings.txt, the `code:` of a refusal proof in canonical_forms/),
+     or the code sits in NO_PRODUCER or OUTSIDE_THE_FIXTURES, with the reason. A
+     registered code nothing can emit is a promise to tools that never holds. The
+     test modules are not read: a test may name a code it does not produce (a code
+     no registry defines, to see it refused).
   3. Every code the negative fixtures actually emit is REGISTERED: a diagnostic
      printed with an unregistered id would be a code no catalog explains.
 
@@ -59,13 +63,16 @@ NO_PRODUCER = {
     "E4003": "no constructor site: file-layout diagnostics are emitted as E4001",
 }
 
+# Registered codes whose producer cannot be a fixture of the suite, each with the reason and the
+# test that produces it.
+OUTSIDE_THE_FIXTURES = {
+    "E2009": "Heap_allocates: the code of a heap is the prelude's only (a heap owns a primitive "
+             "that writes raw memory, and only the prelude declares one), so its producer is a "
+             "prelude with a heap fun added (test_system_os.py, YON_PRELUDE), not a project",
+}
+
 _TOML = '[package]\nname = "{name}"\n{extra}[runtime]\nbackend = "memory"\n'
 _ENTRY_OK = program("test_error_codes/module_1.yon")
-
-# Producers that live in THIS module (the grep below skips this file, whose
-# NO_PRODUCER table would otherwise count as a producer of what it lists).
-LOCAL_PRODUCERS = {"E1002", "E4004"}
-
 
 def _ids() -> list[str]:
     return re.findall(r'->\s*"(E\d{4}|W\d{4})"', SRC.read_text())
@@ -129,41 +136,43 @@ def test_manifest_error_carries_e4004(tmp_path):
 # --------------------------------------------------------------------------- #
 # Registry <-> producers
 # --------------------------------------------------------------------------- #
-_CODE_LITERAL = re.compile(r"""\[(E\d{4}|W\d{4})\]|["'](E\d{4}|W\d{4})["']""")
+CANONICAL = REGRESSION / "canonical_forms"
 
 
-def _asserted_codes() -> dict[str, list[str]]:
-    """code -> where the suite asserts it: a `[Exxxx]` / "Exxxx" literal in a
-    test module (other than this one), or a line of yon_tests/rejections.txt
-    (each line is enforced on a real negative fixture)."""
+def _produced_codes() -> dict[str, list[str]]:
+    """code -> the fixtures that produce it: the lines of yon_tests/rejections.txt and
+    yon_tests/warnings.txt (each enforced on its fixture, by test_projects, test_yon_selfhost
+    and test_lint), and the `code:` of the refusal proofs of canonical_forms/ (enforced by
+    test_canonical_forms)."""
     where: dict[str, list[str]] = {}
-    for py in sorted(REGRESSION.glob("**/test_*.py")):
-        if py.name == Path(__file__).name:
-            continue
-        for m in _CODE_LITERAL.finditer(py.read_text()):
-            where.setdefault(m.group(1) or m.group(2), []).append(py.name)
-    for _path, (code, _frag) in cc.rejections().items():
-        where.setdefault(code, []).append("yon_tests/rejections.txt")
-    for code in LOCAL_PRODUCERS:
-        where.setdefault(code, []).append(Path(__file__).name)
+    for path, (code, _frag) in cc.rejections().items():
+        where.setdefault(code, []).append(path)
+    for path, (code, _frag) in cc.warnings().items():
+        where.setdefault(code, []).append(path)
+    for exp in sorted(CANONICAL.rglob("*.expect")):
+        t = exp.read_text()
+        if re.search(r"^status: reject_clean", t, re.M):
+            for m in re.finditer(r"^code: (E\d{4}|W\d{4})", t, re.M):
+                where.setdefault(m.group(1), []).append(str(exp.relative_to(ROOT)))
     return where
 
 
 @pytest.mark.skipif(not SRC.exists(), reason="error_codes.ml missing")
 def test_every_code_has_a_producer():
     registered = set(_ids())
-    produced = _asserted_codes()
-    orphans = sorted(registered - set(produced) - set(NO_PRODUCER))
+    produced = _produced_codes()
+    declared = set(NO_PRODUCER) | set(OUTSIDE_THE_FIXTURES)
+    orphans = sorted(registered - set(produced) - declared)
     assert not orphans, (
-        f"registered codes no test produces: {orphans}. Add a fixture that emits "
-        "each, or list it in NO_PRODUCER with the reason.")
-    stale = sorted(c for c in NO_PRODUCER if c in produced)
-    assert not stale, f"NO_PRODUCER lists codes that now have a producer, remove them: {stale}"
-    unknown = sorted(set(NO_PRODUCER) - registered)
-    assert not unknown, f"NO_PRODUCER lists codes that are not registered: {unknown}"
+        f"registered codes no fixture produces: {orphans}. Add a fixture that emits "
+        "each (a line of yon_tests/rejections.txt), or list it in NO_PRODUCER with the reason.")
+    stale = sorted(c for c in declared if c in produced)
+    assert not stale, f"NO_PRODUCER or OUTSIDE_THE_FIXTURES list codes a fixture produces, remove them: {stale}"
+    unknown = sorted(declared - registered)
+    assert not unknown, f"NO_PRODUCER or OUTSIDE_THE_FIXTURES list codes that are not registered: {unknown}"
     phantom = sorted(set(produced) - registered)
     assert not phantom, (
-        f"the suite asserts codes the registry does not define: "
+        f"the fixtures expect codes the registry does not define: "
         f"{ {c: produced[c] for c in phantom} }")
 
 

@@ -1,0 +1,9 @@
+[package]
+name = "probe"
+
+[world.W]
+objects = ["Math"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"

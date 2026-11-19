@@ -1,0 +1,14 @@
+# Warning expectations: every fixture of the linter, with the stable warning code it must carry
+# and a fragment of the message.
+#
+#   <path relative to the repo root> | <code> | <message fragment>
+#
+# Read by regression/compiling_corpus.py. Consumers:
+#   test_lint.py         runs the linter on each fixture: the code and the fragment
+#   test_error_codes.py  the codes the warning fixtures produce
+# A fixture of yon_tests/warnings/ with no line here, or a line with no fixture, fails the suite.
+
+regression/yon_tests/warnings/dead_function.yon | W1001 | function 'orphan' is never used
+regression/yon_tests/warnings/unused_binding.yon | W1002 | binding 'unusedb' is never used
+regression/yon_tests/warnings/unused_parameter.yon | W1003 | parameter 'dead' of 'f' is never used
+regression/yon_tests/warnings/unused_import.yon | W3001 | import 'dead_op' from Space B is never used

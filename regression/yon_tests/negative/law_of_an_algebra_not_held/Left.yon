@@ -1,0 +1,5 @@
+place Left carried by text uses algebra Monoid {
+  fun concat(a: Left, b: Left): Left { return a }
+  fun op(a: Left, b: Left): Left { return concat(a, b) }
+  fun unit: Left { return "" }
+}

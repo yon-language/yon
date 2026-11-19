@@ -1,0 +1,5 @@
+place Entry {}
+fun main: Number {
+  y := Yes
+  return 7
+}

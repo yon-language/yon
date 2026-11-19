@@ -24,7 +24,9 @@ Two facts several gates need, kept in one place so they cannot drift apart:
      cross_space/run.sh (tier 2), never by a pytest gate, so they do not count.
 
   3. The rejection expectations (yon_tests/rejections.txt): for every negative
-     fixture, the stable code and a message fragment it must be rejected with.
+     fixture, the stable code and a message fragment it must be rejected with;
+     and the warning expectations (yon_tests/warnings.txt): for every fixture of
+     the linter, the stable code and a message fragment it must warn with.
 
 This module is a helper, not a test module (no test_ prefix).
 """
@@ -38,6 +40,7 @@ BASELINE = ROOT / "regression" / "baseline_exitcodes.txt"
 YON_TESTS = ROOT / "regression" / "yon_tests"
 KEYWORD_COVERAGE = ROOT / "regression" / "keyword_coverage"
 REJECTIONS = YON_TESTS / "rejections.txt"
+WARNINGS = YON_TESTS / "warnings.txt"
 
 PROJECT_ROOTS = ["examples", "regression/yon_tests", "regression/book",
                  "regression/keyword_coverage", "regression/cross_space"]
@@ -82,21 +85,29 @@ def baseline() -> dict[str, object]:
     return out
 
 
-def rejections() -> dict[str, tuple[str, str]]:
-    """relative fixture path -> (stable code, message fragment).
-
-    Format of yon_tests/rejections.txt, one fixture per line:
+def _expectations(table: Path) -> dict[str, tuple[str, str]]:
+    """relative fixture path -> (stable code, message fragment), one fixture per line:
         <path relative to the repo root> | <code> | <fragment>
     Blank lines and `#` comments are ignored."""
     out: dict[str, tuple[str, str]] = {}
-    for line in REJECTIONS.read_text().splitlines():
+    for line in table.read_text().splitlines():
         s = line.strip()
         if not s or s.startswith("#"):
             continue
         path, code, frag = (x.strip() for x in s.split("|", 2))
-        assert path not in out, f"rejections.txt lists {path} twice"
+        assert path not in out, f"{table.name} lists {path} twice"
         out[path] = (code, frag)
     return out
+
+
+def rejections() -> dict[str, tuple[str, str]]:
+    """The negative fixtures (yon_tests/rejections.txt): path -> (code, fragment)."""
+    return _expectations(REJECTIONS)
+
+
+def warnings() -> dict[str, tuple[str, str]]:
+    """The fixtures of the linter (yon_tests/warnings.txt): path -> (code, fragment)."""
+    return _expectations(WARNINGS)
 
 
 def compiling_files() -> list[Path]:

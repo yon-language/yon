@@ -1,0 +1,8 @@
+[package]
+name = "alg"
+
+[world.W]
+objects = ["Or"]
+
+[runtime]
+backend = "memory"

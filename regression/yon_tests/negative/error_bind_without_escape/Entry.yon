@@ -1,0 +1,7 @@
+place Entry { }
+fun f(x: Number) on error DomainError: Number {
+  return Number.sqrt(x) + 1
+}
+fun main: Number {
+  return match f(4) { Number as v => v, DomainError as d => Text.length(d.message) + 100 }
+}
