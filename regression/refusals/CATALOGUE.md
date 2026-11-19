@@ -1263,6 +1263,66 @@ error[E1002]: unexpected character `∘` (U+2218)
    = why: a character that no rule of the lexer reads is not a symbol of Yon; it is named whole, with its code point
 ```
 
+### NO-189 `if-in-operator` · E1003 · grammar
+
+- book: book 04-control-flow (PROPOSAL: the page does not say yet that an `if` inside an operator takes parentheses)
+- proof: `regression/canonical_forms/expression/dev_if_in_operator`
+
+```
+error[E1003]: an `if` inside an operator is written in parentheses: (if c then a else b)
+  --> Entry.yon:4:14
+   |
+ 4 |     x := 1 + if c then 2 else 3
+   |              ^^^^
+   = why: the else branch of an `if` extends to the right as far as it can, so the `if` stands at the top of an expression; inside an operator its parentheses say where it ends
+   = write: x := 1 + (if c then 2 else 3)
+```
+
+### NO-190 `lambda-in-operator` · E1003 · grammar
+
+- book: book 05-functions-and-effects, «Lambdas and pipes.»
+- proof: `regression/canonical_forms/expression/dev_lambda_in_operator`
+
+```
+error[E1003]: a lambda inside an operator is written in parentheses: (fun(x) => e)
+  --> Entry.yon:3:14
+   |
+ 3 |     n := 2 * fun(x: Number) => x
+   |              ^^^^^
+   = why: the body of a lambda extends to the right as far as it can, so the lambda stands at the top of an expression; inside an operator its parentheses say where it ends
+   = write: g := h ↦ (fun(x: Number) => x + 1)
+```
+
+### NO-191 `walk-in-operator` · E1003 · grammar
+
+- book: book 09-hott-types, «Paths as journeys»
+- proof: `regression/canonical_forms/expression/dev_walk_in_operator`
+
+```
+error[E1003]: a `walk` inside an operator is written in parentheses: (walk i => e)
+  --> Entry.yon:3:14
+   |
+ 3 |     p := 1 + walk i => 5
+   |              ^^^^
+   = why: the body of a `walk` extends to the right as far as it can, so the `walk` stands at the top of an expression; inside an operator its parentheses say where it ends
+   = write: p := 1 + (walk i => 5)
+```
+
+### NO-192 `at-before-operator` · E1003 · grammar
+
+- book: book 09-hott-types, «Paths as journeys»
+- proof: `regression/canonical_forms/expression/dev_at_before_operator`
+
+```
+error[E1003]: a path applied with @ is written in parentheses before an operator that binds tighter: (p @ i) + 1
+  --> Entry.yon:4:14
+   |
+ 4 |     return p @ I0 + 1
+   |              ^^^^^^
+   = why: `@` is a postfix below the arithmetic, so `a + p @ i` is `(a + p) @ i`; an operator that binds tighter after it would read it as its left operand, and the parentheses say so
+   = write: return (p @ I0) + 1
+```
+
 ## B. The head: modifiers and clauses a declaration does not take (grammar, E1004)
 
 ### NO-069 `constraint-given` · E1004 · grammar
@@ -2823,7 +2883,7 @@ Read from `frontend/error_codes.ml`.
 |---|---|---|---|
 | E1001 | `Parse_syntax` | syntax error | 3 |
 | E1002 | `Lex_bad_token` | lexical error | 3 |
-| E1003 | `Form_gone` | a form of the language that is gone: the message writes the new one | 81 |
+| E1003 | `Form_gone` | a form of the language that is gone: the message writes the new one | 85 |
 | E1004 | `Head_refused` | a modifier or a clause that the declaration does not take (`is given` on a proof fun, a constraint fun, a law, a carrier; `internal constraint`; `proof constraint`) | 7 |
 | E2001 | `Type_check` | type error | 27 |
 | E2005 | `Arm_name_clash` | an arm and an arrow of the same home share a name | 1 |

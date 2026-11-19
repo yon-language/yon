@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: cond_or_closed
+note: |
+  Two atoms `e is p` joined by `or`: the atom ends at its pattern, so the `or` joins two conditions.

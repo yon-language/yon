@@ -1,0 +1,5 @@
+[package]
+name = "dev_lambda_in_operator"
+
+[runtime]
+backend = "memory"

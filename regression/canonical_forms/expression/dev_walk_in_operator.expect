@@ -1,0 +1,6 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: a `walk` inside an operator is written in parentheses
+note: |
+  a `walk` as the operand of an operator is refused; it is written in parentheses.

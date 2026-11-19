@@ -332,9 +332,6 @@
    Menhir: regression/gate.sh checks that Menhir reports no conflict and no
    useless precedence. Lower entries bind tighter. */
 
-/* LOWEST ends an `if … then … else` and a condition: any operator shift
- * wins over closing them, so a condition is as long as it can be. */
-%nonassoc LOWEST
 
 /* A statement has no terminator, so a construct that may end with an
  * optional part meets the next token undecided. CLAUSE_END is the closing of
@@ -352,28 +349,6 @@
 %nonassoc CLAUSE_END
 %nonassoc ON_ERROR LAW IN DOT IDENT QIDENT VIEW REDUCTION PRODUCE
           MOVE MORPH_KW FUNCTOR FUN DOTARROW
-/* From the weakest: <-> , -> , or, and, = and !=, @, |> , then the arithmetic. So
-   x + 1 ↦ f is (x + 1) ↦ f, and true ↦ merid @ i is (true ↦ merid) @ i. */
-%right IFFQ
-%right FATARROW FATARROWQ
-%left OR PIPEPIPE PIPEPIPEQ
-%left AND AMPAMP AMPAMPQ
-%left LT GT LEQ GEQ EQEQ NEQ
-%left ATSIGN              /* path application p @ i */
-%left PIPEGT MAPSTO INJ   /* application and injection */
-%nonassoc LRARROW        /* f <=> g = equivalence, non-associative */
-%nonassoc BY             /* f <=> g by eta, eps: `by` goes to the nearest <=> */
-%left PIPE
-%left PIPEQ
-%left CARET CARETQ
-%left AMP AMPQ
-%left PLUS MINUS
-%left PLUSPLUS           /* p ++ q = concat, left-assoc */
-%left STAR SLASH PERCENT
-%nonassoc UMINUS
-%nonassoc UNOT
-%nonassoc UTILDE
-%left THROUGH             /* p through f = ap(f, p), binds tight */
 
 
 /* Precedence for dangling-when. */
@@ -1774,128 +1749,227 @@ promote_stmt:
 
 /* ─── Expressions ──────────────────────────────────────────────────── */
 
+/* The expressions by levels, from the weakest: one nonterminal for each level, the associativity
+   written in the recursion. `if`, the lambda and `walk`, whose body extends to the right as far as
+   it can, stand at the top; inside an operator they are written in parentheses (open_in_operator). */
 expr:
-  | e1 = expr PLUS e2 = expr
-    { EBinop (OpAdd, e1, e2, mk_loc $startpos $endpos) }
-  (* Metonymic infix sugar: p ++ q = concat(p,q); f <=> g = equivalence with
-     refl coherences (valid when f,g are definitional inverses); p through f =
-     ap(f,p). Pure desugar to the cubical primitives. *)
-  | e1 = expr PLUSPLUS e2 = expr
-    { ECall ("concat", [e1; e2], mk_loc $startpos $endpos) }
-  | f = expr LRARROW g = expr
-    { let l = mk_loc $startpos $endpos in
-      let refl_lam v = ELam ([(v, TyPrim "unknown")], ERefl (EVar (v, l), l), l) in
-      ECall ("equiv", [f; g; refl_lam "a"; refl_lam "b"], l) }
-  (* with its two laws given as funs of proof: eta for undo after forth, eps for
-     forth after undo *)
-  | f = expr LRARROW g = expr BY eta = expr COMMA eps = expr %prec LRARROW
+  | e = open_form { e }
+  (* the laws of an equivalence given as funs of proof, the last one written as a lambda: it
+     extends to the right, as at the top of an expression *)
+  | f = bor_expr LRARROW g = operand(bor_expr) BY eta = expr COMMA eps = open_form
     { ECall ("equiv", [f; g; eta; eps], mk_loc $startpos $endpos) }
-  | p = expr THROUGH f = expr
-    { ECall ("ap", [f; p], mk_loc $startpos $endpos) }
-  | e1 = expr MINUS e2 = expr
-    { EBinop (OpSub, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr STAR e2 = expr
-    { EBinop (OpMul, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr SLASH e2 = expr
-    { EBinop (OpDiv, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr PERCENT e2 = expr
-    { EBinop (OpMod, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr LT e2 = expr
-    { EBinop (OpLt, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr GT e2 = expr
-    { EBinop (OpGt, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr LEQ e2 = expr
-    { EBinop (OpLeq, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr GEQ e2 = expr
-    { EBinop (OpGeq, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr EQEQ e2 = expr
-    { EBinop (OpEq, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr NEQ e2 = expr
-    { EBinop (OpNeq, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr AND e2 = expr
-    { EBinop (OpAnd, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr AMPAMP e2 = expr
-    { EBinop (OpAnd, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr OR e2 = expr
-    { EBinop (OpOr, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr PIPEPIPE e2 = expr
-    { EBinop (OpOr, e1, e2, mk_loc $startpos $endpos) }
-  | e1 = expr FATARROW e2 = expr
+  | e = iff_expr { e }
+
+open_form:
+  | IF_KW c = expr THEN_KW a = expr ELSE_KW b = expr
+    { (* if/then/else as an expression. Lowered to scf.if with a yield of the
+       * value. The else branch extends to the right as far as it can. *)
+      EIfThenElse (c, a, b, mk_loc $startpos $endpos) }
+  (* Inline lambda. Syntax: `fun(x: T, y: U) => expr` or `fun(x) => expr`.
+   * Unannotated types receive TyPrim "unknown", to be resolved via HM. *)
+  | FUN LPAREN params = separated_list(COMMA, lambda_param) RPAREN FATARROW body = expr
+    { ELam (params, body, mk_loc $startpos $endpos) }
+  | walk_kw i = IDENT FATARROW body = expr
+    { EPathAbs (i, body, mk_loc $startpos $endpos) }
+
+(* The operand of an operator, after its symbol: an expression of the level, or a form that extends
+   to the right, refused there with the parentheses it asks for. *)
+operand(level):
+  | e = level { e }
+  | e = open_in_operator { e }
+
+open_in_operator:
+  | IF_KW
+    { form_gone "an `if` inside an operator is written in parentheses: (if c then a else b)" }
+  | walk_kw
+    { form_gone "a `walk` inside an operator is written in parentheses: (walk i => e)" }
+  | FUN LPAREN separated_list(COMMA, lambda_param) RPAREN FATARROW chained_expr
+    { form_gone "a lambda inside an operator is written in parentheses: (fun(x) => e)" }
+
+(* p ↔ q is (p → q) ∧ (q → p); to the right *)
+iff_expr:
+  | e1 = imp_expr IFFQ e2 = operand(iff_expr)
+    { let l = mk_loc $startpos $endpos in
+      ECall ("__heyt_and", [ECall ("__heyt_imp", [e1; e2], l);
+                            ECall ("__heyt_imp", [e2; e1], l)], l) }
+  | e = imp_expr { e }
+
+(* to the right *)
+imp_expr:
+  | e1 = or_expr FATARROW e2 = operand(imp_expr)
     { (* implies `a => b`. Syntactic transformation: (not a) or b. *)
       let loc = mk_loc $startpos $endpos in
       EBinop (OpOr, ENot (e1, loc), e2, loc) }
-  (* Pipe forward `a |> f(args)`. A post-parse syntactic transformation: pass
-   * the LHS as the first argument of the RHS (which must be an ECall). *)
-  | e = expr ATSIGN I0
+  | e1 = or_expr FATARROWQ e2 = operand(imp_expr)
+    { ECall ("__heyt_imp", [e1; e2], mk_loc $startpos $endpos) }
+  | e = or_expr { e }
+
+or_expr:
+  | e1 = or_expr OR e2 = operand(and_expr)
+    { EBinop (OpOr, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = or_expr PIPEPIPE e2 = operand(and_expr)
+    { EBinop (OpOr, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = or_expr PIPEPIPEQ e2 = operand(and_expr)
+    { ECall ("__heyt_or", [e1; e2], mk_loc $startpos $endpos) }
+  | e = and_expr { e }
+
+and_expr:
+  | e1 = and_expr AND e2 = operand(cmp_expr)
+    { EBinop (OpAnd, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = and_expr AMPAMP e2 = operand(cmp_expr)
+    { EBinop (OpAnd, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = and_expr AMPAMPQ e2 = operand(cmp_expr)
+    { (* AND intuizionista (Heyting).
+       * Lowering: __heyt_and(a, b) -> topos.heyt_and MLIR op. *)
+      ECall ("__heyt_and", [e1; e2], mk_loc $startpos $endpos) }
+  | e = cmp_expr { e }
+
+cmp_expr:
+  | e1 = cmp_expr LT e2 = operand(at_expr)
+    { EBinop (OpLt, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = cmp_expr GT e2 = operand(at_expr)
+    { EBinop (OpGt, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = cmp_expr LEQ e2 = operand(at_expr)
+    { EBinop (OpLeq, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = cmp_expr GEQ e2 = operand(at_expr)
+    { EBinop (OpGeq, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = cmp_expr EQEQ e2 = operand(at_expr)
+    { EBinop (OpEq, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = cmp_expr NEQ e2 = operand(at_expr)
+    { EBinop (OpNeq, e1, e2, mk_loc $startpos $endpos) }
+  | e = at_expr { e }
+
+(* path application p @ i, a postfix below the arrows and the arithmetic: `a + p @ i` is
+   (a + p) @ i. An operator that binds tighter after it asks for the parentheses: (p @ i) + 1. *)
+at_expr:
+  | e = path_point { e }
+  | path_point tighter_than_at
+    { form_gone "a path applied with @ is written in parentheses before an operator that binds tighter: (p @ i) + 1" }
+  | e = map_expr { e }
+
+path_point:
+  | e = at_expr ATSIGN I0
     { EPathApp (e, DI0, mk_loc $startpos $endpos) }
-  | e = expr ATSIGN I1
+  | e = at_expr ATSIGN I1
     { EPathApp (e, DI1, mk_loc $startpos $endpos) }
-  | e = expr ATSIGN id = IDENT
+  | e = at_expr ATSIGN id = IDENT
     { EPathApp (e, DIVar id, mk_loc $startpos $endpos) }
-  | a = expr MAPSTO b = expr   { arrow Surface_ast.Apply a b (mk_loc $startpos $endpos) }
-  | a = expr INJ b = expr      { arrow Surface_ast.Inject a b (mk_loc $startpos $endpos) }
-  | a = expr PIPEGT b = expr   { arrow Surface_ast.Old_pipe a b (mk_loc $startpos $endpos) }
-  | NOT e = expr %prec UNOT
-    { ENot (e, mk_loc $startpos $endpos) }
-  | BANG e = expr %prec UNOT
-    { ENot (e, mk_loc $startpos $endpos) }
-  (* `escape e`, a prefix as `not`: e is S + E inside a fun on error E', the
-     success goes on as S and the error leaves the fun. *)
-  | ESCAPE e = expr %prec UNOT
-    { EEscape (e, mk_loc $startpos $endpos) }
-  | e1 = expr AMP e2 = expr
-    { (* bitwise AND su number. *)
-      ECall ("__band", [e1; e2], mk_loc $startpos $endpos) }
-  | e1 = expr CARET e2 = expr
-    { (* bitwise XOR su number. *)
-      ECall ("__bxor", [e1; e2], mk_loc $startpos $endpos) }
-  | e1 = expr PIPE e2 = expr
+
+%inline tighter_than_at:
+  | PIPEGT | MAPSTO | INJ | LRARROW | PIPE | PIPEQ | CARET | CARETQ | AMP | AMPQ
+  | PLUS | MINUS | PLUSPLUS | STAR | SLASH | PERCENT | THROUGH { () }
+
+(* application ↦ and injection ↪ (and the old pipe, refused) *)
+map_expr:
+  | a = map_expr MAPSTO b = operand(equiv_expr) { arrow Surface_ast.Apply a b (mk_loc $startpos $endpos) }
+  | a = map_expr INJ b = operand(equiv_expr)    { arrow Surface_ast.Inject a b (mk_loc $startpos $endpos) }
+  | a = map_expr PIPEGT b = operand(equiv_expr) { arrow Surface_ast.Old_pipe a b (mk_loc $startpos $endpos) }
+  | e = equiv_expr { e }
+
+(* Metonymic infix sugar: f <=> g = equivalence with refl coherences (valid when f,g are
+   definitional inverses); with its two laws given as funs of proof: eta for undo after forth, eps
+   for forth after undo. Does not chain. *)
+equiv_expr:
+  | f = bor_expr LRARROW g = operand(bor_expr)
+    { let l = mk_loc $startpos $endpos in
+      let refl_lam v = ELam ([(v, TyPrim "unknown")], ERefl (EVar (v, l), l), l) in
+      ECall ("equiv", [f; g; refl_lam "a"; refl_lam "b"], l) }
+  | f = bor_expr LRARROW g = operand(bor_expr) BY eta = expr COMMA eps = bor_expr
+    { ECall ("equiv", [f; g; eta; eps], mk_loc $startpos $endpos) }
+  | e = bor_expr { e }
+
+bor_expr:
+  | e1 = bor_expr PIPE e2 = operand(bhor_expr)
     { (* Classic bitwise OR on a number. The collision with TySum variants
        * (`A | B`) is only in type expressions, where value expressions do not
        * apply. *)
       ECall ("__bor", [e1; e2], mk_loc $startpos $endpos) }
-  | TILDE e = expr %prec UTILDE
-    { (* Unary bitwise NOT on a number. *)
-      ECall ("__bnot", [e], mk_loc $startpos $endpos) }
-  | e1 = expr AMPAMPQ e2 = expr
-    { (* AND intuizionista (Heyting).
-       * Lowering: __heyt_and(a, b) -> topos.heyt_and MLIR op. *)
-      ECall ("__heyt_and", [e1; e2], mk_loc $startpos $endpos) }
-  | e1 = expr PIPEPIPEQ e2 = expr
-    { ECall ("__heyt_or", [e1; e2], mk_loc $startpos $endpos) }
-  | e1 = expr FATARROWQ e2 = expr
-    { ECall ("__heyt_imp", [e1; e2], mk_loc $startpos $endpos) }
-  (* p ↔ q is (p → q) ∧ (q → p) *)
-  | e1 = expr IFFQ e2 = expr
-    { let l = mk_loc $startpos $endpos in
-      ECall ("__heyt_and", [ECall ("__heyt_imp", [e1; e2], l);
-                            ECall ("__heyt_imp", [e2; e1], l)], l) }
-  | BANGQ e = expr %prec UNOT
-    { ECall ("__heyt_not", [e], mk_loc $startpos $endpos) }
-  | e1 = expr AMPQ e2 = expr
+  | e = bhor_expr { e }
+
+bhor_expr:
+  | e1 = bhor_expr PIPEQ e2 = operand(bxor_expr)
+    { ECall ("__heyt_int_or", [e1; e2], mk_loc $startpos $endpos) }
+  | e = bxor_expr { e }
+
+bxor_expr:
+  | e1 = bxor_expr CARET e2 = operand(band_expr)
+    { (* bitwise XOR su number. *)
+      ECall ("__bxor", [e1; e2], mk_loc $startpos $endpos) }
+  | e1 = bxor_expr CARETQ e2 = operand(band_expr)
+    { ECall ("__heyt_int_xor", [e1; e2], mk_loc $startpos $endpos) }
+  | e = band_expr { e }
+
+band_expr:
+  | e1 = band_expr AMP e2 = operand(add_expr)
+    { (* bitwise AND su number. *)
+      ECall ("__band", [e1; e2], mk_loc $startpos $endpos) }
+  | e1 = band_expr AMPQ e2 = operand(add_expr)
     { (* Intuitionistic bitwise AND. Bit-by-bit semantics with Unknown-mask
        * propagation. *)
       ECall ("__heyt_int_and", [e1; e2], mk_loc $startpos $endpos) }
-  | e1 = expr PIPEQ e2 = expr
-    { ECall ("__heyt_int_or", [e1; e2], mk_loc $startpos $endpos) }
-  | e1 = expr CARETQ e2 = expr
-    { ECall ("__heyt_int_xor", [e1; e2], mk_loc $startpos $endpos) }
-  | TILDEQ e = expr %prec UTILDE
+  | e = add_expr { e }
+
+add_expr:
+  | e1 = add_expr PLUS e2 = operand(concat_expr)
+    { EBinop (OpAdd, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = add_expr MINUS e2 = operand(concat_expr)
+    { EBinop (OpSub, e1, e2, mk_loc $startpos $endpos) }
+  | e = concat_expr { e }
+
+(* p ++ q = concat(p, q) *)
+concat_expr:
+  | e1 = concat_expr PLUSPLUS e2 = operand(mul_expr)
+    { ECall ("concat", [e1; e2], mk_loc $startpos $endpos) }
+  | e = mul_expr { e }
+
+mul_expr:
+  | e1 = mul_expr STAR e2 = operand(unary_expr)
+    { EBinop (OpMul, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = mul_expr SLASH e2 = operand(unary_expr)
+    { EBinop (OpDiv, e1, e2, mk_loc $startpos $endpos) }
+  | e1 = mul_expr PERCENT e2 = operand(unary_expr)
+    { EBinop (OpMod, e1, e2, mk_loc $startpos $endpos) }
+  | e = unary_expr { e }
+
+unary_expr:
+  | e = prefixed { e }
+  | e = through_expr { e }
+
+(* The prefixes: their operand extends over `through`, the one operator that binds tighter. *)
+prefixed:
+  | NOT e = operand(unary_expr)
+    { ENot (e, mk_loc $startpos $endpos) }
+  | BANG e = operand(unary_expr)
+    { ENot (e, mk_loc $startpos $endpos) }
+  (* `escape e`, a prefix as `not`: e is S + E inside a fun on error E', the
+     success goes on as S and the error leaves the fun. *)
+  | ESCAPE e = operand(unary_expr)
+    { EEscape (e, mk_loc $startpos $endpos) }
+  | TILDE e = operand(unary_expr)
+    { (* Unary bitwise NOT on a number. *)
+      ECall ("__bnot", [e], mk_loc $startpos $endpos) }
+  | BANGQ e = operand(unary_expr)
+    { ECall ("__heyt_not", [e], mk_loc $startpos $endpos) }
+  | TILDEQ e = operand(unary_expr)
     { ECall ("__heyt_int_not", [e], mk_loc $startpos $endpos) }
-  (* The constructor heyt_int(value, mask). Lowers to an ECall of a
-   * synthesized builtin. *)
-  | HEYT_INT_KW LPAREN v = expr COMMA m = expr RPAREN
-    { ECall ("__heyt_int_make", [v; m], mk_loc $startpos $endpos) }
-  | HEYT_INT_KW LPAREN v = expr RPAREN
-    { (* heyt_int(value): no mask means mask 0 (no Unknown bits) *)
-      let loc = mk_loc $startpos $endpos in
-      ECall ("__heyt_int_make", [v; ELit (LitNumber 0.0, loc)], loc) }
-  | MINUS e = expr %prec UMINUS
+  | MINUS e = operand(unary_expr)
     { (* -e is 0 - e; the 0 stands where the sign is, so a site keyed by
          location names this one and no other *)
       EBinop (OpSub, ELit (LitNumber 0.0, mk_loc $startpos $endpos($1)), e,
               mk_loc $startpos $endpos) }
-  | e = chained_expr %prec CLAUSE_END           { e }
+
+(* p through f = ap(f, p), the tightest operator, to the left. A prefixed operand closes it: in
+   `a through -b through c` the `-` takes `b through c`. *)
+through_expr:
+  | e = closed_through { e }
+  | p = closed_through THROUGH f = prefixed
+    { ECall ("ap", [f; p], mk_loc $startpos $endpos) }
+  | closed_through THROUGH e = open_in_operator { e }
+
+closed_through:
+  | p = closed_through THROUGH f = chained_expr
+    { ECall ("ap", [f; p], mk_loc $startpos $endpos) }
+  | e = chained_expr { e }
 
 (* method chaining.
  * `e.method(args)` itera su expr_atom, costruendo ECall(method, e :: args).
@@ -1910,16 +1984,20 @@ chained_expr:
 expr_atom:
   | l = literal                                                       
     { ELit (l, mk_loc $startpos $endpos) }
-  (* Inline lambda. Syntax: `fun(x: T, y: U) => expr` or `fun(x) => expr`.
-   * Unannotated types receive TyPrim "unknown", to be resolved via HM. *)
   | FUN LPAREN params = separated_list(COMMA, lambda_param) RPAREN FATARROW
     LBRACE body = list(stmt) RBRACE
     { (* block-bodied inline lambda: lifted to a synthetic function,
          the expression's value is its name *)
       let loc = mk_loc $startpos $endpos in
       EVar (Parser_state.lift_inline_block_lambda_to_fun params body loc, loc) }
-  | FUN LPAREN params = separated_list(COMMA, lambda_param) RPAREN FATARROW body = expr
-    { ELam (params, body, mk_loc $startpos $endpos) }
+  (* The constructor heyt_int(value, mask). Lowers to an ECall of a
+   * synthesized builtin. *)
+  | HEYT_INT_KW LPAREN v = expr COMMA m = expr RPAREN
+    { ECall ("__heyt_int_make", [v; m], mk_loc $startpos $endpos) }
+  | HEYT_INT_KW LPAREN v = expr RPAREN
+    { (* heyt_int(value): no mask means mask 0 (no Unknown bits) *)
+      let loc = mk_loc $startpos $endpos in
+      ECall ("__heyt_int_make", [v; ELit (LitNumber 0.0, loc)], loc) }
   (* handle lambdas inline.
    * Categorical stratification preserved: the lambda has a dedicated tag
    * (move/reduction/morph), produces TyMoveHandle/etc.
@@ -2042,8 +2120,6 @@ expr_atom:
   | MATCH_KW x = expr_atom LBRACE branches = separated_list(COMMA, hit_branch) RBRACE
     { let l = mk_loc $startpos $endpos in
       EHITElim (EVar ("__match", l), branches, x, l) }
-  | walk_kw i = IDENT FATARROW body = expr
-    { EPathAbs (i, body, mk_loc $startpos $endpos) }
   | HIT_KW LPAREN ctor = IDENT RPAREN
     { form_gone (Printf.sprintf "hit is a form of the kernel: a nullary arm is its name: %s" ctor) }
   | HIT_KW LPAREN ctor = IDENT COMMA separated_nonempty_list(COMMA, expr) RPAREN
@@ -2129,11 +2205,6 @@ expr_atom:
     { ESpawn (Some n, body, mk_loc $startpos $endpos) }
   | LPAREN e = expr RPAREN                                             
     { EParen (e, mk_loc $startpos $endpos) }
-  | IF_KW c = expr THEN_KW a = expr ELSE_KW b = expr   %prec LOWEST
-    { (* if/then/else as an expression. Lowered to scf.if with a yield of the
-       * value. Low precedence: captures as much of the expression to the right
-       * as possible. *)
-      EIfThenElse (c, a, b, mk_loc $startpos $endpos) }
   (* No EAll ("all P where c"): the condition would be dropped at desugar
      and __all has no lowering. *)
 
@@ -2196,15 +2267,33 @@ field_assign:
  * `x is present and x > 0` parses as `(x is present) AND (x > 0)`.
  */
 
+(* `and` and `or` join conditions, `and` binding tighter, both to the left. An expression takes
+   the `and` and the `or` that follow it (they are its operators too); an atom `e is p` ends there,
+   and the `and` or `or` after it joins two conditions. So the conditions whose last atom is an
+   expression close the chain: cond_and_closed and cond_or_closed end with an `is`. *)
 condition:
-  | c = condition_atom                        { c }
-  | c1 = condition AND c2 = condition         { CondAnd (c1, c2) }
-  | c1 = condition OR c2 = condition          { CondOr (c1, c2) }
+  | c = cond_or { c }
 
-condition_atom:
+is_atom:
   | e = expr IS p = pattern                   { CondIs (e, p) }
   | e = expr IS NOT p = pattern               { CondIsNot (e, p) }
-  | e = expr                  %prec LOWEST    { CondExpr e }
+
+cond_and_closed:
+  | c = is_atom                                       { c }
+  | c1 = cond_and_closed AND c2 = is_atom             { CondAnd (c1, c2) }
+
+cond_and:
+  | c = cond_and_closed                               { c }
+  | c1 = cond_and_closed AND e = expr                 { CondAnd (c1, CondExpr e) }
+  | e = expr                                          { CondExpr e }
+
+cond_or_closed:
+  | c = cond_and_closed                               { c }
+  | c1 = cond_or_closed OR c2 = cond_and_closed       { CondOr (c1, c2) }
+
+cond_or:
+  | c = cond_and                                      { c }
+  | c1 = cond_or_closed OR c2 = cond_and              { CondOr (c1, c2) }
 
 pattern:
   | x = IDENT                                 { PatVar x }

@@ -1,0 +1,6 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: an `if` inside an operator is written in parentheses
+note: |
+  an `if` as the operand of an operator is refused; written in parentheses, `1 + (if c then 2 else 3)`, it is read.

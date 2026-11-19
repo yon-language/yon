@@ -411,52 +411,122 @@ emit_stmt ::= EMIT expr
 
 promote_stmt ::= PROMOTE expr
 
-expr ::= expr PLUS expr
-       | expr PLUSPLUS expr
-       | expr LRARROW expr
-       | expr LRARROW expr BY expr COMMA expr
-       | expr THROUGH expr
-       | expr MINUS expr
-       | expr STAR expr
-       | expr SLASH expr
-       | expr PERCENT expr
-       | expr LT expr
-       | expr GT expr
-       | expr LEQ expr
-       | expr GEQ expr
-       | expr EQEQ expr
-       | expr NEQ expr
-       | expr AND expr
-       | expr AMPAMP expr
-       | expr OR expr
-       | expr PIPEPIPE expr
-       | expr FATARROW expr
-       | expr ATSIGN I0
-       | expr ATSIGN I1
-       | expr ATSIGN IDENT
-       | expr MAPSTO expr
-       | expr INJ expr
-       | expr PIPEGT expr
-       | NOT expr
-       | BANG expr
-       | ESCAPE expr
-       | expr AMP expr
-       | expr CARET expr
-       | expr PIPE expr
-       | TILDE expr
-       | expr AMPAMPQ expr
-       | expr PIPEPIPEQ expr
-       | expr FATARROWQ expr
-       | expr IFFQ expr
-       | BANGQ expr
-       | expr AMPQ expr
-       | expr PIPEQ expr
-       | expr CARETQ expr
-       | TILDEQ expr
-       | HEYT_INT_KW LPAREN expr COMMA expr RPAREN
-       | HEYT_INT_KW LPAREN expr RPAREN
-       | MINUS expr
-       | chained_expr
+expr ::= open_form
+       | bor_expr LRARROW operand_0 BY expr COMMA open_form
+       | iff_expr
+
+open_form ::= IF_KW expr THEN_KW expr ELSE_KW expr
+            | FUN LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
+              FATARROW expr
+            | walk_kw IDENT FATARROW expr
+
+open_in_operator ::= IF_KW
+                   | walk_kw
+                   | FUN LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
+                     FATARROW chained_expr
+
+iff_expr ::= imp_expr IFFQ operand_1
+           | imp_expr
+
+imp_expr ::= or_expr FATARROW operand_2
+           | or_expr FATARROWQ operand_2
+           | or_expr
+
+or_expr ::= or_expr OR operand_3
+          | or_expr PIPEPIPE operand_3
+          | or_expr PIPEPIPEQ operand_3
+          | and_expr
+
+and_expr ::= and_expr AND operand_4
+           | and_expr AMPAMP operand_4
+           | and_expr AMPAMPQ operand_4
+           | cmp_expr
+
+cmp_expr ::= cmp_expr LT operand_5
+           | cmp_expr GT operand_5
+           | cmp_expr LEQ operand_5
+           | cmp_expr GEQ operand_5
+           | cmp_expr EQEQ operand_5
+           | cmp_expr NEQ operand_5
+           | at_expr
+
+at_expr ::= path_point
+          | path_point tighter_than_at
+          | map_expr
+
+path_point ::= at_expr ATSIGN I0
+             | at_expr ATSIGN I1
+             | at_expr ATSIGN IDENT
+
+tighter_than_at ::= PIPEGT
+                  | MAPSTO
+                  | INJ
+                  | LRARROW
+                  | PIPE
+                  | PIPEQ
+                  | CARET
+                  | CARETQ
+                  | AMP
+                  | AMPQ
+                  | PLUS
+                  | MINUS
+                  | PLUSPLUS
+                  | STAR
+                  | SLASH
+                  | PERCENT
+                  | THROUGH
+
+map_expr ::= map_expr MAPSTO operand_6
+           | map_expr INJ operand_6
+           | map_expr PIPEGT operand_6
+           | equiv_expr
+
+equiv_expr ::= bor_expr LRARROW operand_0
+             | bor_expr LRARROW operand_0 BY expr COMMA bor_expr
+             | bor_expr
+
+bor_expr ::= bor_expr PIPE operand_7
+           | bhor_expr
+
+bhor_expr ::= bhor_expr PIPEQ operand_8
+            | bxor_expr
+
+bxor_expr ::= bxor_expr CARET operand_9
+            | bxor_expr CARETQ operand_9
+            | band_expr
+
+band_expr ::= band_expr AMP operand_10
+            | band_expr AMPQ operand_10
+            | add_expr
+
+add_expr ::= add_expr PLUS operand_11
+           | add_expr MINUS operand_11
+           | concat_expr
+
+concat_expr ::= concat_expr PLUSPLUS operand_12
+              | mul_expr
+
+mul_expr ::= mul_expr STAR operand_13
+           | mul_expr SLASH operand_13
+           | mul_expr PERCENT operand_13
+           | unary_expr
+
+unary_expr ::= prefixed
+             | through_expr
+
+prefixed ::= NOT operand_13
+           | BANG operand_13
+           | ESCAPE operand_13
+           | TILDE operand_13
+           | BANGQ operand_13
+           | TILDEQ operand_13
+           | MINUS operand_13
+
+through_expr ::= closed_through
+               | closed_through THROUGH prefixed
+               | closed_through THROUGH open_in_operator
+
+closed_through ::= chained_expr (THROUGH chained_expr)*
 
 chained_expr ::= expr_atom
                | chained_expr DOT IDENT LPAREN expr_list RPAREN
@@ -465,8 +535,8 @@ chained_expr ::= expr_atom
 expr_atom ::= literal
             | FUN LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
               FATARROW LBRACE stmt* RBRACE
-            | FUN LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
-              FATARROW expr
+            | HEYT_INT_KW LPAREN expr COMMA expr RPAREN
+            | HEYT_INT_KW LPAREN expr RPAREN
             | MOVE LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
               FATARROW expr FROM IDENT TO IDENT
             | REDUCTION LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
@@ -502,7 +572,6 @@ expr_atom ::= literal
               hit_branch)*)? RBRACKET COMMA expr RPAREN
             | MATCH_KW expr_atom LBRACE (hit_branch (COMMA hit_branch)*)?
               RBRACE
-            | walk_kw IDENT FATARROW expr
             | HIT_KW LPAREN IDENT RPAREN
             | HIT_KW LPAREN IDENT COMMA expr (COMMA expr)* RPAREN
             | IDENT DOT IDENT LPAREN expr_list RPAREN
@@ -525,7 +594,6 @@ expr_atom ::= literal
             | SPAWN LBRACE stmt* RBRACE
             | SPAWN IN expr PARALLEL LBRACE stmt* RBRACE
             | LPAREN expr RPAREN
-            | IF_KW expr THEN_KW expr ELSE_KW expr
 
 walk_kw ::= WALK
           | PLAM
@@ -547,18 +615,68 @@ field_assign_list ::= field_assign*
 
 field_assign ::= IDENT expr
 
-condition ::= condition_atom
-            | condition AND condition
-            | condition OR condition
+condition ::= cond_or
 
-condition_atom ::= expr IS pattern
-                 | expr IS NOT pattern
-                 | expr
+is_atom ::= expr IS pattern
+          | expr IS NOT pattern
+
+cond_and_closed ::= is_atom (AND is_atom)*
+
+cond_and ::= cond_and_closed
+           | cond_and_closed AND expr
+           | expr
+
+cond_or_closed ::= cond_and_closed (OR cond_and_closed)*
+
+cond_or ::= cond_and
+          | cond_or_closed OR cond_and
 
 pattern ::= IDENT
           | literal
           | PRESENT
           | ABSENT
           | UNKNOWN
+
+operand_1 ::= iff_expr
+            | open_in_operator
+
+operand_4 ::= cmp_expr
+            | open_in_operator
+
+operand_10 ::= add_expr
+             | open_in_operator
+
+operand_7 ::= bhor_expr
+            | open_in_operator
+
+operand_12 ::= mul_expr
+             | open_in_operator
+
+operand_11 ::= concat_expr
+             | open_in_operator
+
+operand_5 ::= at_expr
+            | open_in_operator
+
+operand_9 ::= band_expr
+            | open_in_operator
+
+operand_3 ::= and_expr
+            | open_in_operator
+
+operand_6 ::= equiv_expr
+            | open_in_operator
+
+operand_8 ::= bxor_expr
+            | open_in_operator
+
+operand_2 ::= imp_expr
+            | open_in_operator
+
+operand_0 ::= bor_expr
+            | open_in_operator
+
+operand_13 ::= unary_expr
+             | open_in_operator
 
 

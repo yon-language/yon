@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    p := walk i => 5
+    return p @ I0 + 1
+  }
+}

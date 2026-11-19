@@ -188,7 +188,7 @@ def _between_processes(tmp: Path, boundary: str, ty: str, build: str, read: str,
         imp = "items"
         main = ("  fun main: Number {\n    w := wire to space P\n"
                 "    sub := w.awaits(items)\n    s := sub.stream\n"
-                f"    return s.fold(0, fun(a: Number, x: {ty}) => a + {read})\n  }}\n")
+                f"    return s.fold(0, fun(a: Number, x: {ty}) => a + ({read}))\n  }}\n")
     (svc / "Entry.yon").write_text(
         "place Entry {\n" + _indent(exported) + "\n  fun main: Number { return 0 }\n}\n")
     (cli / "yon_modules" / "prod").mkdir(parents=True)

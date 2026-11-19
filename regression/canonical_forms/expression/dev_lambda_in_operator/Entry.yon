@@ -1,0 +1,6 @@
+place Entry {
+  fun main: Number {
+    n := 2 * fun(x: Number) => x
+    return 0
+  }
+}

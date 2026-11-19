@@ -1,0 +1,8 @@
+place Entry {
+  fun main: Number {
+    x := 42
+    mut r := 0
+    when x is 7 or x is 42 { r <- 42 }
+    return r
+  }
+}

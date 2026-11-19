@@ -1,0 +1,6 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: a path applied with @ is written in parentheses before an operator that binds tighter
+note: |
+  today `p @ i + 1` read `(p @ i) + 1`; until `@` has a level of its own it is refused, and `(p @ i) + 1` is written.

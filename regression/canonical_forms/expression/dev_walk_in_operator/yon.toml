@@ -1,0 +1,5 @@
+[package]
+name = "dev_walk_in_operator"
+
+[runtime]
+backend = "memory"

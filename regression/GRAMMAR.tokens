@@ -192,11 +192,7 @@ TOKEN	RBRACE
 TOKEN	EOF
 
 # Precedence names (parser.mly %left/%right/%nonassoc, not tokens: no case gives them)
-PRECEDENCE	LOWEST
 PRECEDENCE	CLAUSE_END
-PRECEDENCE	UMINUS
-PRECEDENCE	UNOT
-PRECEDENCE	UTILDE
 PRECEDENCE	NO_ELIF
 
 # Keywords (keyword_table: a name the identifier case reads is looked up here)

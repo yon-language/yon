@@ -1,0 +1,7 @@
+place Entry {
+  fun main: Number {
+    c := true
+    x := 1 + if c then 2 else 3
+    return x
+  }
+}
