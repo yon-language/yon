@@ -2138,6 +2138,16 @@ static int yon_rt_shm_slot_of(uint32_t id) {
 }
 static uint32_t g_n_shm_streams = 0;
 
+/* An id opened again replaces the mapping it had: the old handle is unmapped
+ * and its place in the pool given back before the new one is taken, so a
+ * channel opened at every call (the rings of a typed call, on the server)
+ * holds one handle, not one per call. */
+static void yon_shm_stream_release_slot(int slot) {
+    if (!g_shm_stream_handles[slot]) return;
+    yon_rt_stream_shm_close(g_shm_stream_handles[slot]);
+    g_shm_stream_handles[slot] = NULL;
+}
+
 /* Open/attach a cross-process stream identified by an integer id. create=1
  * makes it. Returns the id as f64, or -1.0 on failure. Both processes call
  * with the same id to rendezvous on the same shared region. */
@@ -2149,6 +2159,7 @@ double yon_rt_stream_shm_open_f64(double id_f64, double create_f64) {
             if (!g_shm_stream_handles[i]) { slot = i; break; }
     }
     if (slot < 0) return -1.0;  /* 64 simultaneous channels exhausted */
+    yon_shm_stream_release_slot(slot);
     char name[32];
     snprintf(name, sizeof(name), "id_%u", id);
     yon_shm_stream_t *s =
@@ -2177,6 +2188,7 @@ double yon_rt_stream_shm_open_sized_f64(double id_f64, double create_f64,
             if (!g_shm_stream_handles[i]) { slot = i; break; }
     }
     if (slot < 0) return -1.0;
+    yon_shm_stream_release_slot(slot);
     char name[32];
     snprintf(name, sizeof(name), "id_%u", id);
     yon_shm_stream_t *s =

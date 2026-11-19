@@ -86,6 +86,10 @@ C_UNIT_TESTS = [
     # mutex serializes head/tail/count where flock() on an shm fd did not on
     # macOS. Self-provides __yon_dispatch -> no shared stub.
     ("wire_race",     "test_unit_wire_race.c",    b"WIRE_RACE: PASS",     False),
+    # A channel opened again by its id keeps one mapping: the server of a typed
+    # call attaches the rings of a session at every call, and a new session
+    # must still find handles for its own rings after any number of calls.
+    ("shm_reopen",    "test_unit_shm_reopen.c",   b"SHM_REOPEN: PASS",    True),
     # Extensionality under load: 300k distinct contents (> the 196,560 Leech
     # kissing number) chain past one heap, each on a DISTINCT ref (no false dedup
     # even under heavy 64-bit-hash collisions — memcmp settles them), dedup stable.
