@@ -1,0 +1,6 @@
+place Entry {
+  fun main(): Number {
+    h1 := heyting(5)
+    return 0
+  }
+}

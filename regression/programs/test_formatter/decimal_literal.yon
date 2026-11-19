@@ -1,0 +1,5 @@
+place Entry {
+  fun g(x: Number): Number {
+    return x + 1.0
+  }
+}

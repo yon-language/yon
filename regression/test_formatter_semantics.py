@@ -64,18 +64,25 @@ def _units():
 
 UNITS = _units()
 
-# Units whose formatting breaks the oracle, each with the law it breaks. Strict:
-# an entry whose unit formats correctly fails the run and must go. None today:
-# the formatter writes `exact push` again, and the round-trip compares the whole
-# tree, so a clause it drops is a refusal of the round-trip, not a silent change.
-KNOWN_DEFECTS = {}
+# Units whose formatting the round-trip refuses, each with the defect of the formatter it shows
+# (test_formatter.KNOWN_DEFECTS: the formatted text is read with other sites beside the tree).
+# Strict: an entry whose unit formats again fails the run and must go.
+KNOWN_DEFECTS = {
+    "examples/false_coherence.yon": "yonfmt writes 1.0 as 1",
+    "examples/kw_heyting": "yonfmt writes heyting(v) as the internal __heyt_int_make(v, 0)",
+    "prelude": "yonfmt writes the negative literal -n as 0 - n",
+    "examples/kw_paths": "yonfmt writes ind_path(0, d, p) as induct(d, p), and the 0 that was written is lost",
+    "regression/yon_tests/runtime/j_computes.yon":
+        "yonfmt writes ind_path(0, d, p) as induct(d, p), and the 0 that was written is lost",
+    "regression/canonical_forms/algebra/model": "yonfmt drops `uses algebra` from a place declared by its arms",
+}
 
 
 def _params():
     out = []
     for u in UNITS:
         rel = str(u.relative_to(ROOT))
-        marks = ([pytest.mark.xfail(strict=True, raises=pytest.fail.Exception,
+        marks = ([pytest.mark.xfail(strict=True, raises=AssertionError,
                                    reason=KNOWN_DEFECTS[rel])]
                  if rel in KNOWN_DEFECTS else [])
         out.append(pytest.param(u, id=rel, marks=marks))
@@ -109,7 +116,8 @@ def _emit(target: Path, copy_root: Path):
 
     def norm(s: str) -> str:
         s = s.replace(str(copy_root.resolve()), "<COPY>").replace(str(copy_root), "<COPY>")
-        return re.sub(r"\[line \d+, col \d+\]", "[line _, col _]", s)
+        s = re.sub(r"\[line \d+, col \d+\]", "[line _, col _]", s)
+        return re.sub(r"\bat \d+:\d+\b", "at _:_", s)   # the positions of a drop diagnostic
 
     return r.returncode, norm(r.stdout), norm(r.stderr)
 

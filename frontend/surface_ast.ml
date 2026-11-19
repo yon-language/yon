@@ -1429,4 +1429,5 @@ let reset_parse_tables () =
   Hashtbl.reset mut_sites; Hashtbl.reset fun_bounds; Hashtbl.reset bare_nullary_decls;
   Hashtbl.reset internal_carrier_sites; Hashtbl.reset arrow_written_in;
   Hashtbl.reset carrier_headers; Hashtbl.reset algebra_written; Hashtbl.reset place_algebras;
-  Hashtbl.reset proof_funs
+  Hashtbl.reset proof_funs; Hashtbl.reset arrow_home_sites; Hashtbl.reset carrier_models;
+  Hashtbl.reset algebra_places; Hashtbl.reset place_term_params

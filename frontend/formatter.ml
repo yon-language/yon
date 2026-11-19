@@ -386,6 +386,7 @@ let rec fmt_stmt (f : fmt) (s : stmt) : unit =
       f.indent <- f.indent + 1; List.iter (fmt_stmt f) body; f.indent <- f.indent - 1;
       line f "}"
   | SPromote (e, _) -> line f ("promote " ^ fmt_expr e)
+  | SDrop (sp, _) -> line f ("drop " ^ sp)
   | SNew (place, fas, _) ->
       (* field assignments are space-juxtaposed in the surface (`{ x 1 y 2 }`),
          NOT comma-separated -- a comma here would never re-parse. *)
@@ -783,6 +784,12 @@ let parse (source : string) : program option =
     Some (Parser_state.drain () @ p)
   with _ -> None
 
+(* A reading: the program and the sites the parser wrote beside it (Ast_compare.sites). *)
+let parse_reading (source : string) : (program * Ast_compare.site list) option =
+  match parse source with
+  | None -> None
+  | Some prog -> Some (prog, Ast_compare.sites ())
+
 (* The site of a declaration, to find the house it was written in. *)
 let site_of_top (td : top_decl) : (string * int * int) option =
   let s (l : location) = Some (l.file, l.start_line, l.start_col) in
@@ -849,22 +856,25 @@ let top_names (prog : program) : string list =
 
 (* Format with a guarantee. Return the output only if BOTH hold:
  *   - the output re-parses to the same program: the whole tree is equal but for
- *     the positions (Ast_compare), so no change inside a body goes unseen, and
+ *     the positions (Ast_compare), so no change inside a body goes unseen, and the
+ *     sites the parser writes beside the tree agree (the digits of an integral
+ *     literal, the arrow of a call: Ast_compare.sites), and
  *   - formatting is idempotent: formatting the re-parsed output reproduces it
  *     byte-for-byte (a fixed point). Idempotence catches a formatter that is
  *     unstable under its own output -- a real proxy for "the AST round-tripped".
  * Otherwise None, and the caller leaves the file unchanged (fail-safe). *)
 let safe_format (source : string) : string option =
-  match parse source with
+  match parse_reading source with
   | None -> None   (* invalid source: leave it untouched *)
-  | Some prog ->
+  | Some (prog, sites) ->
       match format_program prog with
       | None -> None   (* construct not covered *)
       | Some formatted ->
-          match parse formatted with
+          match parse_reading formatted with
           | None -> None   (* the output does not re-parse: do NOT use it *)
-          | Some prog2 ->
-              if not (Ast_compare.equal prog prog2) then None  (* the program changed *)
+          | Some (prog2, sites2) ->
+              if not (Ast_compare.equal_readings (prog, sites) (prog2, sites2))
+              then None  (* the program changed, in its tree or in its sites *)
               else match format_program prog2 with
                    | Some formatted2 when formatted2 = formatted -> Some formatted
                    | _ -> None   (* not idempotent: do NOT use it *)

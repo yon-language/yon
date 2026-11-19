@@ -9,6 +9,7 @@
  *   yonfmt <file>         : print the formatted output to stdout (if safe)
  *   yonfmt --write <file> : rewrite the file in place (if safe)
  *   yonfmt --check <file> : exit 0 if already formatted, 1 if it would change
+ *   yonfmt --dump-ast <file> : the reading of the file, with its positions and its sites
  *)
 
 let read_file (file : string) : string =
@@ -33,6 +34,23 @@ let () =
            let oc = open_out file in output_string oc out; close_out oc;
            Printf.printf "formatted: %s\n" file
        | None -> Printf.printf "left unchanged (fail-safe): %s\n" file)
+  | [_; "--dump-ast"; file] ->
+      (* the reading as text: two builds of the parser that read a file the same way write
+         the same text for it *)
+      (match Formatter.parse_reading (read_file file) with
+       | Some (prog, sites) -> print_string (Ast_compare.dump prog sites)
+       | None ->
+           (* the refusal, with where the reading stopped: a change of the grammar keeps it too *)
+           Parser_state.reset (); Surface_ast.reset_parse_tables (); Lexer.reset_statement ();
+           let lexbuf = Lexing.from_string (read_file file) in
+           (try ignore (Parser.program Lexer.token lexbuf); print_endline "parsed on the second reading"
+            with e ->
+              let p = Lexing.lexeme_start_p lexbuf in
+              Printf.printf "refused at %d:%d: %s\n" p.Lexing.pos_lnum (p.Lexing.pos_cnum - p.Lexing.pos_bol)
+                (match e with
+                 | Error_codes.Refused (c, m) -> Error_codes.id c ^ " " ^ m
+                 | e -> Printexc.to_string e));
+           exit 2)
   | [_; "--raw"; file] ->
       (* the raw output, before the round-trip fail-safe: it shows why the
          guard refuses, instead of leaving it to be guessed *)
@@ -44,16 +62,20 @@ let () =
             | Some out -> print_string out))
   | [_; "--ast-diff"; file] ->
       (* where the program and its formatting differ, but for positions: the guard's reason *)
-      (match Formatter.parse (read_file file) with
+      (match Formatter.parse_reading (read_file file) with
        | None -> prerr_endline "parse failed"; exit 2
-       | Some prog ->
+       | Some (prog, sites) ->
            (match Formatter.format_program prog with
             | None -> prerr_endline "format_program: Exit (an uncovered construct)"; exit 3
             | Some out ->
-                (match Formatter.parse out with
+                (match Formatter.parse_reading out with
                  | None -> prerr_endline "the formatted text does not parse"; exit 4
-                 | Some prog2 ->
+                 | Some (prog2, sites2) ->
                      (match Ast_compare.first_difference prog prog2 with
+                      | None when Ast_compare.sites_difference prog sites prog2 sites2 <> None ->
+                          (match Ast_compare.sites_difference prog sites prog2 sites2 with
+                           | Some what -> Printf.printf "differ in the sites (source first): %s\n" what
+                           | None -> ())
                       | None ->
                           (match Formatter.format_program prog2 with
                            | Some out2 when out2 = out -> print_endline "the same program, and idempotent"

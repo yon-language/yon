@@ -1,0 +1,5 @@
+place Entry {
+  fun fnv_offset: Int64 {
+    return -3750763034362895579
+  }
+}

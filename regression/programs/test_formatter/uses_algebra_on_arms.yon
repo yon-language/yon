@@ -1,0 +1,6 @@
+place Coin uses algebra Turn {
+  this > Heads :U Tails
+  fun flip(a: Coin): Coin {
+    return match a { Heads => Tails, Tails => Heads }
+  }
+}
