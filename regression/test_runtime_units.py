@@ -96,7 +96,10 @@ C_UNIT_TESTS = [
     # must still find handles for its own rings after any number of calls.
     ("shm_reopen",    "test_unit_shm_reopen.c",   b"SHM_REOPEN: PASS",    True),
     # The rings of the sessions of a server of typed calls: one server serves
-    # 200 sessions, each through the server's own handling of the rings.
+    # 200 sessions, each through the server's own handling of the rings; a ring
+    # nobody made gives the kernel's reason; a real call between two processes,
+    # to a server that cannot open the rings, is refused with that reason and
+    # exit code 3, not as a call of another signature.
     ("rpc_rings",     "test_unit_rpc_rings.c",    b"RPC_RINGS: PASS",     True),
     # Extensionality under load: 300k distinct contents (> the 196,560 Leech
     # kissing number) chain past one heap, each on a DISTINCT ref (no false dedup

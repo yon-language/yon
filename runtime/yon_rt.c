@@ -1880,6 +1880,7 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
     if (pslot < 0) {
         munmap(region, region_size);
         close(fd);
+        errno = EMFILE;
         return NULL;   /* handle pool exhausted */
     }
     yon_shm_stream_t *s = &g_shm_stream_pool[pslot];
@@ -2215,7 +2216,7 @@ double yon_rt_stream_shm_open_f64(double id_f64, double create_f64) {
         for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
             if (!g_shm_stream_handles[i]) { slot = i; break; }
     }
-    if (slot < 0) return -1.0;  /* 64 simultaneous channels exhausted */
+    if (slot < 0) { errno = EMFILE; return -1.0; }  /* 64 simultaneous channels exhausted */
     yon_shm_stream_release_slot(slot);
     char name[32];
     snprintf(name, sizeof(name), "id_%u", id);
@@ -2244,7 +2245,7 @@ double yon_rt_stream_shm_open_sized_f64(double id_f64, double create_f64,
         for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
             if (!g_shm_stream_handles[i]) { slot = i; break; }
     }
-    if (slot < 0) return -1.0;
+    if (slot < 0) { errno = EMFILE; return -1.0; }  /* every entry of the map is taken */
     yon_shm_stream_release_slot(slot);
     char name[32];
     snprintf(name, sizeof(name), "id_%u", id);
@@ -2531,7 +2532,14 @@ typedef struct {
     double   value;
     uint64_t nonce_echo;
     uint64_t seq_echo;
+    uint32_t status;     /* YON_RPC2_ANSWERED, or why the server could not serve the call */
+    int32_t  detail;     /* the reason of the kernel for that status (an errno), else 0 */
 } yon_rpc2_reply_t;
+
+/* the status of a reply: the call was served (its value is the answer), or the
+ * server could not open the rings of the session (detail: the errno) */
+#define YON_RPC2_ANSWERED          0u
+#define YON_RPC2_RINGS_NOT_OPENED  1u
 
 /* decision 1 fallback: nominal name (a stream of this world instance, the
  * Space's mailbox), truncation+fnv1a only past NAME_MAX. */
@@ -2800,7 +2808,14 @@ int yon_rt_rpc2_take(void *qh, yon_rpc2_req_t *out, uint32_t idle_ms) {
 /* Server side: write the result into the caller's PRIVATE reply channel,
  * named in the request itself. A missing channel means the caller is gone:
  * the request is dropped (-1), the server moves on. */
+static int yon_rpc2_reply_status(const yon_rpc2_req_t *req, double result,
+                                 uint32_t status, int32_t detail);
 int yon_rt_rpc2_reply(const yon_rpc2_req_t *req, double result) {
+    return yon_rpc2_reply_status(req, result, YON_RPC2_ANSWERED, 0);
+}
+
+static int yon_rpc2_reply_status(const yon_rpc2_req_t *req, double result,
+                                 uint32_t status, int32_t detail) {
     if (!req || !req->reply_name[0]) return -1;
     int fd = shm_open(req->reply_name, O_RDWR, 0600);
     if (fd < 0) return -1;
@@ -2820,6 +2835,8 @@ int yon_rt_rpc2_reply(const yon_rpc2_req_t *req, double result) {
     rep->value      = result;
     rep->nonce_echo = req->nonce;
     rep->seq_echo   = req->seq;
+    rep->status     = status;
+    rep->detail     = detail;
     rep->has_value  = 1;
     pthread_cond_signal(&rep->filled);
     pthread_mutex_unlock(&rep->mu);
@@ -2854,6 +2871,8 @@ typedef struct {
     yon_rpc2_reply_t *rep;
     yon_rpc2_queue_t *q;
     int               rings;        /* the session's argument and result rings are open */
+    uint32_t          status;       /* the status of the last reply (YON_RPC2_ANSWERED, ...) */
+    int32_t           detail;       /* and its reason */
 } yon_rpc2_session_t;
 
 #define YON_RPC2_MAX_SESSIONS 16
@@ -3194,6 +3213,8 @@ static double rpc2_call(const char *space_name, double selector,
     if (!s || !s->q || !s->rep) return -777.0;
     yon_rpc2_req_t req;
     memset(&req, 0, sizeof(req));
+    s->status = YON_RPC2_ANSWERED;
+    s->detail = 0;
     s->seq++;
     req.nonce    = s->nonce;
     req.seq      = s->seq;
@@ -3216,6 +3237,8 @@ static double rpc2_call(const char *space_name, double selector,
              * of a timed-out earlier call is consumed and discarded. */
             if (s->rep->nonce_echo == s->nonce && s->rep->seq_echo == s->seq) {
                 double v = s->rep->value;
+                s->status = s->rep->status;
+                s->detail = s->rep->detail;
                 s->rep->has_value = 0;
                 pthread_mutex_unlock(&s->rep->mu);
                 return v;
@@ -3597,6 +3620,9 @@ double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *s
         r = rpc2_call(space, sel, argc, req, 10000u,
                       n_framed_args ? rpc2_send_args : NULL, &ctx);
     }
+    if (s->status == YON_RPC2_RINGS_NOT_OPENED)
+        yon_rt_refuse_with(YON_REFUSAL_CallRingsNotOpened, yon_refusal_name(space), (int64_t)sel,
+                           (int64_t)s->detail);
     if (r == YON_WIRE_TYPE_REFUSED) rpc2_refused(space, sel);
     if (r == -777.0 || ctx.err) {
         fprintf(stderr, "error: cross-Space call failed — Space '%s' did not "
@@ -3716,7 +3742,10 @@ static void rpc2_serve_typed_body(void *p, int cha, int chr) {
     yon_rt_wire_buf_free(&msg);
 }
 
-/* The server's half of a typed call. */
+/* The server's half of a typed call. When the rings of the session cannot be
+ * opened, the server says so, with the kernel's reason, and the caller is
+ * refused with that reason (CallRingsNotOpened), not as a call of another
+ * signature. */
 static void rpc2_serve_typed(const yon_rpc2_req_t *req) {
     rpc2_serve_t c = { req, rpc2_op(req->selector), req->argc & 0xFFu,
                        yon_root_of_halves(req->args[6], req->args[7]) };
@@ -3724,11 +3753,9 @@ static void rpc2_serve_typed(const yon_rpc2_req_t *req) {
     int err = yon_rt_rpc2_with_rings((uint32_t)req->args[4], (uint32_t)req->args[5], framed,
                                      rpc2_serve_typed_body, &c);
     if (err) {
-        /* the rings could not be opened: refused, as a call the server cannot serve */
-        fprintf(stderr, "error: a call to operation %u awaits signature root %016llx, "
-                "and this Space declares %016llx: refused\n", (unsigned)req->selector,
-                (unsigned long long)c.awaited, (unsigned long long)(c.sig ? c.sig[0] : 0));
-        yon_rt_rpc2_reply(req, YON_WIRE_TYPE_REFUSED);
+        fprintf(stderr, "error: the rings of the session of a call to operation %u could not "
+                "be opened: %s\n", (unsigned)req->selector, strerror(err));
+        yon_rpc2_reply_status(req, 0.0, YON_RPC2_RINGS_NOT_OPENED, (int32_t)err);
     }
 }
 

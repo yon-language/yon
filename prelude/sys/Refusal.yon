@@ -39,6 +39,8 @@ place Refusal {
     :U UnknownDecided
     /* the algebras */
     :U AlgebraNotInTable
+    /* the rings of a call between processes */
+    :U CallRingsNotOpened
 
   fun sentence(r: Refusal): Text {
     return match r {
@@ -93,7 +95,8 @@ place Refusal {
       SpaceUnknown => "space: there is no Space {a}",
       SpaceHasNoHeap => "space: there is no heap for Space {a}",
       UnknownDecided => "logic: unknown reached a decided condition",
-      AlgebraNotInTable => "algebra verifier: {a:f} names no algebra of the table"
+      AlgebraNotInTable => "algebra verifier: {a:f} names no algebra of the table",
+      CallRingsNotOpened => "cross-Space call refused: Space '{a:s}' could not open the rings of the session of operation {b}: {c:e}"
     }
   }
 }

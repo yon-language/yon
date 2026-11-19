@@ -61,7 +61,8 @@ enum yon_refusal {
     YON_REFUSAL_SpaceHasNoHeap = 49,
     YON_REFUSAL_UnknownDecided = 50,
     YON_REFUSAL_AlgebraNotInTable = 51,
-    YON_REFUSAL_COUNT = 52
+    YON_REFUSAL_CallRingsNotOpened = 52,
+    YON_REFUSAL_COUNT = 53
 };
 
 /* the words of the occasion: an integer, the bits of a real, a type root,
@@ -129,5 +130,6 @@ static const char *const yon_refusal_sentence[YON_REFUSAL_COUNT] = {
     "space: there is no heap for Space {a}",
     "logic: unknown reached a decided condition",
     "algebra verifier: {a:f} names no algebra of the table",
+    "cross-Space call refused: Space '{a:s}' could not open the rings of the session of operation {b}: {c:e}",
 };
 #endif
