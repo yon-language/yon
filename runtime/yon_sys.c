@@ -130,17 +130,28 @@ static void yon_sys_shared_kernel_name(double name_d, char out[40]) {
     snprintf(out, 40, "/%s", yon_ds_cstr(name_d));
 }
 
+/* Give the region open on fd at least `bytes` bytes. Two processes that open it
+ * at once may both measure it empty; the first sizes it, and a kernel that sizes
+ * a shared region only once (macOS) refuses the second with EINVAL. The second
+ * then measures again: a region the other already sized is the one it asked for. */
+static void yon_sys_shared_size(int fd, size_t bytes) {
+    struct stat st;
+    if (fstat(fd, &st) != 0) { close(fd); yon_sys_refuse(YON_REFUSAL_SharedNotMeasured); }
+    if ((size_t)st.st_size >= bytes || ftruncate(fd, (off_t)bytes) == 0) return;
+    int e = errno;
+    if (fstat(fd, &st) == 0 && (size_t)st.st_size >= bytes) return;
+    close(fd);
+    errno = e;
+    yon_sys_refuse(YON_REFUSAL_KernelDidNotSizeShared);
+}
+
 int64_t yon_rt_sys_shared_map(double name_d, int64_t words) {
     char n[40];
     yon_sys_shared_kernel_name(name_d, n);
     size_t bytes = ((size_t)words + 1u) * sizeof(int64_t);
     int fd = shm_open(n, O_CREAT | O_RDWR, 0600);
     if (fd < 0) yon_sys_refuse(YON_REFUSAL_KernelDidNotOpenShared);
-    struct stat st;
-    if (fstat(fd, &st) != 0) { close(fd); yon_sys_refuse(YON_REFUSAL_SharedNotMeasured); }
-    if ((size_t)st.st_size < bytes && ftruncate(fd, (off_t)bytes) != 0) {
-        close(fd); yon_sys_refuse(YON_REFUSAL_KernelDidNotSizeShared);
-    }
+    yon_sys_shared_size(fd, bytes);
     void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);
     if (p == MAP_FAILED) yon_sys_refuse(YON_REFUSAL_KernelDidNotMapShared);
@@ -158,11 +169,7 @@ static int64_t yon_sys_shared_named(const char *n, int64_t words) {
     int fd = shm_open(n, O_CREAT | O_RDWR, 0600);
     if (fd < 0) yon_sys_refuse(YON_REFUSAL_KernelDidNotOpenShared);
     yon_rt_world_register(n);
-    struct stat st;
-    if (fstat(fd, &st) != 0) { close(fd); yon_sys_refuse(YON_REFUSAL_SharedNotMeasured); }
-    if ((size_t)st.st_size < bytes && ftruncate(fd, (off_t)bytes) != 0) {
-        close(fd); yon_sys_refuse(YON_REFUSAL_KernelDidNotSizeShared);
-    }
+    yon_sys_shared_size(fd, bytes);
     void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);
     if (p == MAP_FAILED) yon_sys_refuse(YON_REFUSAL_KernelDidNotMapShared);
