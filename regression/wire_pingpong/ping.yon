@@ -1,0 +1,24 @@
+// Wire ping-pong, PING (the fixture of test_wire_pingpong and tools/bench/wire_pingpong.py).
+//   args: <n> <channel-out> <channel-in>
+// Attaches the two channels the pong created, then n times: sends i on <channel-out>, awaits
+// the answer on <channel-in>, checks that it is i + 1, and prints the nanoseconds of the round
+// trip, one line each (printed after the round trip, outside the time it measures).
+// Exit: 0 every answer right; 2 a channel could not be attached; 3 an answer out of place
+// (a wrong value, or an await that timed out with -1).
+fun main(): Number visits Output {
+  n := Text.parse_number(Args.get(1))
+  w_out := Wire.make_shm(Text.parse_number(Args.get(2)), 0)
+  w_in := Wire.make_shm(Text.parse_number(Args.get(3)), 0)
+  mut bad := 0
+  mut i := 0
+  while i < n do {
+    t0 := Time.now_ns(0)
+    _s := Wire.produce_shm(w_out, i)
+    v := Wire.await_shm(w_in)
+    t1 := Time.now_ns(0)
+    bad <- bad + (if v == i + 1 then 0 else 1)
+    _p := Output.print(Text.from_int(t1 - t0))
+    i <- i + 1
+  }
+  return if w_out < 0 then 2 else if w_in < 0 then 2 else if bad > 0 then 3 else 0
+}

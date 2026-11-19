@@ -1,0 +1,23 @@
+// Wire ping-pong, PONG (the fixture of test_wire_pingpong and tools/bench/wire_pingpong.py).
+//   args: <ready-path> <n> <channel-in> <channel-out>
+// Creates the two shared-memory channels, THEN writes "ready" to <ready-path> (a FIFO: the
+// handshake, so the ping never starts before the channels exist), then answers n messages:
+// each value v that comes in on <channel-in> goes back as v + 1 on <channel-out>.
+// Exit: 0 all answered; 2 a channel could not be created; 3 the ready signal could not be
+// written; 4 an await or a produce timed out.
+fun main(): Number visits Output {
+  n := Text.parse_number(Args.get(2))
+  w_in := Wire.make_shm(Text.parse_number(Args.get(3)), 1)
+  w_out := Wire.make_shm(Text.parse_number(Args.get(4)), 1)
+  ok := File.write_text(Args.get(1), "ready")
+  mut failed := 0
+  mut k := 0
+  while k < n do {
+    v := Wire.await_shm(w_in)
+    s := Wire.produce_shm(w_out, v + 1)
+    failed <- failed + (if v < 0 then 1 else 0) + (if s < 0 then 1 else 0)
+    k <- k + 1
+  }
+  _z := Wire.close_shm(w_out)
+  return if w_in < 0 then 2 else if w_out < 0 then 2 else if ok < 1 then 3 else if failed > 0 then 4 else 0
+}

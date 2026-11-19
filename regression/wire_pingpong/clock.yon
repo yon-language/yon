@@ -1,0 +1,14 @@
+// Wire ping-pong, the BASE of the ping: the same loop with nothing between the two readings of
+// the clock, so what the clock and the loop cost is measured apart and taken off the round trip.
+//   args: <n>
+fun main(): Number visits Output {
+  n := Text.parse_number(Args.get(1))
+  mut i := 0
+  while i < n do {
+    t0 := Time.now_ns(0)
+    t1 := Time.now_ns(0)
+    _p := Output.print(Text.from_int(t1 - t0))
+    i <- i + 1
+  }
+  return 0
+}
