@@ -162,10 +162,6 @@ fun scope_illegal(): Number { drop_A := 0  scope S { w := wire to space A }  ret
 fun scope_legal(): Number { scope S { w := wire to space A }  drop_A := 0  return 0 }\n\
 fun import_illegal(): Number { drop_A := 0  r := a_op(5)  return r }\n\
 fun import_legal(): Number { r := a_op(5)  drop_A := 0  return r }\n\
-fun move_illegal(): Number { drop_A := 0  r := apply_move(0) in A  return r }\n\
-fun move_legal(): Number { r := apply_move(0) in A  drop_A := 0  return r }\n\
-fun morph_illegal(): Number { drop_A := 0  r := tr(0) in A  return r }\n\
-fun morph_legal(): Number { r := tr(0) in A  drop_A := 0  return r }\n\
 fun place_illegal(): Number { drop_A := 0  r := .-> P { v 0 }  return r }\n\
 fun place_legal(): Number { r := .-> P { v 0 }  y := r.v  drop_A := 0  return y }\n\
 fun awaits_illegal(): Number { drop_A := 0  sub := w.awaits(prod)  return 0 }\n\

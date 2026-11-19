@@ -193,7 +193,6 @@ TOKEN	EOF
 
 # Precedence names (parser.mly %left/%right/%nonassoc, not tokens: no case gives them)
 PRECEDENCE	CLAUSE_END
-PRECEDENCE	NO_ELIF
 
 # Keywords (keyword_table: a name the identifier case reads is looked up here)
 KEYWORD	import	IMPORT

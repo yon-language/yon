@@ -21,6 +21,19 @@
   (* A form of the language that is gone: the refusal carries its code, and the
      message writes the form to use instead. *)
   let form_gone msg = raise (Error_codes.Refused (Error_codes.Form_gone, msg))
+
+  (* an operation with parameters, from what follows them: on error, the return type, the
+     symbol, the algebra *)
+  let operation_with_params name params (oerr, ret, sym, alg) loc =
+    (if params = [] then
+       failwith (Printf.sprintf
+         "operation %s has no parameters: it is a constant: operation %s: T" name name));
+    (if oerr <> None && ret = None then
+       failwith (Printf.sprintf
+         "operation %s: `on error` requires an explicit return type \
+          (`) on error E : T`)" name));
+    { Surface_ast.op_name = name; op_symbol = sym; op_params = params; op_return = ret;
+      op_on_error = oerr; op_algebra = alg; op_loc = loc }
   
   let mk_loc start_pos end_pos =
     { start_line = start_pos.Lexing.pos_lnum;
@@ -327,34 +340,15 @@
 
 %token EOF
 
-/* ─── Precedence and associativity ─────────────────────────────────── */
-/* Every shift/reduce choice of the grammar is decided here, none is left to
-   Menhir: regression/gate.sh checks that Menhir reports no conflict and no
-   useless precedence. Lower entries bind tighter. */
-
-
-/* A statement has no terminator, so a construct that may end with an
- * optional part meets the next token undecided. CLAUSE_END is the closing of
- * such a construct; the tokens below CONTINUE it, and continuing wins: the
- * longest reading, as a binder's body extends to the right.
- *   - `operation f(x) on error E`: the clause belongs to the operation;
- *   - `Sigma(x: A). B -> C`: the body of Σ is `B -> C`;
- *   - `a.b.c`: one field path (so `a.b.c(…)` is not a call on `a.b`);
- *   - `f(x) in S`: the call in a Space, not `f(x)` followed by `in …`;
- *   - `T in A, B`: one constrained type over A and B;
- *   - `functor (…) => e from W to V law L`: the law belongs to the functor;
- *   - `compose f with g @ I0` and `walk i => e @ I0` / `.m(…)`: the
- *     application belongs to the last operand / to the body;
- *   - `clear e`: reflexivity on e; bare `clear` only when no atom follows. */
+/* ─── Precedence ───────────────────────────────────────────────────── */
+/* The grammar is read by levels, and no precedence decides a choice of it but two, at the end of
+   a construct that may end with an optional part, where a statement (or a member) that has no
+   terminator meets the next one; continuing wins:
+     - `clear e` is reflexivity on e: a bare `clear` closes only when no atom follows;
+     - `functor (…) => e from W to V law L`: the law belongs to the functor.
+   regression/test_grammar_guard.py holds the list of these two and the form that removes each. */
 %nonassoc CLAUSE_END
-%nonassoc ON_ERROR LAW IN DOT IDENT QIDENT VIEW REDUCTION PRODUCE
-          MOVE MORPH_KW FUNCTOR FUN DOTARROW
-
-
-/* Precedence for dangling-when. */
-%nonassoc NO_ELIF
-%nonassoc WHEN
-
+%nonassoc LAW IDENT QIDENT VIEW REDUCTION PRODUCE MOVE MORPH_KW FUNCTOR FUN DOTARROW
 
 /* ─── Start symbol ──────────────────────────────────────────────────── */
 
@@ -559,7 +553,7 @@ morph_item:
   | tag = IDENT kind = IDENT
     LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
-    LBRACE body = list(stmt) RBRACE
+    LBRACE body = stmt_list RBRACE
     { if tag <> "on" || kind <> "object" then
         failwith ("expected 'on object' clause in morph body, got '"
                   ^ tag ^ " " ^ kind ^ "'");
@@ -657,7 +651,7 @@ geom_morphism_decl:
 geom_morphism_item:
   | PULL LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
-    LBRACE body = list(stmt) RBRACE
+    LBRACE body = stmt_list RBRACE
     { GmItemPull { fn_name = "pull";
                    fn_type_params = [];
                    fn_params = params;
@@ -667,7 +661,7 @@ geom_morphism_item:
                    fn_loc = mk_loc $startpos $endpos } }
   | PUSH LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
-    LBRACE body = list(stmt) RBRACE
+    LBRACE body = stmt_list RBRACE
     { GmItemPush { fn_name = "push";
                    fn_type_params = [];
                    fn_params = params;
@@ -879,11 +873,6 @@ over_clause:
 on_error_clause:
   | ON_ERROR e = IDENT  { e }
 
-(* the optional `on error E` right after an operation's parameters *)
-op_on_error:
-  | %prec CLAUSE_END        { None }
-  | e = on_error_clause     { Some e }
-
 field_or_cell:
   | f = field_decl                          { FoField f }
   | c = cell_decl                           { FoCell c }
@@ -894,7 +883,7 @@ field_or_cell:
    of the front-end sees it as an ordinary top-level arrow while the source
    keeps it inside the place. *)
 place_member_list:
-  | items = list(place_member)
+  | items = member_items
     { let members =
         List.filter_map (function PbiMember fc -> Some fc | _ -> None) items in
       let variants =
@@ -911,7 +900,22 @@ place_member_list:
 variant_clause:
   | THIS GT vs = separated_nonempty_list(COLON_U, arm) ARMS_END   { vs }
 
+member_items:
+  | (* empty *)                                     { [] }
+  | m = place_member rest = member_items            { m :: rest }
+  | o = bare_operation rest = members_after_bare    { PbiMember (FoOp o) :: rest }
+
+members_after_bare:
+  | (* empty *)                                       { [] }
+  | m = place_member_no_on_error rest = member_items  { m :: rest }
+  | o = bare_operation rest = members_after_bare      { PbiMember (FoOp o) :: rest }
+
 place_member:
+  | m = place_member_no_on_error          { m }
+  | ON_ERROR e = IDENT
+    { PbiClause (PcOnError e) }
+
+place_member_no_on_error:
   | fc = field_or_cell                    { PbiMember fc }
   | vs = variant_clause                   { PbiVariants vs }
   /* an operation is a mediated arrow, listed with the other arrows; a law is
@@ -940,8 +944,6 @@ place_member:
      (mirror of the coproduct's `this > arms` = this ⊃ arms). The AST clause
      is PcSubcontains. */
   | THIS LT base = IDENT                  { PbiClause (PcSubcontains base) }
-  | ON_ERROR e = IDENT
-    { PbiClause (PcOnError e) }
   /* in an algebra: the carrier C is a model, with the machine's operation
      for each symbol; its laws are certified like those of any model */
   | CARRIED BY c = IDENT g = boption(preceded(IS, GIVEN))
@@ -987,23 +989,26 @@ operation_decl:
   (* `) on error E : T` — the clause sits BEFORE the
      return type, and the `:` after E disambiguates (no place member can
      start with `:`). Return type MANDATORY with the clause. *)
-  | OPERATION name = IDENT LPAREN params = param_list RPAREN
-    oerr = op_on_error
-    ret = option(return_type_decl)
-    sym = option(op_symbol)
-    alg = option(uses_algebra_clause)
-    { (if params = [] then
-         failwith (Printf.sprintf
-           "operation %s has no parameters: it is a constant: operation %s: T" name name));
-      (if oerr <> None && ret = None then
-         failwith (Printf.sprintf
-           "operation %s: `on error` requires an explicit return type \
-            (`) on error E : T`)" name));
-      { op_name = name; op_symbol = sym; op_params = params; op_return = ret;
-        op_on_error = oerr;
+  | OPERATION name = IDENT LPAREN params = param_list RPAREN t = operation_tail
+    { operation_with_params name params t (mk_loc $startpos $endpos) }
 
-        op_algebra = alg;
-        op_loc = mk_loc $startpos $endpos } }
+(* What follows the parameters of an operation, when something does. *)
+operation_tail:
+  | e = on_error_clause ret = option(return_type_decl) sym = option(op_symbol)
+    alg = option(uses_algebra_clause)
+    { (Some e, ret, sym, alg) }
+  | ret = return_type_decl sym = option(op_symbol) alg = option(uses_algebra_clause)
+    { (None, Some ret, sym, alg) }
+  | sym = op_symbol alg = option(uses_algebra_clause)
+    { (None, None, Some sym, alg) }
+  | alg = uses_algebra_clause
+    { (None, None, None, Some alg) }
+
+(* An operation that ends with its parameters. An `on error` after them is its clause, so the
+   member after it does not begin with `on error` (members_after_bare). *)
+bare_operation:
+  | OPERATION name = IDENT LPAREN params = param_list RPAREN
+    { operation_with_params name params (None, None, None, None) (mk_loc $startpos $endpos) }
 
 (* A topos's morphism declaration. Mirrors operation_decl but uses the
  * `morphism` keyword (MORPHISM_KW) instead of `operation`, and produces the
@@ -1055,6 +1060,7 @@ functor_laws:
 
 standalone_op:
   | o = operation_decl                    { o }
+  | o = bare_operation                    { o }
 
 return_type_decl:
   | COLON t = type_expr                   { t }
@@ -1362,7 +1368,7 @@ arm:
 
 (* x.f1.f2: the fields after the head, as one path *)
 field_path:
-  | f = IDENT %prec CLAUSE_END                     { [f] }
+  | f = IDENT                                      { [f] }
   | f = IDENT DOT rest = field_path                { f :: rest }
 
 ident_list:
@@ -1403,7 +1409,7 @@ fun_decl:
         fn_visits = visits; fn_internal = internal; fn_given = true;
         fn_home = None; fn_body = []; fn_loc = loc } }
   | internal = boption(INTERNAL) proof = boption(PROOF) FUN name = IDENT tparams = type_params_opt
-    ret = option(return_type_decl) visits = visits_clause LBRACE body = list(stmt) RBRACE
+    ret = option(return_type_decl) visits = visits_clause LBRACE body = stmt_list RBRACE
     { let loc = mk_loc $startpos $endpos in
       Hashtbl.replace Surface_ast.bare_nullary_decls (loc.file, loc.start_line, loc.start_col) ();
       mark_proof proof { fn_name = name; fn_type_params = bound_params tparams loc; fn_params = [];
@@ -1411,7 +1417,7 @@ fun_decl:
         fn_visits = visits; fn_internal = internal; fn_given = false;
         fn_home = None; fn_body = body; fn_loc = loc } }
   | boption(INTERNAL) boption(PROOF) FUN name = IDENT type_params_opt option(return_type_decl)
-    visits_clause IS GIVEN LBRACE list(stmt) RBRACE
+    visits_clause IS GIVEN LBRACE stmt_list RBRACE
     { failwith (Printf.sprintf
         "fun %s is given and has a body: `is given` declares that the body is \
          the compiler's primitive, a body declares it is this one; write one \
@@ -1420,7 +1426,7 @@ fun_decl:
      the compiler's (a primitive), a body says it is this one. *)
   | boption(INTERNAL) boption(PROOF) FUN name = IDENT type_params_opt
     LPAREN param_list RPAREN option(on_error_clause) option(return_type_decl)
-    visits_clause IS GIVEN LBRACE list(stmt) RBRACE
+    visits_clause IS GIVEN LBRACE stmt_list RBRACE
     { failwith (Printf.sprintf
         "fun %s is given and has a body: `is given` declares that the body is \
          the compiler's primitive, a body declares it is this one; write one \
@@ -1431,7 +1437,7 @@ fun_decl:
     oerr = option(on_error_clause)
     ret = option(return_type_decl)
     visits = visits_clause
-    LBRACE body = list(stmt) RBRACE
+    LBRACE body = stmt_list RBRACE
     { (* UNIFORM order across the arrow family: `) on error E : T` — after E
          comes `:`, which no other construct can start, so the clause is
          unambiguous in every host (the operation lesson). The return type is
@@ -1592,19 +1598,30 @@ reduction_clause:
 
 on_clause:
   | tag = IDENT name = IDENT LPAREN params = param_list RPAREN
-    LBRACE body = list(stmt) RBRACE
+    LBRACE body = stmt_list RBRACE
     { if tag <> "on" then
         failwith ("expected 'on' keyword in reduction clause, got '" ^ tag ^ "'");
       RcOn (name, params, body, mk_loc $startpos $endpos) }
 
 /* ─── Statements ───────────────────────────────────────────────────── */
 
+(* A list of statements. A `when` that ends without `otherwise` takes the `when` after it as the
+   next arm of its chain, so the statement after it does not begin with `when`. *)
+stmt_list:
+  | (* empty *)                                   { [] }
+  | s = stmt rest = stmt_list                     { s :: rest }
+  | w = closed_when rest = stmt_list              { w :: rest }
+  | w = open_when rest = stmts_after_open_when    { w :: rest }
+
+stmts_after_open_when:
+  | (* empty *)                                   { [] }
+  | s = stmt rest = stmt_list                     { s :: rest }
+
 stmt:
   | s = let_stmt                          { s }
   | s = assign_stmt                       { s }
   | s = return_stmt                       { s }
   | s = call_or_new_stmt                  { s }
-  | s = when_stmt                         { s }
   | s = for_stmt                          { s }
   | s = in_seq_stmt                       { s }
   | s = repeat_stmt                       { s }
@@ -1614,18 +1631,21 @@ stmt:
   | s = emit_stmt                         { s }
   | s = promote_stmt                      { s }
   | DROP sp = IDENT                       { SDrop (sp, mk_loc $startpos $endpos) }
+  (* `f(args) in S`: after a call an `in` begins a statement, and only `in sequence` is one *)
+  | IN IDENT
+    { form_gone "`f(args) in S` is not a call of Yon: a call to another Space goes through a wire" }
   | s = iter_stmt                         { s }
   | s = while_stmt                        { s }
   | s = forces_stmt                       { s }
 
 iter_stmt:
-  | ITER_KW n = expr DO_KW LBRACE body = list(stmt) RBRACE
+  | ITER_KW n = expr DO_KW LBRACE body = stmt_list RBRACE
     { (* iter N do { body } — a bounded loop, always terminates.
        * Lowered to scf.for with upper bound N. *)
       SIter (n, body, mk_loc $startpos $endpos) }
 
 while_stmt:
-  | WHILE_KW c = expr DO_KW LBRACE body = list(stmt) RBRACE
+  | WHILE_KW c = expr DO_KW LBRACE body = stmt_list RBRACE
     { (* while cond do { body } may not terminate.
        * Lowered to scf.while + scf.condition + scf.yield. *)
       SWhile (c, body, mk_loc $startpos $endpos) }
@@ -1676,67 +1696,73 @@ call_or_new_stmt:
     { SNew (name, fas, mk_loc $startpos $endpos) }
 
 forces_stmt:
-  | FORCES stage = IDENT c = condition LBRACE body = list(stmt) RBRACE
+  | FORCES stage = IDENT c = condition LBRACE body = stmt_list RBRACE
     { SForces (stage, c, body, mk_loc $startpos $endpos) }
 
-when_stmt:
-  | WHEN c = condition LBRACE body = list(stmt) RBRACE
-    rest = when_chain
+(* when … { } (when … { })* (otherwise { })?: open when it ends without `otherwise` *)
+open_when:
+  | WHEN c = condition LBRACE body = stmt_list RBRACE rest = open_chain
     { let (elifs, other) = rest in
       SWhen (c, body, elifs, other, mk_loc $startpos $endpos) }
 
-/* when_chain represents the optional sequence of WHEN-elifs and optional
- * OTHERWISE. We use explicit precedence to favor extending the chain
- * (longest match) rather than terminating it. */
-when_chain:
+closed_when:
+  | WHEN c = condition LBRACE body = stmt_list RBRACE rest = closed_chain
+    { let (elifs, other) = rest in
+      SWhen (c, body, elifs, other, mk_loc $startpos $endpos) }
+
+open_chain:
   | /* empty */
-    %prec NO_ELIF
     { ([], None) }
-  | WHEN c = condition LBRACE body = list(stmt) RBRACE rest = when_chain
+  | WHEN c = condition LBRACE body = stmt_list RBRACE rest = open_chain
     { let (elifs, other) = rest in
       ((c, body) :: elifs, other) }
-  | OTHERWISE LBRACE body = list(stmt) RBRACE
+
+closed_chain:
+  | WHEN c = condition LBRACE body = stmt_list RBRACE rest = closed_chain
+    { let (elifs, other) = rest in
+      ((c, body) :: elifs, other) }
+  | OTHERWISE LBRACE body = stmt_list RBRACE
     { ([], Some body) }
 
 for_stmt:
-  | FOR EVERY x = IDENT IN e = expr WHEN HERE LBRACE body = list(stmt) RBRACE
+  | FOR EVERY x = IDENT IN e = expr WHEN HERE LBRACE body = stmt_list RBRACE
     { SForEvery (ForWhenHere, x, e, body, mk_loc $startpos $endpos) }
-  | FOR EVERY x = IDENT IN e = expr LBRACE body = list(stmt) RBRACE
+  | FOR EVERY x = IDENT IN e = expr LBRACE body = stmt_list RBRACE
     { SForEvery (ForParallel, x, e, body, mk_loc $startpos $endpos) }
 
 in_seq_stmt:
-  | IN SEQUENCE OVER x = IDENT IN e = expr LBRACE body = list(stmt) RBRACE
+  | IN SEQUENCE OVER x = IDENT IN e = expr LBRACE body = stmt_list RBRACE
     { SInSequence (x, e, body, mk_loc $startpos $endpos) }
 
 repeat_stmt:
-  | REPEAT AT MOST n = NUM_LIT TIMES LBRACE body = list(stmt) RBRACE
+  | REPEAT AT MOST n = NUM_LIT TIMES LBRACE body = stmt_list RBRACE
     other = repeat_tail
     { SRepeat (int_of_float n, body, other, mk_loc $startpos $endpos) }
 
 repeat_tail:
   | /* empty */
     { None }
-  | OTHERWISE LBRACE body = list(stmt) RBRACE
+  | OTHERWISE LBRACE body = stmt_list RBRACE
     { Some body }
 
 forever_stmt:
-  | FOREVER LBRACE body = list(stmt) RBRACE
+  | FOREVER LBRACE body = stmt_list RBRACE
     { SForever (body, mk_loc $startpos $endpos) }
 
 scope_stmt:
-  | SCOPE name = IDENT LBRACE body = list(stmt) RBRACE
+  | SCOPE name = IDENT LBRACE body = stmt_list RBRACE
     { (* An always-true scope predicate is top in Omega, not a classical
          boolean. *)
       SScope (Some name, body,
               ELit (LitHeytPresent, dummy_loc),
               mk_loc $startpos $endpos) }
-  | SCOPE LBRACE body = list(stmt) RBRACE
+  | SCOPE LBRACE body = stmt_list RBRACE
     { SScope (None, body,
               ELit (LitHeytPresent, dummy_loc),
               mk_loc $startpos $endpos) }
 
 produce_stmt:
-  | PRODUCE LBRACE body = list(stmt) RBRACE
+  | PRODUCE LBRACE body = stmt_list RBRACE
     { SProduce (body, mk_loc $startpos $endpos) }
 
 emit_stmt:
@@ -1975,17 +2001,59 @@ closed_through:
  * `e.method(args)` itera su expr_atom, costruendo ECall(method, e :: args).
  * Tipico use: Sequence.from_list(l).map(f).filter(p).fold(0, g). *)
 chained_expr:
-  | e = expr_atom              { e }
-  | recv = chained_expr DOT meth = IDENT LPAREN args = expr_list RPAREN
+  | e = name_ending { e }
+  | e = receiver { e }
+
+(* a bare name or a field path, or a prefix of an atom that ends with one *)
+name_ending:
+  | e = name_atom { e }
+  | e = prefixed_atom(name_ending) { e }
+
+(* A name and its field path take every `.` that follows them: `a.b.c` is one path, and a method
+   is called on an atom that is not a bare name (`a.m(…)` is the call of the dot, dot_call_expr). *)
+receiver:
+  | e = other_atom              { e }
+  | recv = receiver DOT meth = IDENT LPAREN args = expr_list RPAREN
     { ECall (meth, recv :: args, mk_loc $startpos $endpos) }
-  | recv = chained_expr DOT FOLD LPAREN args = expr_list RPAREN
+  | recv = receiver DOT FOLD LPAREN args = expr_list RPAREN
     { ECall ("fold", recv :: args, mk_loc $startpos $endpos) }
 
 expr_atom:
+  | e = name_ending { e }
+  | e = other_atom { e }
+
+name_atom:
+  | x = IDENT DOT fs = field_path
+    {
+      (* Build a left-associative chain: x.f1.f2.f3 -> EField(EField(EField(x, f1), f2), f3) *)
+      List.fold_left
+        (fun acc f -> EField (acc, f, mk_loc $startpos $endpos))
+        (EVar (x, dummy_loc))
+        fs
+    }
+  | x = IDENT
+    { EVar (x, mk_loc $startpos $endpos) }
+
+(* The prefixes that take an atom: they end as their operand ends, with a bare name or not. *)
+prefixed_atom(operand):
+  (* Handle composition: `compose <h1> with <h2>` produces a composed handle;
+     result(x) = h2(h1(x)). *)
+  | COMPOSE h1 = expr_atom WITH h2 = operand
+    { EComposeWith (h1, h2, mk_loc $startpos $endpos) }
+  | CLEAR e = operand
+    { ERefl (e, mk_loc $startpos $endpos) }
+  (* back p = inv(p) *)
+  | BACK e = operand
+    { ECall ("inv", [e], mk_loc $startpos $endpos) }
+  | CARRY expr_atom ALONG operand
+    { form_gone "carry x along e is not written: the transport is the application of the equivalence, x \xe2\x86\xa6 e" }
+
+other_atom:
+  | e = prefixed_atom(other_atom) { e }
   | l = literal                                                       
     { ELit (l, mk_loc $startpos $endpos) }
   | FUN LPAREN params = separated_list(COMMA, lambda_param) RPAREN FATARROW
-    LBRACE body = list(stmt) RBRACE
+    LBRACE body = stmt_list RBRACE
     { (* block-bodied inline lambda: lifted to a synthetic function,
          the expression's value is its name *)
       let loc = mk_loc $startpos $endpos in
@@ -2028,11 +2096,6 @@ expr_atom:
   | VIEW LPAREN params = separated_list(COMMA, lambda_param) RPAREN
     FATARROW body = expr OF of_p = IDENT
     { EViewLam (params, body, of_p, mk_loc $startpos $endpos) }
-  (* Handle composition.
-   * Syntax: `compose <h1> with <h2>` produces a composed handle.
-   * Semantics: result(x) = h2(h1(x)). *)
-  | COMPOSE h1 = expr_atom WITH h2 = expr_atom
-    { EComposeWith (h1, h2, mk_loc $startpos $endpos) }
   | HCOMP ty_name = IDENT LBRACKET
       sides = separated_list(COMMA, hcomp_side) RBRACKET base = hcomp_base
     {
@@ -2073,19 +2136,8 @@ expr_atom:
      After CLEAR, a token that can start an atom continues it (greedy, as
      every prefix metonym): the bare form closes only when no atom follows
      (CLAUSE_END, see the precedence block). *)
-  | CLEAR e = expr_atom
-    { ERefl (e, mk_loc $startpos $endpos) }
   | CLEAR %prec CLAUSE_END
     { ERefl (EVar ("__plainly__", mk_loc $startpos $endpos), mk_loc $startpos $endpos) }
-  (* ─── Metonymic surface sugar (journey metaphor) ─────────────────────
-     Prefix forms binding an atom; pure desugar to the cubical primitives.
-       back p          = inv(p)
-       carry x along e = transport(ua(e), x)   (e a bridge / equivalence)
-     (`span` is retired: univalence is written `ua(e)` directly.) *)
-  | BACK e = expr_atom
-    { ECall ("inv", [e], mk_loc $startpos $endpos) }
-  | CARRY expr_atom ALONG expr_atom
-    { form_gone "carry x along e is not written: the transport is the application of the equivalence, x \xe2\x86\xa6 e" }
   | PAIR LPAREN a = expr COMMA b = expr RPAREN
     { EPair (a, b, mk_loc $startpos $endpos) }
   /* a tuple, a product: right-nested pairs of one location */
@@ -2144,28 +2196,7 @@ expr_atom:
   | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN
     { dot_call_expr obj "push" args (mk_loc $startpos $endpos) }
 
-  | name = IDENT LPAREN args = expr_list RPAREN IN space = IDENT
-    { (* syntax `f(args) in S`.
-       *
-       * Cases:
-       *  - f = "apply_move": desugars to __apply_move_in_<S>.
-       *  - f = a declared morph name: desugars to
-       *      __apply_morph_in_<S>(<MorphName>, args)
-       *    so the runtime dispatch can apply the morph inside the target
-       *    space (triggering cross-space coordination via geom_morphism when
-       *    one is declared between the topoi involved).
-       *  - otherwise: a regular function call in a space context, desugared as
-       *    __call_in_<S>(name, args). The simple dispatch is equivalent to the
-       *    local call, but the space context stays visible to the lowering. *)
-      if name = "apply_move" then
-        ECall ("__apply_move_in_" ^ space, args, mk_loc $startpos $endpos)
-      else
-        (* For morphs and other functions in a space: the desugar/tycheck
-         * decides whether name is a morph (apply morph) or not. The mangling
-         * __morph_in_<S>__<name> serves as a unique tag. *)
-        ECall ("__morph_in_" ^ space ^ "__" ^ name, args,
-               mk_loc $startpos $endpos) }
-  | name = IDENT LPAREN args = expr_list RPAREN %prec CLAUSE_END
+  | name = IDENT LPAREN args = expr_list RPAREN
     { (match name with
        | "ua" -> failwith "ua(e) is not written: by univalence an equivalence is the path between its types wherever a path is asked, so write e, and carry a value along it with x \xe2\x86\xa6 e"
        | "equiv" -> failwith "equiv(f, g, eta, eps) is not written: an equivalence is f <=> g by eta, eps, or f <=> g when its laws close by computation"
@@ -2173,21 +2204,11 @@ expr_atom:
       ECall (name, args, mk_loc $startpos $endpos) }
   | name = QIDENT LPAREN args = expr_list RPAREN
     { ECall (name, args, mk_loc $startpos $endpos) }   (* mod::fun(args) *)
-  | x = IDENT DOT fs = field_path
-    {
-      (* Build a left-associative chain: x.f1.f2.f3 -> EField(EField(EField(x, f1), f2), f3) *)
-      List.fold_left
-        (fun acc f -> EField (acc, f, mk_loc $startpos $endpos))
-        (EVar (x, dummy_loc))
-        fs
-    }
   | x = IDENT DOT STREAM
     { (* subscription.stream: STREAM is a keyword, so the generic field
          chain above cannot accept it; dedicated rule *)
       EField (EVar (x, dummy_loc), "stream", mk_loc $startpos $endpos)
     }
-  | x = IDENT %prec CLAUSE_END
-    { EVar (x, mk_loc $startpos $endpos) }
   | x = QIDENT
     { EVar (x, mk_loc $startpos $endpos) }   (* qualified name mod::fun *)
   /* the mediatrice, expression position: `.-> Confirmed { amount 100 }` is
@@ -2197,11 +2218,11 @@ expr_atom:
     { ENew (name, fas, mk_loc $startpos $endpos) }
   | WIRE TO SPACE sp = IDENT
     { EWireTo (sp, mk_loc $startpos $endpos) }
-  | PRODUCE LBRACE body = list(stmt) RBRACE
+  | PRODUCE LBRACE body = stmt_list RBRACE
     { EProduce (body, mk_loc $startpos $endpos) }
-  | SPAWN LBRACE body = list(stmt) RBRACE
+  | SPAWN LBRACE body = stmt_list RBRACE
     { ESpawn (None, body, mk_loc $startpos $endpos) }
-  | SPAWN IN n = expr PARALLEL LBRACE body = list(stmt) RBRACE
+  | SPAWN IN n = expr PARALLEL LBRACE body = stmt_list RBRACE
     { ESpawn (Some n, body, mk_loc $startpos $endpos) }
   | LPAREN e = expr RPAREN                                             
     { EParen (e, mk_loc $startpos $endpos) }

@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: bare_operation members_after_bare
+note: |
+  An operation that ends with its parameters, followed by another member of the place.

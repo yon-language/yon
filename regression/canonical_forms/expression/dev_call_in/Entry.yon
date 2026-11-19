@@ -1,0 +1,9 @@
+place Entry {
+  fun double(x: Number): Number {
+    return x * 2
+  }
+  fun main: Number {
+    y := double(21) in Ledger
+    return y
+  }
+}

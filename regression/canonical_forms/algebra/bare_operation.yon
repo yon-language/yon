@@ -1,0 +1,4 @@
+place Entry {
+  operation tick(n: Number)
+  fun main: Number { return 42 }
+}

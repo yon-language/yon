@@ -49,7 +49,7 @@ topos_morphisms_opt ::= morphism_decl+?
 morph_decl ::= MORPH_KW IDENT FROM IDENT TO IDENT LBRACE morph_item* RBRACE
 
 morph_item ::= IDENT IDENT LPAREN param_list RPAREN return_type_decl? LBRACE
-               stmt* RBRACE
+               stmt_list RBRACE
              | IDENT IDENT COLON FUN LPAREN param_list RPAREN (COLON
                closed_type)? FATARROW expr
              | IDENT MORPHISM_KW IDENT VIA_KW IDENT
@@ -64,9 +64,9 @@ geom_morphism_decl ::= GEOM_MORPHISM IDENT FROM IDENT TO IDENT LBRACE
                        geom_morphism_item* RBRACE
 
 geom_morphism_item ::= PULL LPAREN param_list RPAREN return_type_decl? LBRACE
-                       stmt* RBRACE
+                       stmt_list RBRACE
                      | PUSH LPAREN param_list RPAREN return_type_decl? LBRACE
-                       stmt* RBRACE
+                       stmt_list RBRACE
                      | EXACT_KW PUSH
 
 top_let ::= IDENT COLONEQ expr
@@ -110,35 +110,44 @@ over_clause ::= OVER IDENT
 
 on_error_clause ::= ON_ERROR IDENT
 
-op_on_error ::= on_error_clause?
-
 field_or_cell ::= field_decl
                 | cell_decl
 
-place_member_list ::= place_member*
+place_member_list ::= member_items
 
 variant_clause ::= THIS GT arm (COLON_U arm)* ARMS_END
 
-place_member ::= field_or_cell
-               | variant_clause
-               | operation_decl
-               | LAW IDENT
-               | LAW IDENT LAW_STATEMENT expr (IS GIVEN)?
-               | LAW IDENT law_quantifiers COMMA expr (IS GIVEN)?
-               | LAW IDENT quantifiers LPAREN expr RPAREN (IS GIVEN)?
-               | LAW IDENT quantifiers COMMA expr (IS GIVEN)?
-               | OVER IDENT
-               | THIS LT IDENT
+member_items ::= 
+               | place_member member_items
+               | bare_operation members_after_bare
+
+members_after_bare ::= 
+                     | place_member_no_on_error member_items
+                     | bare_operation members_after_bare
+
+place_member ::= place_member_no_on_error
                | ON_ERROR IDENT
-               | CARRIED BY IDENT (IS GIVEN)?
-               | fun_decl
-               | move_decl
-               | functor_decl
-               | geom_morphism_decl
-               | view_decl
-               | reduction_decl
-               | morph_decl
-               | nat_transform_decl
+
+place_member_no_on_error ::= field_or_cell
+                           | variant_clause
+                           | operation_decl
+                           | LAW IDENT
+                           | LAW IDENT LAW_STATEMENT expr (IS GIVEN)?
+                           | LAW IDENT law_quantifiers COMMA expr (IS GIVEN)?
+                           | LAW IDENT quantifiers LPAREN expr RPAREN (IS
+                             GIVEN)?
+                           | LAW IDENT quantifiers COMMA expr (IS GIVEN)?
+                           | OVER IDENT
+                           | THIS LT IDENT
+                           | CARRIED BY IDENT (IS GIVEN)?
+                           | fun_decl
+                           | move_decl
+                           | functor_decl
+                           | geom_morphism_decl
+                           | view_decl
+                           | reduction_decl
+                           | morph_decl
+                           | nat_transform_decl
 
 field_decl ::= IDENT type_expr
              | IDENT COLONEQ type_expr
@@ -147,8 +156,15 @@ cell_decl ::= CELL IDENT FROM expr TO expr
 
 operation_decl ::= OPERATION IDENT return_type_decl op_symbol?
                    uses_algebra_clause?
-                 | OPERATION IDENT LPAREN param_list RPAREN op_on_error
-                   return_type_decl? op_symbol? uses_algebra_clause?
+                 | OPERATION IDENT LPAREN param_list RPAREN operation_tail
+
+operation_tail ::= on_error_clause return_type_decl? op_symbol?
+                   uses_algebra_clause?
+                 | return_type_decl op_symbol? uses_algebra_clause?
+                 | op_symbol uses_algebra_clause?
+                 | uses_algebra_clause
+
+bare_operation ::= OPERATION IDENT LPAREN param_list RPAREN
 
 morphism_decl ::= MORPHISM_KW IDENT LPAREN param_list RPAREN
                   return_type_decl?
@@ -166,6 +182,7 @@ functor_law ::= LAW IDENT
 functor_laws ::= functor_law*
 
 standalone_op ::= operation_decl
+                | bare_operation
 
 return_type_decl ::= COLON type_expr
 
@@ -280,15 +297,15 @@ fun_decl ::= INTERNAL? PROOF? FUN IDENT type_params_opt LPAREN param_list
            | INTERNAL? PROOF? FUN IDENT type_params_opt return_type_decl?
              visits_clause IS GIVEN
            | INTERNAL? PROOF? FUN IDENT type_params_opt return_type_decl?
-             visits_clause LBRACE stmt* RBRACE
+             visits_clause LBRACE stmt_list RBRACE
            | INTERNAL? PROOF? FUN IDENT type_params_opt return_type_decl?
-             visits_clause IS GIVEN LBRACE stmt* RBRACE
+             visits_clause IS GIVEN LBRACE stmt_list RBRACE
            | INTERNAL? PROOF? FUN IDENT type_params_opt LPAREN param_list
              RPAREN on_error_clause? return_type_decl? visits_clause IS GIVEN
-             LBRACE stmt* RBRACE
+             LBRACE stmt_list RBRACE
            | INTERNAL? PROOF? FUN IDENT type_params_opt LPAREN param_list
              RPAREN on_error_clause? return_type_decl? visits_clause LBRACE
-             stmt* RBRACE
+             stmt_list RBRACE
 
 type_params_opt ::= 
                   | LT type_param (COMMA type_param)* GT
@@ -341,13 +358,19 @@ WITH_MULTI_SHOT ::= WITH MULTI_SHOT
 reduction_clause ::= on_clause
                    | IDENT COLONEQ expr
 
-on_clause ::= IDENT IDENT LPAREN param_list RPAREN LBRACE stmt* RBRACE
+on_clause ::= IDENT IDENT LPAREN param_list RPAREN LBRACE stmt_list RBRACE
+
+stmt_list ::= 
+            | stmt stmt_list
+            | closed_when stmt_list
+            | open_when stmts_after_open_when
+
+stmts_after_open_when ::= (stmt stmt_list)?
 
 stmt ::= let_stmt
        | assign_stmt
        | return_stmt
        | call_or_new_stmt
-       | when_stmt
        | for_stmt
        | in_seq_stmt
        | repeat_stmt
@@ -357,13 +380,14 @@ stmt ::= let_stmt
        | emit_stmt
        | promote_stmt
        | DROP IDENT
+       | IN IDENT
        | iter_stmt
        | while_stmt
        | forces_stmt
 
-iter_stmt ::= ITER_KW expr DO_KW LBRACE stmt* RBRACE
+iter_stmt ::= ITER_KW expr DO_KW LBRACE stmt_list RBRACE
 
-while_stmt ::= WHILE_KW expr DO_KW LBRACE stmt* RBRACE
+while_stmt ::= WHILE_KW expr DO_KW LBRACE stmt_list RBRACE
 
 let_stmt ::= IDENT COLONEQ expr
            | MUT IDENT COLONEQ expr
@@ -383,29 +407,33 @@ call_or_new_stmt ::= IDENT DOT IDENT LPAREN expr_list RPAREN
                    | QIDENT LPAREN expr_list RPAREN
                    | DOTARROW IDENT LBRACE field_assign_list RBRACE
 
-forces_stmt ::= FORCES IDENT condition LBRACE stmt* RBRACE
+forces_stmt ::= FORCES IDENT condition LBRACE stmt_list RBRACE
 
-when_stmt ::= WHEN condition LBRACE stmt* RBRACE when_chain
+open_when ::= WHEN condition LBRACE stmt_list RBRACE open_chain
 
-when_chain ::= 
-             | WHEN condition LBRACE stmt* RBRACE when_chain
-             | OTHERWISE LBRACE stmt* RBRACE
+closed_when ::= WHEN condition LBRACE stmt_list RBRACE closed_chain
 
-for_stmt ::= FOR EVERY IDENT IN expr WHEN HERE LBRACE stmt* RBRACE
-           | FOR EVERY IDENT IN expr LBRACE stmt* RBRACE
+open_chain ::= (WHEN condition LBRACE stmt_list RBRACE)*
 
-in_seq_stmt ::= IN SEQUENCE OVER IDENT IN expr LBRACE stmt* RBRACE
+closed_chain ::= WHEN condition LBRACE stmt_list RBRACE closed_chain
+               | OTHERWISE LBRACE stmt_list RBRACE
 
-repeat_stmt ::= REPEAT AT MOST NUM_LIT TIMES LBRACE stmt* RBRACE repeat_tail
+for_stmt ::= FOR EVERY IDENT IN expr WHEN HERE LBRACE stmt_list RBRACE
+           | FOR EVERY IDENT IN expr LBRACE stmt_list RBRACE
 
-repeat_tail ::= (OTHERWISE LBRACE stmt* RBRACE)?
+in_seq_stmt ::= IN SEQUENCE OVER IDENT IN expr LBRACE stmt_list RBRACE
 
-forever_stmt ::= FOREVER LBRACE stmt* RBRACE
+repeat_stmt ::= REPEAT AT MOST NUM_LIT TIMES LBRACE stmt_list RBRACE
+                repeat_tail
 
-scope_stmt ::= SCOPE IDENT LBRACE stmt* RBRACE
-             | SCOPE LBRACE stmt* RBRACE
+repeat_tail ::= (OTHERWISE LBRACE stmt_list RBRACE)?
 
-produce_stmt ::= PRODUCE LBRACE stmt* RBRACE
+forever_stmt ::= FOREVER LBRACE stmt_list RBRACE
+
+scope_stmt ::= SCOPE IDENT LBRACE stmt_list RBRACE
+             | SCOPE LBRACE stmt_list RBRACE
+
+produce_stmt ::= PRODUCE LBRACE stmt_list RBRACE
 
 emit_stmt ::= EMIT expr
 
@@ -528,72 +556,78 @@ through_expr ::= closed_through
 
 closed_through ::= chained_expr (THROUGH chained_expr)*
 
-chained_expr ::= expr_atom
-               | chained_expr DOT IDENT LPAREN expr_list RPAREN
-               | chained_expr DOT FOLD LPAREN expr_list RPAREN
+chained_expr ::= name_ending
+               | receiver
 
-expr_atom ::= literal
-            | FUN LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
-              FATARROW LBRACE stmt* RBRACE
-            | HEYT_INT_KW LPAREN expr COMMA expr RPAREN
-            | HEYT_INT_KW LPAREN expr RPAREN
-            | MOVE LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
-              FATARROW expr FROM IDENT TO IDENT
-            | REDUCTION LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
-              FATARROW expr OF IDENT
-            | MORPH_KW LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
-              FATARROW expr FROM IDENT TO IDENT
-            | FUNCTOR LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
-              FATARROW expr FROM IDENT TO IDENT functor_laws
-            | VIEW LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
-              FATARROW expr OF IDENT
-            | COMPOSE expr_atom WITH expr_atom
-            | HCOMP IDENT LBRACKET (hcomp_side (COMMA hcomp_side)*)? RBRACKET
-              hcomp_base
-            | COMP LPAREN expr RPAREN LBRACKET (hcomp_side (COMMA
-              hcomp_side)*)? RBRACKET hcomp_base
-            | PRESENT
-            | ABSENT
-            | UNKNOWN
-            | REFL LPAREN expr RPAREN
-            | CLEAR expr_atom
-            | CLEAR
-            | BACK expr_atom
-            | CARRY expr_atom ALONG expr_atom
-            | PAIR LPAREN expr COMMA expr RPAREN
-            | LPAREN expr COMMA expr (COMMA expr)* RPAREN
-            | FST LPAREN expr RPAREN
-            | SND LPAREN expr RPAREN
-            | INDUCT LPAREN expr COMMA expr RPAREN
-            | IND_PATH LPAREN expr COMMA expr COMMA expr RPAREN
-            | QUOTE LPAREN IDENT COMMA expr RPAREN
-            | EL_MATCH LPAREN expr COMMA expr COMMA expr RPAREN
-            | HIT_ELIM LPAREN expr COMMA LBRACKET (hit_branch (COMMA
-              hit_branch)*)? RBRACKET COMMA expr RPAREN
-            | MATCH_KW expr_atom LBRACE (hit_branch (COMMA hit_branch)*)?
-              RBRACE
-            | HIT_KW LPAREN IDENT RPAREN
-            | HIT_KW LPAREN IDENT COMMA expr (COMMA expr)* RPAREN
-            | IDENT DOT IDENT LPAREN expr_list RPAREN
-            | IDENT LT_TYPE_ARGS IDENT (COMMA IDENT)* GT LPAREN expr_list
-              RPAREN
-            | IDENT DOT IDENT LT_TYPE_ARGS IDENT (COMMA IDENT)* GT LPAREN
-              expr_list RPAREN
-            | IDENT DOT FOLD LPAREN expr_list RPAREN
-            | IDENT DOT PUSH LPAREN expr_list RPAREN
-            | IDENT LPAREN expr_list RPAREN IN IDENT
-            | IDENT LPAREN expr_list RPAREN
-            | QIDENT LPAREN expr_list RPAREN
-            | IDENT DOT field_path
-            | IDENT DOT STREAM
+name_ending ::= name_atom
+              | prefixed_atom_0
+
+receiver ::= other_atom
+           | receiver DOT IDENT LPAREN expr_list RPAREN
+           | receiver DOT FOLD LPAREN expr_list RPAREN
+
+expr_atom ::= name_ending
+            | other_atom
+
+name_atom ::= IDENT DOT field_path
             | IDENT
-            | QIDENT
-            | DOTARROW IDENT LBRACE field_assign_list RBRACE
-            | WIRE TO SPACE IDENT
-            | PRODUCE LBRACE stmt* RBRACE
-            | SPAWN LBRACE stmt* RBRACE
-            | SPAWN IN expr PARALLEL LBRACE stmt* RBRACE
-            | LPAREN expr RPAREN
+
+other_atom ::= prefixed_atom_1
+             | literal
+             | FUN LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
+               FATARROW LBRACE stmt_list RBRACE
+             | HEYT_INT_KW LPAREN expr COMMA expr RPAREN
+             | HEYT_INT_KW LPAREN expr RPAREN
+             | MOVE LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
+               FATARROW expr FROM IDENT TO IDENT
+             | REDUCTION LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
+               FATARROW expr OF IDENT
+             | MORPH_KW LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
+               FATARROW expr FROM IDENT TO IDENT
+             | FUNCTOR LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
+               FATARROW expr FROM IDENT TO IDENT functor_laws
+             | VIEW LPAREN (lambda_param (COMMA lambda_param)*)? RPAREN
+               FATARROW expr OF IDENT
+             | HCOMP IDENT LBRACKET (hcomp_side (COMMA hcomp_side)*)?
+               RBRACKET hcomp_base
+             | COMP LPAREN expr RPAREN LBRACKET (hcomp_side (COMMA
+               hcomp_side)*)? RBRACKET hcomp_base
+             | PRESENT
+             | ABSENT
+             | UNKNOWN
+             | REFL LPAREN expr RPAREN
+             | CLEAR
+             | PAIR LPAREN expr COMMA expr RPAREN
+             | LPAREN expr COMMA expr (COMMA expr)* RPAREN
+             | FST LPAREN expr RPAREN
+             | SND LPAREN expr RPAREN
+             | INDUCT LPAREN expr COMMA expr RPAREN
+             | IND_PATH LPAREN expr COMMA expr COMMA expr RPAREN
+             | QUOTE LPAREN IDENT COMMA expr RPAREN
+             | EL_MATCH LPAREN expr COMMA expr COMMA expr RPAREN
+             | HIT_ELIM LPAREN expr COMMA LBRACKET (hit_branch (COMMA
+               hit_branch)*)? RBRACKET COMMA expr RPAREN
+             | MATCH_KW expr_atom LBRACE (hit_branch (COMMA hit_branch)*)?
+               RBRACE
+             | HIT_KW LPAREN IDENT RPAREN
+             | HIT_KW LPAREN IDENT COMMA expr (COMMA expr)* RPAREN
+             | IDENT DOT IDENT LPAREN expr_list RPAREN
+             | IDENT LT_TYPE_ARGS IDENT (COMMA IDENT)* GT LPAREN expr_list
+               RPAREN
+             | IDENT DOT IDENT LT_TYPE_ARGS IDENT (COMMA IDENT)* GT LPAREN
+               expr_list RPAREN
+             | IDENT DOT FOLD LPAREN expr_list RPAREN
+             | IDENT DOT PUSH LPAREN expr_list RPAREN
+             | IDENT LPAREN expr_list RPAREN
+             | QIDENT LPAREN expr_list RPAREN
+             | IDENT DOT STREAM
+             | QIDENT
+             | DOTARROW IDENT LBRACE field_assign_list RBRACE
+             | WIRE TO SPACE IDENT
+             | PRODUCE LBRACE stmt_list RBRACE
+             | SPAWN LBRACE stmt_list RBRACE
+             | SPAWN IN expr PARALLEL LBRACE stmt_list RBRACE
+             | LPAREN expr RPAREN
 
 walk_kw ::= WALK
           | PLAM
@@ -658,6 +692,11 @@ operand_11 ::= concat_expr
 operand_5 ::= at_expr
             | open_in_operator
 
+prefixed_atom_1 ::= COMPOSE expr_atom WITH other_atom
+                  | CLEAR other_atom
+                  | BACK other_atom
+                  | CARRY expr_atom ALONG other_atom
+
 operand_9 ::= band_expr
             | open_in_operator
 
@@ -678,5 +717,10 @@ operand_0 ::= bor_expr
 
 operand_13 ::= unary_expr
              | open_in_operator
+
+prefixed_atom_0 ::= COMPOSE expr_atom WITH name_ending
+                  | CLEAR name_ending
+                  | BACK name_ending
+                  | CARRY expr_atom ALONG name_ending
 
 

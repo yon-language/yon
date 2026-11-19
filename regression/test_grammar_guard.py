@@ -172,3 +172,45 @@ if __name__ == "__main__":
     EBNF.write_text(ebnf_text())
     TOKENS.write_text(tokens_text())
     print("wrote regression/GRAMMAR.ebnf and regression/GRAMMAR.tokens")
+
+
+# The grammar is read by levels: no precedence decides a choice of it, but the ones listed here,
+# each with the form whose exit removes it. A precedence that is not listed fails, and so does one
+# that stays after its form has left the grammar.
+DECLARED_PRECEDENCE = [
+    {"prec": re.compile(r"\|\s*CLEAR\s+%prec\s+CLAUSE_END"),
+     "form": re.compile(r"\|\s*CLEAR\s+e\s*=\s*operand"),
+     "why": "`clear e` against a bare `clear`: an atom after `clear` continues it; it goes when "
+            "`stay e` takes the place of `clear e`"},
+    {"prec": re.compile(r"^functor_laws:\s*\n\s*\|\s*%prec\s+CLAUSE_END", re.M),
+     "form": re.compile(r"laws\s*=\s*functor_laws"),
+     "why": "the `law` after a functor lambda belongs to it; it goes with the law of the functor "
+            "lambda"},
+]
+DECLARED_LEVELS = [
+    "%nonassoc CLAUSE_END",
+    "%nonassoc LAW IDENT QIDENT VIEW REDUCTION PRODUCE MOVE MORPH_KW FUNCTOR FUN DOTARROW",
+]
+
+
+def _grammar_text() -> str:
+    """parser.mly without its comments, which may name a precedence."""
+    t = PARSER.read_text()
+    t = re.sub(r"\(\*.*?\*\)", "", t, flags=re.S)
+    return re.sub(r"/\*.*?\*/", "", t, flags=re.S)
+
+
+def test_only_the_declared_precedences_are_left():
+    t = _grammar_text()
+    levels = [" ".join(ln.split()) for ln in t.splitlines() if re.match(r"\s*%(left|right|nonassoc)\b", ln)]
+    assert levels == DECLARED_LEVELS, f"precedence levels of parser.mly: {levels}"
+    found = len(re.findall(r"%prec\b", t))
+    listed = sum(1 for d in DECLARED_PRECEDENCE if d["prec"].search(t))
+    assert found == listed, f"{found} %prec in parser.mly, {listed} of them declared here"
+
+
+def test_a_declared_precedence_goes_with_its_form():
+    t = _grammar_text()
+    for d in DECLARED_PRECEDENCE:
+        assert d["prec"].search(t), f"the precedence is gone: remove its entry ({d['why']})"
+        assert d["form"].search(t), f"its form has left the grammar: remove the precedence ({d['why']})"

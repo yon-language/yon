@@ -766,10 +766,14 @@ error[E1003]: `T in A, B` is not a type
 ### NO-054 `call-in` · E1003 · grammar
 
 - book: book 11-spaces-and-packages, «Cross-package imports»
-- proof to write: no use in the corpus to copy
+- proof: `regression/canonical_forms/expression/dev_call_in`
 
 ```
 error[E1003]: `f(args) in S` is not a call of Yon
+  --> Entry.yon:6:21
+   |
+ 6 |     y := double(21) in Ledger
+   |                     ^^^^^^^^^
    = why: `f(args) in S` applied a morph or a move to the heaps of S inside this process; it was never a call to another Space
    = write: this form has no successor; a call to another Space goes through a wire
 ```

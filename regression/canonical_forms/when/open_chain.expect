@@ -1,0 +1,6 @@
+status: accept
+exit: 42
+covers: open_when open_chain stmts_after_open_when
+note: |
+  when c { } when d { } with no otherwise: the second `when` is the next arm of the chain, and
+  the statement after the chain does not begin with `when`.

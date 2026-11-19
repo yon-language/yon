@@ -1,0 +1,8 @@
+status: reject_clean
+exit: 1
+code: E1003
+match: `f(args) in S` is not a call of Yon
+note: |
+  `f(args) in S` applied a morph or a move to the heaps of S inside this process; it was never a
+  call to another Space. The form is refused with its code; a call to another Space goes through
+  a wire.
