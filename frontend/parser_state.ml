@@ -9,7 +9,9 @@ let synth_decls : Surface_ast.top_decl list ref = ref []
 
 let fresh_inline_name (kind : string) : string =
   incr inline_counter;
-  Printf.sprintf "__%s_inline_p_%d" kind !inline_counter
+  let name = Printf.sprintf "__%s_inline_p_%d" kind !inline_counter in
+  Hashtbl.replace Surface_ast.lifted_lambdas name ();
+  name
 
 let reset () =
   inline_counter := 0;

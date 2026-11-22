@@ -52,7 +52,6 @@ let rec names_expr (e : S.expr) : (string * S.location) list =
       names_expr a @ names_expr b
   | S.EIfThenElse (a, b, c, _) | S.EJ (a, b, c, _) | S.EElMatch (a, b, c, _) ->
       names_expr a @ names_expr b @ names_expr c
-  | S.EPullbackVal (_, _, a, b, _) -> names_expr a @ names_expr b
   | S.EQuote (S.TyTermExpr t, a, _) -> names_expr t @ names_expr a
   | S.EHITElim (e0, branches, x, _) ->
       names_expr e0
@@ -68,7 +67,6 @@ let rec names_expr (e : S.expr) : (string * S.location) list =
          imap). The Space rewrite makes this explicit later; here P names it. *)
       (p, l) :: List.concat_map (fun fa -> names_expr fa.S.fa_value) fas
   | S.EAll (_, c, _) -> names_cond c
-  | S.EPullback _ | S.EPushout _ -> []
 
 and names_stmt (s : S.stmt) : (string * S.location) list =
   match s with
@@ -238,9 +236,11 @@ let callees ~(ftab : (string, S.fun_decl) Hashtbl.t) (fd : S.fun_decl) : string 
        (fun (n, _l) -> if Hashtbl.mem ftab n then Some n else None)
        (names_used_in_fun fd))
 
-(* The Spaces a function can communicate with directly OR through any function it
-   (transitively) calls. Fixed-point closure over the call graph, recursion-safe
-   via a visited set. *)
+(* The Spaces a function can communicate with directly or through any function it
+   calls, a call through a function value reaching every fun the program names as
+   a value: the union over the calls, in one pass over the condensation of the
+   graph (Call_graph.reach), the same for every member of a recursive group,
+   whatever the names and the order of the declarations. *)
 let transitive_arcs ~(place_space : (string, string) Hashtbl.t)
     (prog : S.program) : (string, string list) Hashtbl.t =
   let imap = import_map prog in
@@ -248,26 +248,19 @@ let transitive_arcs ~(place_space : (string, string) Hashtbl.t)
      map so direct_arcs resolves a place name the same way as an imported one. *)
   Hashtbl.iter (fun p s -> Hashtbl.replace imap p s) place_space;
   let ftab = func_table prog in
-  let memo = Hashtbl.create 32 in
-  let rec arcs_of (name : string) (visiting : string list) : string list =
-    match Hashtbl.find_opt memo name with
-    | Some r -> r
-    | None ->
-        if List.mem name visiting then []            (* cycle guard: recursion *)
-        else match Hashtbl.find_opt ftab name with
-          | None -> []
-          | Some fd ->
-              let here = direct_arcs ~imap ~ftab fd in
-              let through =
-                List.concat_map (fun c -> arcs_of c (name :: visiting)) (callees ~ftab fd)
-              in
-              let r = List.sort_uniq compare (here @ through) in
-              (* memoize only when not inside an active cycle for this name *)
-              if not (List.mem name visiting) then Hashtbl.replace memo name r;
-              r
-  in
+  let values = Call_graph.escaping prog in
+  let succ name = match Hashtbl.find_opt ftab name with
+    | None -> []
+    | Some fd -> callees ~ftab fd @ (if Call_graph.calls_a_value fd then values else []) in
+  let seed name = match Hashtbl.find_opt ftab name with
+    | None -> []
+    | Some fd -> direct_arcs ~imap ~ftab fd in
+  let nodes = Hashtbl.fold (fun n _ acc -> n :: acc) ftab [] |> List.sort compare in
+  let fact = Call_graph.reach nodes succ seed in
   let out = Hashtbl.create 32 in
-  Hashtbl.iter (fun name _ -> Hashtbl.replace out name (arcs_of name [])) ftab;
+  List.iter (fun n ->
+      Hashtbl.replace out n
+        (List.sort_uniq compare (Option.value (Hashtbl.find_opt fact n) ~default:[]))) nodes;
   out
 
 (* ---- level 3: downstream-of-a-point (the shared predicate) ---- *)

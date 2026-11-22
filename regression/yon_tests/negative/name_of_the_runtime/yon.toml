@@ -1,0 +1,5 @@
+[package]
+name = "name_of_the_runtime"
+
+[runtime]
+backend = "memory"

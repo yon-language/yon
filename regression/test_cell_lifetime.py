@@ -57,9 +57,10 @@ def test_the_hidden_cell_of_a_for_every_lives_one_turn_of_the_outer_loop(tmp_pat
     assert _run(tmp_path, src).returncode == 42
 
 
-def test_more_live_cells_than_the_table_holds_is_a_declared_refusal(tmp_path):
-    src = program("test_cell_lifetime/test_more_live_cells_than_the_table_holds_is_a_declared_refusal_1.yon")
+def test_more_live_variables_than_a_table_held_run(tmp_path):
+    """1101 variables live at once, one per activation of the recursion: a variable is a slot of
+    the frame of its fun, so there is no table to fill (the table of the runtime held 1024 and
+    refused the next, CellTableFull). The program computes its value, 1."""
+    src = program("test_cell_lifetime/test_more_live_variables_than_a_table_held_run_1.yon")
     r = _run(tmp_path, src)
-    assert r.returncode == 3, (r.returncode, r.stderr)
-    assert ("error: cell: 1024 cells are live, the most the cell table holds; "
-            "a cell lives as long as the block that declares it") in r.stderr, r.stderr
+    assert r.returncode == 1, (r.returncode, r.stderr)

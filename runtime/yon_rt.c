@@ -2871,6 +2871,7 @@ typedef struct {
     yon_rpc2_reply_t *rep;
     yon_rpc2_queue_t *q;
     int               rings;        /* the session's argument and result rings are open */
+    int               described;    /* the server has compared the description of the session */
     uint32_t          status;       /* the status of the last reply (YON_RPC2_ANSWERED, ...) */
     int32_t           detail;       /* and its reason */
 } yon_rpc2_session_t;
@@ -2901,6 +2902,7 @@ static int g_rpc2_cleanup_registered = 0;
 static int yon_rpc2_session_arm(yon_rpc2_session_t *s, const char *space) {
     s->owner = getpid();
     s->seq   = 0;
+    s->described = 0;
     s->nonce = yon_rpc2_random64();
     /* macOS caps shm names at 31 characters (PSHMNAMLEN, slash included):
      * the world prefix "/y<tag>r_" (8) + 8 chars of Space + "_" + 12 hex of
@@ -3258,7 +3260,9 @@ static double rpc2_call(const char *space_name, double selector,
 }
 
 #define YON_RPC2_TYPED 0x100u   /* argc of a typed request: this flag | the framed count */
+#define YON_RPC2_DESCRIBE 0xFFFFFFFEu   /* reserved selector: the description of a session */
 static void rpc2_serve_typed(const yon_rpc2_req_t *req);
+static void rpc2_serve_description(const yon_rpc2_req_t *req);
 
 /* ---- Strato 1: serve loop, name-keyed spawn/lifecycle, named invoke ---- */
 
@@ -3339,6 +3343,10 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
             /* the subscription is over for the server: its handle of the
                channel goes, the consumer still holds the channel */
             yon_shm_stream_release_id((uint32_t)chan_id);
+            continue;
+        }
+        if (req.selector == YON_RPC2_DESCRIBE) {
+            rpc2_serve_description(&req);
             continue;
         }
         if (req.argc & YON_RPC2_TYPED) {
@@ -3581,6 +3589,175 @@ static void rpc2_send_args(void *p) {
     yon_rt_wire_buf_free(&msg);
 }
 
+/* ---- The description of a session ----
+ *
+ * The selector of an operation is a hash of its name, and the root of its
+ * signature a hash of its types: no equality rests on a hash alone. When a
+ * session opens, the caller sends once the description of every operation it
+ * calls in that Space (its name, its selector, the words of its signature);
+ * the server compares each with its own byte for byte, and answers 0, or the
+ * place (from 1) of the first one it describes otherwise or does not have.
+ * Then the selectors hold for that session. */
+
+#define YON_MAX_OPS 256u
+#define YON_OP_WORDS (4u + 2u * 4u)
+static struct { uint32_t sel; char *name; uint64_t sig[YON_OP_WORDS]; } g_ops[YON_MAX_OPS];
+static uint32_t g_n_ops = 0;
+
+typedef struct { const char *space; uint32_t sel; const char *name; const uint64_t *sig; } rpc2_import_t;
+static rpc2_import_t *g_imports = NULL;
+static uint32_t g_n_imports = 0, g_cap_imports = 0;
+
+/* An operation this program calls in another Space, with its description. */
+void yon_rt_register_import(const char *space, double sel, const char *name, const uint64_t *sig) {
+    if (g_n_imports == g_cap_imports) {
+        uint32_t cap = g_cap_imports ? 2u * g_cap_imports : 16u;
+        rpc2_import_t *q = realloc(g_imports, cap * sizeof *q);
+        if (!q) yon_rt_refuse_with(YON_REFUSAL_KernelDidNotMap, errno, 0, 0);
+        g_imports = q;
+        g_cap_imports = cap;
+    }
+    g_imports[g_n_imports].space = space;
+    g_imports[g_n_imports].sel = (uint32_t)sel;
+    g_imports[g_n_imports].name = name;
+    g_imports[g_n_imports].sig = sig;
+    g_n_imports++;
+}
+
+typedef struct { uint8_t *p; size_t len, cap; } rpc2_bytes_t;
+
+static int rpc2_put(rpc2_bytes_t *b, const void *x, size_t n) {
+    if (b->len + n > b->cap) {
+        size_t cap = b->cap ? b->cap : 256;
+        while (cap < b->len + n) cap *= 2;
+        uint8_t *q = realloc(b->p, cap);
+        if (!q) return -1;
+        b->p = q;
+        b->cap = cap;
+    }
+    memcpy(b->p + b->len, x, n);
+    b->len += n;
+    return 0;
+}
+
+/* One operation's description: its length, its name and a zero, its selector,
+ * the words of its signature. */
+static int rpc2_describe(rpc2_bytes_t *b, const char *name, uint32_t sel, const uint64_t *sig) {
+    uint64_t n = sig[1] < 4 ? sig[1] : 4;
+    uint32_t words = 4u + 2u * (uint32_t)n;
+    uint32_t len = (uint32_t)strlen(name) + 1u + 4u + 8u * words;
+    return rpc2_put(b, &len, 4) || rpc2_put(b, name, strlen(name) + 1)
+        || rpc2_put(b, &sel, 4) || rpc2_put(b, sig, 8u * words);
+}
+
+typedef struct {
+    yon_rpc2_session_t *s;
+    const rpc2_bytes_t *d;
+    int                 err;
+} rpc2_frame_t;
+
+static uint32_t rpc2_ring(const yon_rpc2_session_t *s, int result);
+int yon_rt_rpc2_with_rings(uint32_t ring_a, uint32_t ring_r, int framed,
+                           void (*body)(void *ctx, int cha, int chr), void *ctx);
+
+static void rpc2_send_description(void *p) {
+    rpc2_frame_t *c = (rpc2_frame_t *)p;
+    int ch = yon_rt_shm_slot_of(rpc2_ring(c->s, 0));
+    if (ch < 0 || yon_rt_stream_shm_send_message(g_shm_stream_handles[ch], c->d->p, c->d->len) != 0)
+        c->err = 1;
+}
+
+/* The caller's half: the description sent once, when the session opens. */
+static void rpc2_describe_session(yon_rpc2_session_t *s, const char *space, uint32_t reply_ms) {
+    rpc2_bytes_t d = { 0 };
+    uint32_t *mine = malloc((g_n_imports ? g_n_imports : 1u) * sizeof *mine), n = 0;
+    if (!mine) yon_rt_refuse_with(YON_REFUSAL_KernelDidNotMap, errno, 0, 0);
+    for (uint32_t i = 0; i < g_n_imports; i++)
+        if (strcmp(g_imports[i].space, space) == 0) {
+            if (rpc2_describe(&d, g_imports[i].name, g_imports[i].sel, g_imports[i].sig) != 0) {
+                free(d.p);
+                free(mine);
+                return;
+            }
+            mine[n++] = i;
+        }
+    if (n == 0) { s->described = 1; free(mine); return; }
+    if (!s->rings) {
+        if (yon_rt_stream_shm_open_sized_f64(rpc2_ring(s, 0), 1.0, 0.0) < 0.0
+            || yon_rt_stream_shm_open_sized_f64(rpc2_ring(s, 1), 1.0, 0.0) < 0.0) {
+            free(d.p);
+            free(mine);
+            return;
+        }
+        s->rings = 1;
+    }
+    double req[8] = { 0 };
+    req[0] = (double)n;
+    req[4] = (double)rpc2_ring(s, 0);
+    req[5] = (double)rpc2_ring(s, 1);
+    rpc2_frame_t ctx = { s, &d, 0 };
+    double r = rpc2_call(space, (double)YON_RPC2_DESCRIBE, (double)(YON_RPC2_TYPED | 1u), req,
+                         reply_ms, rpc2_send_description, &ctx);
+    free(d.p);
+    uint32_t at = (r >= 1.0 && r <= (double)n) ? mine[(uint32_t)r - 1u] : 0u;
+    free(mine);
+    if (ctx.err) return;
+    if (r == 0.0) { s->described = 1; return; }
+    if (r >= 1.0 && r <= (double)n)
+        yon_rt_refuse_with(YON_REFUSAL_CallDescriptionsDiffer, yon_refusal_name(space),
+                           yon_refusal_name(g_imports[at].name), 0);
+}
+
+/* The server's half: each description compared with its own, byte for byte. */
+static void rpc2_serve_description_body(void *p, int cha, int chr) {
+    (void)chr;
+    const yon_rpc2_req_t *req = (const yon_rpc2_req_t *)p;
+    yon_wire_buf_t msg = { 0 };
+    double verdict = 0.0;
+    if (cha < 0 || yon_rt_stream_shm_recv_message(g_shm_stream_handles[cha], &msg) != 0) {
+        yon_rt_wire_buf_free(&msg);
+        yon_rt_rpc2_reply(req, -1.0);
+        return;
+    }
+    size_t off = 0;
+    for (uint32_t k = 1; off + 4 <= msg.len; k++) {
+        uint32_t len;
+        memcpy(&len, msg.p + off, 4);
+        const uint8_t *entry = msg.p + off + 4;
+        size_t nl = len ? strnlen((const char *)entry, len) : 0;
+        int same = 0;
+        if (len >= nl + 1 + 4 && off + 4 + len <= msg.len) {
+            uint32_t sel;
+            memcpy(&sel, entry + nl + 1, 4);
+            for (uint32_t i = 0; i < g_n_ops; i++)
+                if (g_ops[i].sel == sel && g_ops[i].name) {
+                    rpc2_bytes_t own = { 0 };
+                    if (rpc2_describe(&own, g_ops[i].name, sel, g_ops[i].sig) == 0)
+                        same = own.len == (size_t)len + 4 && memcmp(own.p, msg.p + off, own.len) == 0;
+                    free(own.p);
+                    break;
+                }
+        }
+        if (!same) { verdict = (double)k; break; }
+        off += 4 + (size_t)len;
+    }
+    yon_rt_wire_buf_free(&msg);
+    if (verdict != 0.0)
+        fprintf(stderr, "error: the description of operation %u of a session differs from "
+                "this Space's: refused\n", (unsigned)verdict);
+    yon_rt_rpc2_reply(req, verdict);
+}
+
+static void rpc2_serve_description(const yon_rpc2_req_t *req) {
+    int err = yon_rt_rpc2_with_rings((uint32_t)req->args[4], (uint32_t)req->args[5], 1,
+                                     rpc2_serve_description_body, (void *)req);
+    if (err) {
+        fprintf(stderr, "error: the rings of the session could not be opened for its "
+                "description: %s\n", strerror(err));
+        yon_rpc2_reply_status(req, 0.0, YON_RPC2_RINGS_NOT_OPENED, (int32_t)err);
+    }
+}
+
 static void rpc2_refused(const char *space, double sel) {
     yon_rt_refuse_with(YON_REFUSAL_CallSignaturesDiffer, yon_refusal_name(space), (int64_t)sel, 0);
 }
@@ -3595,6 +3772,13 @@ double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *s
     }
     yon_rpc2_session_t *s = yon_rpc2_session(space);
     if (!s) return -777.0;
+    if (!s->described) rpc2_describe_session(s, space, reply_ms);
+    if (!s->described) {
+        /* no call before the server has compared the description */
+        fprintf(stderr, "error: cross-Space call failed — Space '%s' did not answer the "
+                        "description of the session\n", space);
+        return -777.0;
+    }
     uint32_t framed = sig[3] ? 1u : 0u;
     for (uint64_t i = 0; i < sig[1]; i++) framed += sig[5 + 2 * i] ? 1u : 0u;
     if (framed && !s->rings) {
@@ -3617,6 +3801,13 @@ double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *s
                          n_framed_args ? rpc2_send_args : NULL, &ctx);
     if (r == -777.0 && yon_rpc2_recover(space)) {
         ctx.err = 0;
+        s->described = 0;
+        rpc2_describe_session(s, space, 10000u);
+        if (!s->described) {
+            fprintf(stderr, "error: cross-Space call failed — Space '%s' did not answer the "
+                            "description of the session\n", space);
+            return -777.0;
+        }
         r = rpc2_call(space, sel, argc, req, 10000u,
                       n_framed_args ? rpc2_send_args : NULL, &ctx);
     }
@@ -3642,11 +3833,8 @@ double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *s
     return v;
 }
 
-/* The operations of a binary a typed call can reach: selector -> signature. */
-#define YON_MAX_OPS 256u
-#define YON_OP_WORDS (4u + 2u * 4u)
-static struct { uint32_t sel; uint64_t sig[YON_OP_WORDS]; } g_ops[YON_MAX_OPS];
-static uint32_t g_n_ops = 0;
+/* The operations of a binary a typed call can reach: selector -> signature
+ * (g_ops, above, with the name of each). */
 
 /* One word of an operation's signature, as the lowered code registers it:
  * numbers only, the word as two 32-bit halves. */
@@ -3656,10 +3844,27 @@ void yon_rt_register_op_word(double sel, double i, double hi, double lo) {
     if (k == g_n_ops) {
         if (g_n_ops >= YON_MAX_OPS) return;
         g_ops[k].sel = (uint32_t)sel;
+        g_ops[k].name = NULL;
         memset(g_ops[k].sig, 0, sizeof g_ops[k].sig);
         g_n_ops++;
     }
     if ((uint32_t)i < YON_OP_WORDS) g_ops[k].sig[(uint32_t)i] = yon_root_of_halves(hi, lo);
+}
+
+/* The bare name of an operation, the rest of its description: six of its bytes
+ * at a time, as an exact number, the low byte first; the last part holds the
+ * zero that ends it. */
+void yon_rt_register_op_name(double sel, double i, double part) {
+    for (uint32_t k = 0; k < g_n_ops; k++)
+        if (g_ops[k].sel == (uint32_t)sel) {
+            size_t at = 6u * (size_t)i;
+            char *q = realloc(g_ops[k].name, at + 6u);
+            if (!q) yon_rt_refuse_with(YON_REFUSAL_KernelDidNotMap, errno, 0, 0);
+            uint64_t v = (uint64_t)part;
+            for (int j = 0; j < 6; j++) { q[at + j] = (char)(v & 0xFFu); v >>= 8; }
+            g_ops[k].name = q;
+            return;
+        }
 }
 
 static const uint64_t *rpc2_op(uint32_t sel) {
@@ -6821,72 +7026,6 @@ double yon_rt_vec_push(double handle, double value) {
     /* hand the old strip's whole pages back to the OS (no-op if < 1 page) */
     yon_xheap_strip_trim(g_yon_heap, (uint32_t)handle, 0u, 8u + cap * 8u);
     return nh;
-}
-
-/* ============================================================== */
-/* Space cell mutabile (array statico in BSS)                       */
-/* ============================================================== */
-
-static struct {
-    double   value;
-    uint32_t in_use;
-} g_space_cells[YON_RT_MAX_SPACE_CELLS];
-
-static uint32_t g_n_space_cells = 0;
-
-double yon_rt_space_make(double initial) {
-    if (g_n_space_cells >= YON_RT_MAX_SPACE_CELLS) {
-        yon_rt_refuse_with(YON_REFUSAL_CellTableFull, YON_RT_MAX_SPACE_CELLS, 0, 0);
-    }
-    uint32_t id = g_n_space_cells++;
-    g_space_cells[id].value  = initial;
-    g_space_cells[id].in_use = 1;
-    return (double)id;
-}
-
-/* a cell is read or written only while its block lives: a handle past it, or
-   one that never named a cell, stops the program rather than reach another
-   cell */
-static uint32_t space_cell_live(double space_id, enum yon_refusal why) {
-    if (!(space_id >= 0.0) || space_id >= (double)g_n_space_cells
-        || !g_space_cells[(uint32_t)space_id].in_use)
-        yon_rt_refuse_with(why, yon_refusal_real(space_id), g_n_space_cells, 0);
-    return (uint32_t)space_id;
-}
-
-double yon_rt_space_set(double space_id, double new_value) {
-    g_space_cells[space_cell_live(space_id, YON_REFUSAL_CellWriteNotLive)].value = new_value;
-    return space_id;
-}
-
-double yon_rt_space_get(double space_id) {
-    return g_space_cells[space_cell_live(space_id, YON_REFUSAL_CellReadNotLive)].value;
-}
-
-/* Mutable-cell reclaim by stack discipline. A function's mutable-local cells do
- * NOT escape: `return` reads the cell's value, and a closure that captures a
- * cell's handle is rejected by the type checker before it can leave the call
- * (the mobility judgment in tycheck.ml), so the cells are LIFO with
- * respect to calls. The compiler captures the high-water
- * mark on entry (yon_rt_space_mark) and, once the return value is materialized,
- * frees every cell allocated during the call by resetting the counter to the mark
- * (yon_rt_space_reset). Freed slots are then reused by yon_rt_space_make, so a
- * reassigning helper called N times no longer leaks N cells. This is the same
- * drop-then-reuse the named-Space regions get, applied to the cell registry.
- * The same holds for every block: a block that declares a cell takes the
- * mark on entry and gives its cells back on exit, so a cell declared in the
- * body of a loop lives one turn. */
-double yon_rt_space_mark(void) {
-    return (double)g_n_space_cells;
-}
-
-double yon_rt_space_reset(double mark) {
-    uint32_t m = (uint32_t)mark;
-    if (m <= g_n_space_cells) {
-        for (uint32_t i = m; i < g_n_space_cells; i++) g_space_cells[i].in_use = 0;
-        g_n_space_cells = m;
-    }
-    return mark;
 }
 
 /* ============================================================== */

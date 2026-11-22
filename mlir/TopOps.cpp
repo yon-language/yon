@@ -105,8 +105,7 @@ static StringRef placeWorldName(PlaceOp p) {
 
 // Looks for a "place declaration" that can be:
 //   - a direct PlaceOp (explicit declaration)
-//   - a PullbackOp / PushoutOp / CoproductOp / CoequalizerOp that declares a
-//     derived place (a limit / colimit construction).
+//   - a CoproductOp that declares a derived place (a colimit construction).
 //
 // Returns true if it finds something with that name. The "owning world" of the
 // derived place is inferred by walking up to the moves or the components (see
@@ -122,13 +121,7 @@ static bool placeOrDerivedExists(Operation *op, StringRef name) {
 
   bool found = false;
   mod.walk([&](Operation *o) {
-    if (auto p = llvm::dyn_cast<PullbackOp>(o)) {
-      if (p.getSymName() == name) { found = true; return WalkResult::interrupt(); }
-    } else if (auto p = llvm::dyn_cast<PushoutOp>(o)) {
-      if (p.getSymName() == name) { found = true; return WalkResult::interrupt(); }
-    } else if (auto p = llvm::dyn_cast<CoproductOp>(o)) {
-      if (p.getSymName() == name) { found = true; return WalkResult::interrupt(); }
-    } else if (auto p = llvm::dyn_cast<CoequalizerOp>(o)) {
+    if (auto p = llvm::dyn_cast<CoproductOp>(o)) {
       if (p.getSymName() == name) { found = true; return WalkResult::interrupt(); }
     }
     return WalkResult::advance();
@@ -139,10 +132,6 @@ static bool placeOrDerivedExists(Operation *op, StringRef name) {
 // Infers the world of a place or a derived place.
 //   - direct PlaceOp:    its `world` attribute
 //   - CoproductOp:       the world of its components (the first Place)
-//   - CoequalizerOp:     the world of the source/target of f,g
-//   - PullbackOp/PushoutOp: the world inferred from the two moves f,g (if both
-//                            consistent — otherwise the original op's verifier
-//                            already rejected it)
 //
 // Returns an empty StringRef if not resolvable.
 static StringRef derivedPlaceWorld(Operation *op, StringRef name) {
@@ -176,30 +165,6 @@ static StringRef derivedPlaceWorld(Operation *op, StringRef name) {
       auto firstSym = llvm::cast<FlatSymbolRefAttr>(comps[0]);
       if (auto firstP = findPlaceByName(op, firstSym.getValue()))
         out = placeWorldName(firstP);
-      return WalkResult::interrupt();
-    }
-    if (auto p = llvm::dyn_cast<CoequalizerOp>(o)) {
-      if (p.getSymName() != name) return WalkResult::advance();
-      auto f = findMoveIn(p.getF());
-      if (!f) return WalkResult::interrupt();
-      if (auto srcP = findPlaceByName(op, f.getSourcePlace()))
-        out = placeWorldName(srcP);
-      return WalkResult::interrupt();
-    }
-    if (auto p = llvm::dyn_cast<PullbackOp>(o)) {
-      if (p.getSymName() != name) return WalkResult::advance();
-      auto f = findMoveIn(p.getF());
-      if (!f) return WalkResult::interrupt();
-      if (auto tgtP = findPlaceByName(op, f.getTargetPlace()))
-        out = placeWorldName(tgtP);
-      return WalkResult::interrupt();
-    }
-    if (auto p = llvm::dyn_cast<PushoutOp>(o)) {
-      if (p.getSymName() != name) return WalkResult::advance();
-      auto f = findMoveIn(p.getF());
-      if (!f) return WalkResult::interrupt();
-      if (auto srcP = findPlaceByName(op, f.getSourcePlace()))
-        out = placeWorldName(srcP);
       return WalkResult::interrupt();
     }
     return WalkResult::advance();
@@ -494,7 +459,7 @@ LogicalResult PlaceOp::verify() {
 //       an explicit geom_morphism — out of scope for this verifier)
 LogicalResult MoveOp::verify() {
   // Risolvi source e target: possono essere PlaceOp diretti o
-  // derived places (Pullback/Pushout/Coproduct/Coequalizer).
+  // derived places (Coproduct).
   bool srcExists = placeOrDerivedExists(*this, getSourcePlace());
   if (!srcExists)
     return emitOpError("source place '")
@@ -762,49 +727,6 @@ LogicalResult OpApplyOp::verify() {
   return success();
 }
 
-//===----------------------------------------------------------------------===//
-// PullbackOp / PushoutOp
-//===----------------------------------------------------------------------===//
-
-// Verify that f and g are moves existing in the module (cospan for pullback,
-// span for pushout). The categorical compatibility of the cospan (coinciding
-// codomains) or of the span (coinciding domains) is not checked: it would
-// require type information.
-static LogicalResult verifyUniversalConstruction(
-    Operation *op, StringRef name, StringRef fName, StringRef gName,
-    StringRef kind) {
-  Operation *cur = op->getParentOp();
-  while (cur && !llvm::isa<ModuleOp>(cur))
-    cur = cur->getParentOp();
-  if (!cur)
-    return op->emitOpError(kind) << " not inside a module";
-  auto mod = llvm::cast<ModuleOp>(cur);
-
-  bool foundF = false, foundG = false;
-  mod.walk([&](MoveOp m) {
-    if (m.getSymName() == fName)
-      foundF = true;
-    if (m.getSymName() == gName)
-      foundG = true;
-  });
-  if (!foundF)
-    return op->emitOpError(kind)
-           << " '" << name << "' references unknown move '" << fName << "'";
-  if (!foundG)
-    return op->emitOpError(kind)
-           << " '" << name << "' references unknown move '" << gName << "'";
-  return success();
-}
-
-LogicalResult PullbackOp::verify() {
-  return verifyUniversalConstruction(*this, getSymName(), getF(), getG(),
-                                     "pullback");
-}
-
-LogicalResult PushoutOp::verify() {
-  return verifyUniversalConstruction(*this, getSymName(), getF(), getG(),
-                                     "pushout");
-}
 
 //===----------------------------------------------------------------------===//
 // CoproductOp (Lurie 4.4.1) — dualismo di pullback/restrict-to-product.
@@ -861,135 +783,6 @@ LogicalResult CoproductOp::verify() {
   return success();
 }
 
-//===----------------------------------------------------------------------===//
-// CoequalizerOp (Lurie 4.4.3) — quotient by the equivalence relation generated
-// by a pair of parallel morphisms.
-//===----------------------------------------------------------------------===//
-
-// Verifier:
-//   (1) f e g devono essere MoveOp dichiarati
-//   (2) [TOPOS-E0952]  f and g must be parallel (same source,
-//                       same target)
-//   (3) [TOPOS-E0953]  the two moves must live in the same world
-//                       enclosing (cross-space coeq is deferred)
-//   (4)                quotient_move must be an already-declared MoveOp
-//                       with source = target of f,g and target = sym_name (the
-//                       coequalizer place declared here)
-//
-// NOTE: the quotient_move is declared separately (as a regular MoveOp)
-// and referenced by name; this allows pre-declaring it so it can be referenced
-// inside forces / coherence blocks, and consolidates its nature as a "named
-// morphism".
-LogicalResult CoequalizerOp::verify() {
-  // Local helper: find a MoveOp by name.
-  auto findMove = [&](StringRef name) -> MoveOp {
-    Operation *cur = (*this)->getParentOp();
-    while (cur && !llvm::isa<ModuleOp>(cur)) cur = cur->getParentOp();
-    if (!cur) return nullptr;
-    auto mod = llvm::cast<ModuleOp>(cur);
-    MoveOp found = nullptr;
-    mod.walk([&](MoveOp m) {
-      if (m.getSymName() == name) {
-        found = m;
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    return found;
-  };
-
-  auto fMove = findMove(getF());
-  if (!fMove) {
-    return emitOpError(
-        "[TOPOS-E0952] coequalizer '")
-        << getSymName() << "' references unknown move '" << getF() << "'.\n"
-        << "  fix: declare the move with `topos.move` before referring "
-           "to it here.";
-  }
-  auto gMove = findMove(getG());
-  if (!gMove) {
-    return emitOpError(
-        "[TOPOS-E0952] coequalizer '")
-        << getSymName() << "' references unknown move '" << getG() << "'.\n"
-        << "  fix: declare the move with `topos.move` before referring "
-           "to it here.";
-  }
-
-  // Parallelism: same source, same target.
-  if (fMove.getSourcePlace() != gMove.getSourcePlace()) {
-    return emitOpError(
-        "[TOPOS-E0952] coequalizer '")
-        << getSymName() << "': moves '" << getF() << "' and '"
-        << getG() << "' are not parallel — source mismatch: '"
-        << fMove.getSourcePlace() << "' vs '"
-        << gMove.getSourcePlace() << "'.\n"
-        << "  fix: the categorical coequalizer requires two parallel "
-           "morphisms f, g : P -> Q. Adjust the moves so they share "
-           "source and target.";
-  }
-  if (fMove.getTargetPlace() != gMove.getTargetPlace()) {
-    return emitOpError(
-        "[TOPOS-E0952] coequalizer '")
-        << getSymName() << "': moves '" << getF() << "' and '"
-        << getG() << "' are not parallel — target mismatch: '"
-        << fMove.getTargetPlace() << "' vs '"
-        << gMove.getTargetPlace() << "'.\n"
-        << "  fix: f and g must share both source and target.";
-  }
-
-  // World consistency: the source/target places must live in the same world
-  // (and that world must be the coequalizer's enclosing world).
-  auto srcPlace = findPlaceByName(*this, fMove.getSourcePlace());
-  auto tgtPlace = findPlaceByName(*this, fMove.getTargetPlace());
-  if (srcPlace && tgtPlace) {
-    if (placeWorldName(srcPlace) != placeWorldName(tgtPlace)) {
-      return emitOpError(
-          "[TOPOS-E0953] coequalizer '")
-          << getSymName() << "': source place '"
-          << fMove.getSourcePlace() << "' (world '"
-          << placeWorldName(srcPlace) << "') and target place '"
-          << fMove.getTargetPlace() << "' (world '"
-          << placeWorldName(tgtPlace) << "') belong to different "
-             "worlds.\n"
-          << "  fix: a coequalizer has no cross-Space form; "
-             "both places must share one world.";
-    }
-  }
-
-  // Quotient move check: must be declared and have
-  //   source = target di f,g     target = sym_name (= il place coeq)
-  auto qMove = findMove(getQuotientMove());
-  if (!qMove) {
-    return emitOpError(
-        "[TOPOS-E0953] coequalizer '")
-        << getSymName() << "' references unknown quotient move '"
-        << getQuotientMove() << "'.\n"
-        << "  fix: declare the quotient morphism with `topos.move "
-        << getQuotientMove() << " : "
-        << fMove.getTargetPlace() << " -> " << getSymName()
-        << "` before this coequalizer.";
-  }
-  if (qMove.getSourcePlace() != fMove.getTargetPlace()) {
-    return emitOpError(
-        "[TOPOS-E0953] coequalizer '")
-        << getSymName() << "': quotient move '"
-        << getQuotientMove() << "' has source '"
-        << qMove.getSourcePlace() << "' but should be '"
-        << fMove.getTargetPlace() << "' (the target of f,g).\n"
-        << "  fix: the canonical quotient q : Q -> C has source = Q.";
-  }
-  if (qMove.getTargetPlace() != getSymName()) {
-    return emitOpError(
-        "[TOPOS-E0953] coequalizer '")
-        << getSymName() << "': quotient move '"
-        << getQuotientMove() << "' has target '"
-        << qMove.getTargetPlace() << "' but should be '"
-        << getSymName() << "' (this coequalizer's name).\n"
-        << "  fix: the canonical quotient q : Q -> C has target = C.";
-  }
-
-  return success();
-}
 
 //===----------------------------------------------------------------------===//
 // CDT Hagino layer — Terminal, Initial, Bang, Absurd

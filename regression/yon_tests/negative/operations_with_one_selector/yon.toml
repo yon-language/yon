@@ -1,0 +1,5 @@
+[package]
+name = "operations_with_one_selector"
+
+[runtime]
+backend = "memory"

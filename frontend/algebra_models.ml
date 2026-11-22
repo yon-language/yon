@@ -22,6 +22,13 @@ let machine_term (symbol : string) (args : S.expr list) (loc : S.location) : S.e
   | "-", [a; b] -> Some (S.EBinop (S.OpSub, a, b, loc))
   | "-", [a] -> Some (S.EBinop (S.OpSub, S.ELit (S.LitNumber 0., loc), a, loc))
   | "*", [a; b] -> Some (S.EBinop (S.OpMul, a, b, loc))
+  (* the connectives of Omega, on the carrier proposition *)
+  | "&&?", [a; b] -> Some (S.ECall ("__heyt_and", [a; b], loc))
+  | "||?", [a; b] -> Some (S.ECall ("__heyt_or", [a; b], loc))
+  | "=>?", [a; b] -> Some (S.ECall ("__heyt_imp", [a; b], loc))
+  | "!?", [a] -> Some (S.ECall ("__heyt_not", [a], loc))
+  | "present", [] -> Some (S.ELit (S.LitHeytPresent, loc))
+  | "absent", [] -> Some (S.ELit (S.LitHeytAbsent, loc))
   | s, [] when s <> "" && String.for_all (fun c -> c >= '0' && c <= '9') s ->
       Hashtbl.replace S.exact_int_literals (loc.S.file, loc.S.start_line, loc.S.start_col) s;
       Some (S.ELit (S.LitNumber (float_of_string s), loc))
@@ -155,7 +162,8 @@ let instances (p : S.program) (places : S.place_decl list) : S.top_decl list =
                   let file = Printf.sprintf "%s (%s.%s in %s)"
                       fd.S.fn_loc.S.file a fd.S.fn_name pd.S.pd_name in
                   List.map (function
-                    | S.TopFun g -> S.TopFun { g with S.fn_name = pd.S.pd_name ^ "__" ^ g.S.fn_name }
+                    | S.TopFun g -> S.TopFun { g with S.fn_name = pd.S.pd_name ^ "__" ^ g.S.fn_name;
+                                                      S.fn_home = Some pd.S.pd_name }
                     | d -> d)
                     (parse_instance file fd.S.fn_loc.S.start_line text))
             ds

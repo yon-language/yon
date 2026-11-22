@@ -1,0 +1,8 @@
+[package]
+name = "place_not_positive"
+
+[world.W]
+objects = ["Bad"]
+
+[runtime]
+backend = "memory"

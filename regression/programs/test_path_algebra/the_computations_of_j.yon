@@ -1,0 +1,5 @@
+place Entry {
+  fun ru(p: 0 = 1): concat(p, refl(1)) = p { return clear }
+  fun ri(a: Number): back refl(a) = refl(a) { return clear }
+  fun main: Number { return 7 }
+}

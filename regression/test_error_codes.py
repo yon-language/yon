@@ -52,8 +52,6 @@ NO_PRODUCER = {
     "E2017": "Law_outside_algebra: produced when a law outside an algebra is refused",
     "E2018": "Algebra_carried: produced when an algebra with a carrier is refused",
     "E2019": "Writing_refused: produced by the second writings the checker refuses",
-    "E2020": "Place_not_positive: produced with the positivity check",
-    "E2021": "Index_impure: produced with the purity check of an index",
     "E2022": "Reduction_unfinished: produced when the bound of the reducer is a refusal",
     "E2023": "Value_discarded: produced when a discarded value is refused",
     "E2024": "Abstract_holds_state: produced with the abstract Spaces",

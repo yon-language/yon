@@ -420,15 +420,24 @@ let admit_int_literal (env : Tyenv.env) (ctx : Reduce.ctx)
   | ELit (LitBool _, _) when face_carrier expected = Some "boolean" -> expected
   | _ -> inferred
 
+(* The symbol of a connective of Omega, as an algebra declares it. *)
+let heyting_symbol = function
+  | "__heyt_and" -> "&&?" | "__heyt_or" -> "||?" | "__heyt_imp" -> "=>?" | "__heyt_not" -> "!?"
+  | _ -> ""
+
 (* The operation an algebra gives an operator on a place: the place is the
    algebra itself (in the statements of its laws), or uses it (`uses algebra
    A`), and the algebra declares an operation `as "<symbol>"`. The answer is
    the fun the operator calls (the place's own fun of the operation's name)
    and the type it returns. *)
-let algebra_operator (env : Tyenv.env) (op : binop) (t : ty) : (string * ty) option =
+let rec algebra_operator (env : Tyenv.env) (op : binop) (t : ty) : (string * ty) option =
   let symbol = match op with
     | OpAdd -> "+" | OpSub -> "-" | OpMul -> "*" | OpDiv -> "/" | OpMod -> "%"
     | _ -> "" in
+  algebra_symbol env symbol 2 t
+
+(* The same, for an operator written `symbol` with `arity` operands. *)
+and algebra_symbol (env : Tyenv.env) (symbol : string) (arity : int) (t : ty) : (string * ty) option =
   match t with
   (* inside its own house a place is its carrier: the operator is the
      carrier's, never the algebra's (which would call itself) *)
@@ -454,7 +463,7 @@ let algebra_operator (env : Tyenv.env) (op : binop) (t : ty) : (string * ty) opt
         | Some _ when shown_carrier a -> None
         | Some pd ->
             List.find_map (function
-              | FoOp o when o.op_symbol = Some symbol && List.length o.op_params = 2 ->
+              | FoOp o when o.op_symbol = Some symbol && List.length o.op_params = arity ->
                   (* the carrier of the algebra, in its operation, is the place *)
                   let ret = match o.op_return with
                     | Some (TyUser r) when r = a -> TyUser p
@@ -490,6 +499,12 @@ let record_text_concat (loc : location) : unit =
 let pending_text_concat : (location * ty) list ref = ref []
 
 (* Type of a binop result, given operand types. *)
+(* A truth value of Omega: the classifier, three-valued (G3). *)
+let is_prop_ty (t : ty) : bool =
+  match t with
+  | TyPrim "proposition" | TyUser "Omega" | TyUser "proposition" -> true
+  | _ -> false
+
 let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
     (env : Tyenv.env) (ctx : Reduce.ctx) (loc : location) : ty tc_result =
   match algebra_operator env op lhs with
@@ -559,16 +574,22 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
            (Tyenv.ty_to_string lhs) (Tyenv.ty_to_string rhs))
   (* Boolean operators *)
   | OpAnd | OpOr ->
-      (* Accepts number (C-style coercion, 0=false) in addition to boolean and
-       * proposition (Heyting dispatch via the interpreter). *)
-      let is_bool_like t =
-        is t bool_t || is t (TyPrim "number") || is t (TyPrim "proposition")
-      in
-      if is_bool_like lhs && is_bool_like rhs then ok bool_t
-      else err loc
-        (Printf.sprintf
-           "boolean operator requires Boolean, Number or proposition operands; got %s and %s"
-           (Tyenv.ty_to_string lhs) (Tyenv.ty_to_string rhs))
+      (* `and` and `or` are the operations of the algebra of Boolean: their
+       * operands are Booleans and so is their result. On Omega the meet and
+       * the join of Heyting are `&&?` and `||?`; a Number is no truth value. *)
+      let word = if op = OpAnd then "and" else "or" in
+      let heyting = if op = OpAnd then "&&?" else "||?" in
+      let wrong t =
+        if is_prop_ty t then
+          Some (Printf.sprintf "`%s` is an operation of Boolean, and this operand is an Omega: \
+                                on Omega it is written `%s`" word heyting)
+        else if not (is t bool_t) then
+          Some (Printf.sprintf "`%s` takes Booleans, and this operand is %s: compare it to make \
+                                a Boolean (`x != 0`)" word (Tyenv.ty_to_string t))
+        else None in
+      (match wrong lhs, wrong rhs with
+       | None, None -> ok bool_t
+       | Some m, _ | None, Some m -> err loc m)
 
 (* ─── Expression: infer ────────────────────────────────────────────── *)
 
@@ -708,9 +729,6 @@ let free_vars_expr (e0 : expr) : string list =
     | EJ (a, b, c, _) -> s a @ s b @ s c
     | EQuote (_, e, _) -> s e
     | EElMatch (a, b, c, _) -> s a @ s b @ s c
-    | EPullback (_, _, _) -> []
-    | EPushout (_, _, _) -> []
-    | EPullbackVal (_, _, a, b, _) -> s a @ s b
     | ENot (e, _) -> s e
     | EEscape (e, _) -> s e
     | EIfThenElse (a, b, c, _) -> s a @ s b @ s c
@@ -799,7 +817,6 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
   | EQuote (code, x, loc) -> EQuote (code, r x, loc)
   | EElMatch (target, ret, body, loc) ->
       EElMatch (r target, r ret, r body, loc)
-  | EPullbackVal (f, g, a, b, loc) -> EPullbackVal (f, g, r a, r b, loc)
   | ENot (x, loc) -> ENot (r x, loc)
   | EEscape (x, loc) -> EEscape (r x, loc)
   | EIfThenElse (a, b, c, loc) -> EIfThenElse (r a, r b, r c, loc)
@@ -816,8 +833,7 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
       EViewLam (params, r body, place, loc)
   | EComposeWith (a, b, loc) -> EComposeWith (r a, r b, loc)
   | ESpawn (count, body, loc) -> ESpawn (Option.map r count, body, loc)
-  | (ELit _ | EVar _ | EWireTo _ | EProduce _ | EAll _
-    | EPullback _ | EPushout _) -> e
+  | (ELit _ | EVar _ | EWireTo _ | EProduce _ | EAll _) -> e
 
 (* A spawn body runs in forked replicas, and it holds no store at any depth of its
    blocks: the walk goes through every block a statement holds. A produce is a new
@@ -1220,30 +1236,43 @@ let branch_context (env : Tyenv.env) (x : expr) (arm : (string * string list) op
         (y, if Some y = scrutinee then rename t else refine t)) vars in
     ({ env with Tyenv.vars = kept @ refined }, refine)
 
-(* Categorical certification for dependent elimination. An inductive is the
-   initial F-algebra; its constructors form a cocone into the carrier, and a
-   dependent eliminator is the unique map factoring the branch cone through that
-   colimit (the initial-algebra universal property). We build the constructor
-   pasting-diagram, take its universal colimit cell, and factor the branch cone
-   through it. This activates the CaTT universal-property machinery
-   (Catt_r_yon.universal_colimit_cell / factor_through) that the checker already
-   carries, so dependent elimination is grounded in the universal property rather
-   than a bare substitution. The operational content — that each branch inhabits
-   its fibre — is the per-branch check below; this is the abstract witness that
-   the branch cone is a well-formed cocone over the carrier. *)
-let certify_dependent_cone (hname : string)
+(* The certificate of a dependent elimination. A higher inductive is the
+   colimit of the diagram of its constructors: an object for each point
+   constructor, an arrow s -> t for each cell between two of them. A match into
+   a family is a cocone over that diagram: a leg for each point (the branch, in
+   its fibre) and, for each cell, a square from the image of one end to the
+   image of the other (the branch of the cell, a path the kernel has checked
+   between the two images, cell_match). The eliminator is the factor of that
+   cocone through the colimit; the certificate is the factor computed and its
+   triangles verified, arrow by arrow (Catt_r_yon.factor_from). A cell whose
+   ends are not points (a cell between cells) is checked by the kernel alone. *)
+let certify_dependent_cone (hname : string) (sig_ : Hit_env.hit_signature)
     (branches : (string * _ * expr) list) : bool =
   let open Catt_r_yon in
-  let diagram : ps_ctx =
-    (hname, CellStar)
-    :: List.map
-         (fun (ctor, _, _) ->
-            (ctor, CellArr (TmVar ctor, TmVar hname, CellStar)))
-         branches
-  in
-  let apex = TmVar hname in
-  match factor_through (universal_colimit_cell diagram apex) apex
-          (TmVar "__branch_cone") with
+  let head e = match e with
+    | EVar (n, _) | ECall (n, _, _) -> Some n
+    | _ -> None in
+  let points = List.map (fun (p : Hit_env.point_constructor) -> p.pc_name) sig_.Hit_env.hit_points in
+  let cells = List.filter_map (fun (c : Hit_env.path_constructor) ->
+      match head c.hpc_left, head c.hpc_right with
+      | Some s, Some t when List.mem s points && List.mem t points -> Some (c.hpc_name, s, t)
+      | _ -> None) sig_.Hit_env.hit_paths in
+  let diagram = List.map (fun p -> (p, CellStar)) points
+                @ List.map (fun (c, s, t) -> (c, CellArr (TmVar s, TmVar t, CellStar))) cells in
+  let fibre = TmVar ("__fibre_" ^ hname) in
+  let branch c = TmVar ("__branch_" ^ c) in
+  let has c = List.exists (fun (n, _, _) -> n = c) branches in
+  let cocone = {
+    apex = fibre;
+    legs = List.filter_map (fun p ->
+        if has p then Some (p, branch p, CellArr (TmVar p, fibre, CellStar)) else None) points;
+    squares = List.filter_map (fun (c, s, t) ->
+        if has c then
+          Some (c, branch c,
+                CellArr (compose (TmVar s) (TmVar t) fibre (TmVar c) (branch t),
+                         branch s, CellArr (TmVar s, fibre, CellStar)))
+        else None) cells } in
+  match factor_from (universal_colimit_cell diagram (TmVar hname)) cocone with
   | Some _ -> true
   | None -> false
 
@@ -1448,10 +1477,11 @@ type mob_fact =
   | Mob_gets_closure of mob_target * int * location
       (* the argument at this position of a call holds a closure over a cell *)
 let mob_facts : mob_fact list ref = ref []
+let mob_escaping : string list ref = ref []
 
 let rec mob_kids (e : expr) : expr list =
   match e with
-  | ELit _ | EVar _ | EWireTo _ | EAll _ | EPullback _ | EPushout _ -> []
+  | ELit _ | EVar _ | EWireTo _ | EAll _ -> []
   | EField (o, _, _) | EParen (o, _) | ENot (o, _) | EEscape (o, _) | EIn (o, _, _) | ERefl (o, _)
   | EFst (o, _) | ESnd (o, _) | EPathApp (o, _, _) | EPathAbs (_, o, _)
   | EQuote (_, o, _) -> [o]
@@ -1461,8 +1491,7 @@ let rec mob_kids (e : expr) : expr list =
   | EProduce (b, _) -> mob_stmts_kids b
   | ESpawn (n, b, _) -> Option.to_list n @ mob_stmts_kids b
   | ENew (_, fas, _) | ENewIn (_, _, fas, _) -> List.map (fun fa -> fa.fa_value) fas
-  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _)
-  | EPullbackVal (_, _, a, b, _) -> [a; b]
+  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _) -> [a; b]
   | EJ (a, b, c, _) | EElMatch (a, b, c, _) | EIfThenElse (a, b, c, _) -> [a; b; c]
   | ELam (_, b, _) | EMoveLam (_, b, _, _, _) | EMorphLam (_, b, _, _, _)
   | EFunctorLam (_, b, _, _, _, _) | EReductionLam (_, b, _, _)
@@ -1906,6 +1935,8 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
                  | Some (sp, _), Some sg ->
                      Hashtbl.replace Surface_ast.rpc_sigs
                        (sp, Module_prefix.op_selector bare) sg;
+                     Hashtbl.replace Surface_ast.rpc_names
+                       (sp, Module_prefix.op_selector bare) bare;
                      Hashtbl.replace Surface_ast.rpc_returns
                        (sp, Module_prefix.op_selector bare) r
                  | _ -> ());
@@ -2155,9 +2186,9 @@ let mob_flow_errors () : type_error list =
   let changed = ref true in
   let reach t i =
     if not (mem t i) then begin Hashtbl.replace reached (t, i) (); changed := true end in
-  let values =
-    List.sort_uniq compare
-      (List.filter_map (function Mob_is_value n -> Some n | _ -> None) !mob_facts) in
+  (* the funs named as values: the one set of Call_graph, the same the effects,
+     the allocation and the termination read *)
+  let values = !mob_escaping in
   let positions n =
     Hashtbl.fold (fun (t, i) () acc -> if t = Mob_fun n then i :: acc else acc) reached [] in
   while !changed do
@@ -2552,6 +2583,44 @@ let resolve_model (env : Tyenv.env) ~(called : string) ~(signature : string)
 
 (* the values in the tail of a fun on error, by span (see tail_escape) *)
 let tail_values : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 16
+
+(* The one point where an expression of the program becomes an index of a type:
+   an endpoint of a path, the term argument of a place. An index is a value: it
+   does not read a variable, which can change under it (Landin; Harper ch. 34). *)
+let index_of (env : Tyenv.env) (loc : location) (e : expr) : ty_term tc_result =
+  match List.find_opt (Tyenv.is_cell env)
+          (List.sort_uniq compare (Desugar.free_vars_in_expr [] e)) with
+  | Some c ->
+      err_coded Error_codes.Index_impure loc (Printf.sprintf
+        "the index of a type reads the variable `%s`: the index of a type is a value, \
+         and a variable can change under it. Bind its value first, `v := %s`, and \
+         make the path on `v`." c c)
+  | None -> ok (TyTermExpr e)
+
+(* The indices of a type written in the program, each read by index_of. *)
+let rec indices_of (env : Tyenv.env) (loc : location) (t : ty) : unit tc_result =
+  let each ts = List.fold_left (fun acc t ->
+      let* () = acc in indices_of env loc t) (ok ()) ts in
+  let term (TyTermExpr e) = let* _ = index_of env loc e in ok () in
+  match t with
+  | TyId (a, x, y) -> let* () = indices_of env loc a in let* () = term x in term y
+  | TyPathP ((_, a), x, y) -> let* () = indices_of env loc a in let* () = term x in term y
+  | TyEl c -> term c
+  | TyApp (n, args) ->
+      let terms = match Hashtbl.find_opt Surface_ast.place_term_params n with
+        | Some (ps, ts) -> List.filter_map (fun (p, a) ->
+            if List.mem_assoc p ts then Some a else None)
+            (try List.combine ps args with Invalid_argument _ -> [])
+        | None -> [] in
+      let* () = List.fold_left (fun acc a ->
+          let* () = acc in
+          match a with
+          | TyUser x -> let* _ = index_of env loc (EVar (x, loc)) in ok ()
+          | _ -> ok ()) (ok ()) terms in
+      each (List.filter (fun a -> not (List.memq a terms)) args)
+  | TyPi (_, a, b) | TySigma (_, a, b) | TyArrow (a, b) | TyMap (a, b) -> each [a; b]
+  | TyChannel a -> each [a]
+  | _ -> ok ()
 
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   let before = !Surface_ast.bind_count in
@@ -3100,14 +3169,15 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
        | TyId (carrier, _x, _y) -> ok carrier
        | _ -> err loc "path application (@): the head is not a path (Id type)")
 
-  | EPathAbs (i, e, _loc) ->
+  | EPathAbs (i, e, loc) ->
       (* walk i => e : a path <i> e. Non-dependent typing: the body has type A
        * (the carrier); the path runs e[i:=0] ~> e[i:=1]. Keep the actual
        * endpoint expressions so Dispatcher conversion can normalize path
-       * applications and certified deltas. *)
+       * applications and certified deltas; each is an index (index_of). *)
+      let* x = index_of env loc (subst_dim_in_expr i DI0 e) in
+      let* y = index_of env loc (subst_dim_in_expr i DI1 e) in
       let* a_ty = infer env ctx e in
-      ok (TyId (a_ty, TyTermExpr (subst_dim_in_expr i DI0 e),
-                TyTermExpr (subst_dim_in_expr i DI1 e)))
+      ok (TyId (a_ty, x, y))
 
   | EHITConstr (ctor, args, loc) ->
       (* hit(ctor, args): a HIT constructor. Look it up in the registry.
@@ -3502,6 +3572,27 @@ got %s" (Tyenv.ty_to_string other)))
           ("__i64_" ^ String.sub name 2 (String.length name - 2));
         ok t0
       end
+  | ECall (("__heyt_and" | "__heyt_or" | "__heyt_imp" | "__heyt_not") as name, args, loc)
+    when (match args with
+          | a :: _ ->
+              (match infer env ctx a with
+               | Ok (TyUser p as t) ->
+                   Hashtbl.mem Surface_ast.algebra_places p
+                   && algebra_symbol env (heyting_symbol name) (List.length args) t <> None
+               | _ -> false)
+          | [] -> false) ->
+      (* in the statement of a law of an algebra that writes its operations with
+         the connectives of Omega, a connective between values of the algebra
+         is its operation: the algebra stands for its carrier *)
+      let* t = infer env ctx (List.hd args) in
+      let* tys = List.fold_right (fun a acc ->
+          let* l = acc in let* ta = infer env ctx a in ok (ta :: l)) args (ok []) in
+      if List.for_all (fun ta -> Dispatcher.type_equal env ctx ta t) tys then
+        (match algebra_symbol env (heyting_symbol name) (List.length args) t with
+         | Some (_, ret) -> ok ret
+         | None -> ok t)
+      else err loc (Printf.sprintf "%s needs operands of one type, got %s" (heyting_symbol name)
+                      (String.concat " and " (List.map Tyenv.ty_to_string tys)))
   | ECall (name, args, loc) ->
       (* B.2: directed-transport builtin. `coerce_incl(v, proof)` transports a
          value v along the directed inclusion cell m_f : c_P -> c_Q whose witness
@@ -3943,12 +4034,14 @@ got %s" (Tyenv.ty_to_string other)))
       infer env ctx inner
 
   (* ── HoTT term constructors ──────────────────────────────────── *)
-  | ERefl (e, _loc) ->
+  | ERefl (e, loc) ->
       (* refl(t) : Id_A(t, t) — the endpoints ARE the argument t, tracked
        * faithfully (no placeholder). Endpoint comparison in type_equal is
-       * now structural, so the real term must appear here. *)
+       * now structural, so the real term must appear here. An endpoint is
+       * an index of a type (index_of). *)
+      let* t = index_of env loc e in
       let* a_ty = infer env ctx e in
-      ok (TyId (a_ty, TyTermExpr e, TyTermExpr e))
+      ok (TyId (a_ty, t, t))
   | EPair (a, b, _loc) ->
       let* a_ty = infer env ctx a in
       let* b_ty = infer env ctx b in
@@ -4059,28 +4152,20 @@ got %s" (Tyenv.ty_to_string other)))
        | other ->
            err loc (Printf.sprintf "el_match expects El(...) as 1st arg, got %s"
                       (Tyenv.ty_to_string other)))
-  | EPullback (_f, _g, _loc) ->
-      (* pullback(f, g) as an expression. We return TyPrim "number" (a runtime
-       * handle placeholder). The full semantic validation (f and g must be
-       * morphs parallel to a cospan f : A -> C, g : B -> C) stays open. *)
-      ok (TyPrim "number")
-  | EPushout (_f, _g, _loc) ->
-      ok (TyPrim "number")
-  | EPullbackVal (_f, _g, _a, _b, _loc) ->
-      (* pullback runtime semantics.
-       * Returns a handle encoded as a number (bit-packing). *)
-      ok (TyPrim "number")
   | EEscape (x, loc) -> escape_value env ctx x loc
   | ENot (e, _loc) ->
-      (* Unary not. Accepts boolean -> boolean, proposition -> proposition, and
-       * number -> boolean (C-style: 0 -> true, nonzero -> false). *)
+      (* `not` is the negation of the algebra of Boolean. On Omega the
+       * pseudo-complement of Heyting is `!?`; a Number is no truth value. *)
       let* t = infer env ctx e in
       (match t with
        | TyPrim "boolean" -> ok (TyPrim "boolean")
-       | TyPrim "proposition" -> ok (TyPrim "proposition")
-       | TyPrim "number" -> ok (TyPrim "boolean")
-       | _ ->
-           err (location_of_expr e) "not: expected Boolean, proposition, or Number")
+       | t when is_prop_ty t ->
+           err (location_of_expr e) "`not` is the negation of Boolean, and this is an Omega: \
+                                     on Omega it is written `!?` (and `a => b` is `a =>? b`)"
+       | t ->
+           err (location_of_expr e) (Printf.sprintf
+             "`not` takes a Boolean, and this is %s: compare it to make a Boolean (`x == 0`)"
+             (Tyenv.ty_to_string t)))
 
   | EIfThenElse (c, a, b, _loc) ->
       (* if/then/else expression typing:
@@ -4096,6 +4181,8 @@ got %s" (Tyenv.ty_to_string other)))
        * return the TyArrow chain. An annotated parameter has its annotation;
        * an unannotated one has its unknown, solved by the expected type of the
        * lambda and by its uses. *)
+      let* () = List.fold_left (fun acc (_, t) ->
+          let* () = acc in indices_of env _loc t) (ok ()) params in
       let params = lambda_params_with_unknowns params _loc in
       let env_ext = List.fold_left
         (fun env_acc (pname, pty) ->
@@ -4893,6 +4980,8 @@ and check_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) :
         ok ()
       end
   | ELam ((params as lam_params), body, lam_loc), (TyPi _ | TyArrow _) ->
+      let* () = List.fold_left (fun acc (_, t) ->
+          let* () = acc in indices_of env lam_loc t) (ok ()) lam_params in
       let env = { env with Tyenv.bind_scope = Tyenv.BindLambda } in
       (* Bidirectional lambda checking.  A dependent expected type carries the
          information needed to type an unannotated surface lambda and to align
@@ -5171,7 +5260,7 @@ and check_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) :
                         go_branches rest)
            in
            let* () = go_branches branches in
-           if certify_dependent_cone hname branches then ok ()
+           if certify_dependent_cone hname sig_ branches then ok ()
            else
              err loc "match: the branch cone does not factor through the \
                       inductive's universal cell (malformed dependent cocone)")
@@ -5427,10 +5516,12 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
            | TyTermExpr ex ->
                (match f_e with
                 | EVar (n, _) when Tyenv.lookup_fun env n <> None ->
-                    TyTermExpr (ECall (n, [ex], loc))
-                | ELam ([(x, _)], body, _) -> TyTermExpr (Desugar.subst_evar_in_expr x ex body)
-                | _ -> TyTermExpr (EApp (f_e, [ex], loc))) in
-         ok (TyId (cod, apf x, apf y))
+                    index_of env loc (ECall (n, [ex], loc))
+                | ELam ([(x, _)], body, _) -> index_of env loc (Desugar.subst_evar_in_expr x ex body)
+                | _ -> index_of env loc (EApp (f_e, [ex], loc))) in
+         let* fx = apf x in
+         let* fy = apf y in
+         ok (TyId (cod, fx, fy))
      | [_; _], [TyArrow (dom, _); TyId (carrier, _, _)]
        when not (Dispatcher.type_equal env ctx dom carrier) ->
          err loc "ap: the function's domain does not match the path's carrier type"
@@ -7202,6 +7293,122 @@ let library_name_collisions (p : program) : type_error list =
                  pd.pd_name pd.pd_name pd.pd_name }
     | _ -> None) p
 
+(* A recursive place is strictly positive: within a group of places that name
+   one another (a component of the condensation of the graph of their fields),
+   no member occurs left of an arrow in the field of a member. A place p with
+   `f p -> Number` would give p = not p: the logic of the types would prove
+   anything, and the checker could loop (Lambek, Scott, Part I, Prop. 15.4;
+   Pierce ch. 20; Harper ch. 16). Refused, E2020. *)
+let positivity_errors (p : program) : type_error list =
+  let decls = List.filter_map (function TopPlace pd -> Some pd | _ -> None) p in
+  let names = List.map (fun pd -> pd.pd_name) decls in
+  let rec mentions (t : ty) : string list =
+    match t with
+    | TyUser n | TyVar n -> [n]
+    | TyApp (n, ts) -> n :: List.concat_map mentions ts
+    | TyArrow (a, b) | TyMap (a, b) | TyPi (_, a, b) | TySigma (_, a, b) -> mentions a @ mentions b
+    | TyChannel a | TySubscription (_, a) -> mentions a
+    | TyId (a, _, _) -> mentions a
+    | TySum vs | TySumIn (vs, _) -> List.concat_map (fun v -> List.concat_map mentions v.v_args) vs
+    | _ -> [] in
+  let field_tys (pd : place_decl) =
+    List.filter_map (function FoField f -> Some (f.fd_name, f.fd_ty) | _ -> None) pd.pd_members
+    @ List.concat_map (fun (v : variant) -> List.map (fun t -> (v.v_name, t)) v.v_args) pd.pd_arms in
+  (* The parameters of a parametric place that stand left of an arrow in its fields: an argument
+     there stands left of the arrow too. The least fixed point over the places, which only grows
+     and is bounded by the parameters. *)
+  let left_params : (string, string list) Hashtbl.t = Hashtbl.create 16 in
+  (* the names left of an arrow, at any depth of the left *)
+  let rec negative (t : ty) : string list =
+    match t with
+    | TyArrow (a, b) | TyPi (_, a, b) -> mentions a @ negative b
+    | TyApp (n, ts) ->
+        let left = Option.value (Hashtbl.find_opt left_params n) ~default:[] in
+        let ps = match List.find_opt (fun pd -> pd.pd_name = n) decls with
+          | Some pd -> pd.pd_type_params | None -> [] in
+        List.concat (List.mapi (fun i a ->
+            match List.nth_opt ps i with
+            | Some x when List.mem x left -> mentions a
+            | _ -> negative a) ts)
+    | TyMap (a, b) | TySigma (_, a, b) -> negative a @ negative b
+    | TyChannel a | TySubscription (_, a) | TyId (a, _, _) -> negative a
+    | TySum vs | TySumIn (vs, _) -> List.concat_map (fun v -> List.concat_map negative v.v_args) vs
+    | _ -> [] in
+  let rec grow () =
+    let changed = ref false in
+    List.iter (fun pd ->
+        if pd.pd_type_params <> [] then begin
+          let left = List.concat_map (fun (_, t) -> negative t) (field_tys pd) in
+          let now = List.filter (fun x -> List.mem x left) pd.pd_type_params in
+          if now <> Option.value (Hashtbl.find_opt left_params pd.pd_name) ~default:[] then begin
+            Hashtbl.replace left_params pd.pd_name now; changed := true end
+        end) decls;
+    if !changed then grow () in
+  grow ();
+  let succ n = match List.find_opt (fun pd -> pd.pd_name = n) decls with
+    | Some pd -> List.filter (fun m -> List.mem m names)
+                   (List.concat_map (fun (_, t) -> mentions t) (field_tys pd))
+    | None -> [] in
+  List.concat_map (fun group ->
+      if not (Call_graph.recursive succ group) then [] else
+      List.concat_map (fun n ->
+          match List.find_opt (fun pd -> pd.pd_name = n) decls with
+          | None -> []
+          | Some pd ->
+              List.filter_map (fun (f, t) ->
+                  match List.find_opt (fun m -> List.mem m group) (negative t) with
+                  | Some m ->
+                      Some { err_loc = pd.pd_loc; err_code = Error_codes.Place_not_positive;
+                             err_msg = Printf.sprintf
+                               "a recursive place is not strictly positive: %s appears left of \
+                                an arrow in the field %s of %s. A recursive place appears only \
+                                right of the arrows of its fields." m f n }
+                  | None -> None) (field_tys pd)) group)
+    (Call_graph.condensation names succ)
+
+(* The names the compiler and the runtime make are theirs: a name that begins
+   with `__` (the names the compiler generates), with `yon_rt_` (the runtime),
+   or that is the qualified name of a fun of a house, `House__f` (a place of
+   the program or of the library, and the houses the lowering makes: Stream,
+   Wire, Spawn). A user fun or place with such a name would take the place of
+   the one the compiler means, in the program or at the link. Refused, E2025.
+   A fun of the user is no symbol of the executable either (it is emitted with
+   internal linkage), so `strlen` or `malloc` take nothing from the system. *)
+(* A function the parser lifted out of an inline lambda (it made the name). *)
+let is_lifted_lambda (name : string) : bool =
+  Hashtbl.mem Surface_ast.lifted_lambdas name
+
+let reserved_names (p : program) : type_error list =
+  let places = List.filter_map (function TopPlace pd -> Some pd.pd_name | _ -> None) p in
+  let houses = ["Stream"; "Wire"; "Spawn"] @ places in
+  let written (fd : fun_decl) =
+    match fd.fn_home with
+    | Some h when String.starts_with ~prefix:(h ^ "__") fd.fn_name ->
+        String.sub fd.fn_name (String.length h + 2) (String.length fd.fn_name - String.length h - 2)
+    | _ -> fd.fn_name in
+  let why n =
+    if String.starts_with ~prefix:"__" n then Some "it begins with `__`, as the names the compiler makes"
+    else if String.starts_with ~prefix:"yon_rt_" n then Some "it begins with `yon_rt_`, as the names of the runtime"
+    else
+      match Str.bounded_split (Str.regexp_string "__") n 2 with
+      | [h; _] when List.mem h houses && String.length h < String.length n - 2 ->
+          Some (Printf.sprintf "it is the qualified name of a fun of the house %s (%s.%s)"
+                  h h (String.sub n (String.length h + 2) (String.length n - String.length h - 2)))
+      | _ -> None in
+  let refuse loc n w =
+    { err_loc = loc; err_code = Error_codes.Name_reserved;
+      err_msg = Printf.sprintf
+        "the name `%s` is reserved: %s. Rename it." n w } in
+  List.filter_map (function
+    (* a declaration with no site is one the compiler made *)
+    | TopFun fd when fd.fn_loc.file <> "" && not (in_prelude_file fd.fn_loc)
+                     && not (is_lifted_lambda fd.fn_name) ->
+        let n = written fd in
+        Option.map (refuse fd.fn_loc n) (why n)
+    | TopPlace pd when pd.pd_loc.file <> "" && not (in_prelude_file pd.pd_loc) ->
+        Option.map (refuse pd.pd_loc pd.pd_name) (why pd.pd_name)
+    | _ -> None) p
+
 (* `is given` declares the face of a primitive of the runtime, which the
    compiler wires: the library's, so the prelude's only (E2007). A function
    of a user file has a body written in Yon. *)
@@ -7355,7 +7562,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                  let* () = check_fun_decl env_with_objs ctx fn in
                  let body_core = Desugar.desugar_expr_pure env_with_objs body in
                  let sheaf_ctx =
-                   { ctx with Reduce.deltas = env_with_objs.Tyenv.delta }
+                   { ctx with Reduce.deltas = Dispatcher.certified_deltas env_with_objs }
                  in
                  let* () = List.fold_left
                    (fun acc (param_name, param_ty) ->
@@ -7969,9 +8176,9 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
                     "address"; "tensor"; "cryptographic"; "unit";
                     "duration"; "fun"; "world"; "sum"; "unknown"] in
   let cubical_builtin = ["Path"; "Identity"; "Eq"; "Equiv"; "Glue";
-                         "U"; "S1"; "S2"; "Sphere"; "Suspension"; "Susp";
+                         "U"; "S1"; "S2"; "Suspension";
                          "Quotient"; "PropTrunc"; "SetTrunc";
-                         "Pushout"; "Coeq"] in
+                         "Pushout"] in
   (* Parameterizable runtime user-types. Lets one write
    * `fun f(R: Space): ...` and `fun g(m: Map): ...` without having to register
    * them with `place`. *)
@@ -8232,7 +8439,7 @@ and unreachable_binds (body : stmt list) : type_error list =
       Hashtbl.mem Surface_ast.cond_bind_sites (Surface_ast.span_of (location_of_expr e)) in
     match e with
     | ECall _ | EApp _ | EField _ | EBinop _ | EParen _ | ENot _ | EEscape _ | EIn _ | EFst _
-    | ESnd _ | EPair _ | EHITConstr _ | ENew _ | ENewIn _ | EPullbackVal _
+    | ESnd _ | EPair _ | EHITConstr _ | ENew _ | ENewIn _
     | ELit _ | EVar _ ->
         (match e with
          | EBinop ((OpAnd | OpOr), _, b, _)
@@ -8663,7 +8870,7 @@ and check_move_decl (env : Tyenv.env) (ctx : Reduce.ctx) (md : move_decl) : unit
                        let domain = C.TyPlace src_name in
                        let canon = Sheaf.quotient_canon ~rel ~domain in
                        let sheaf_ctx =
-                         { ctx with Reduce.deltas = env.Tyenv.delta }
+                         { ctx with Reduce.deltas = Dispatcher.certified_deltas env }
                        in
                        List.fold_left
                          (fun acc m ->
@@ -8750,7 +8957,7 @@ and check_view_decl (env : Tyenv.env) (ctx : Reduce.ctx) (vd : view_decl) : unit
               let canon =
                 Sheaf.quotient_canon ~rel ~domain:(C.TyPlace vd.vw_of)
               in
-              let sheaf_ctx = { ctx with Reduce.deltas = env.Tyenv.delta } in
+              let sheaf_ctx = { ctx with Reduce.deltas = Dispatcher.certified_deltas env } in
               List.fold_left
                 (fun acc item ->
                    let* () = acc in
@@ -9101,8 +9308,7 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | EPair (a, b, _) -> walk_expr a; walk_expr b
     | EFst (e, _) | ESnd (e, _) | ERefl (e, _) -> walk_expr e
     | EJ (a, b, c, _) -> walk_expr a; walk_expr b; walk_expr c
-    | EPullback (_, _, _) | EPushout (_, _, _) | EWireTo (_, _) -> ()
-    | EPullbackVal (_, _, a, b, _) -> walk_expr a; walk_expr b
+    | EWireTo (_, _) -> ()
     | ENot (e, _) -> walk_expr e
     | EEscape (e, _) -> walk_expr e
     | EIfThenElse (c, a, b, _) -> walk_expr c; walk_expr a; walk_expr b
@@ -9310,25 +9516,35 @@ let heap_alloc_errors (p : program) : type_error list =
     | None -> ()) bodies;
   let calls = Hashtbl.create 256 in
   Hashtbl.iter (fun n fd -> Hashtbl.replace calls n (collect_calls_in_stmts fd.fn_body)) bodies;
-  let callee_allocates g =
-    match Hashtbl.find_opt reason g with
-    | Some r -> Some (Printf.sprintf "calls %s, which %s" (shown g) r)
-    | None ->
-        if Hashtbl.mem bodies g then None
-        else if List.mem g Stdlib_runtime.non_allocating_primitives then None
-        else if Hashtbl.mem given g || Stdlib_runtime.lookup_stdlib_signature g <> None then
-          (if List.mem g Stdlib_runtime.non_allocating_primitives then None
-           else Some (Printf.sprintf "calls %s, a primitive that allocates" (shown g)))
-        else Some (Printf.sprintf "calls %s, a function value whose body is not known here" (shown g)) in
-  let changed = ref true in
-  while !changed do
-    changed := false;
-    Hashtbl.iter (fun n cs ->
-      if not (Hashtbl.mem reason n) then
-        match List.find_map callee_allocates cs with
-        | Some r -> Hashtbl.replace reason n r; changed := true
-        | None -> ()) calls
-  done;
+  let values = Call_graph.escaping p in
+  (* a call through a function value reaches every fun named as a value *)
+  let value_call n g =
+    not (Hashtbl.mem bodies g)
+    && (match Hashtbl.find_opt bodies n with
+        | Some fd -> List.mem g (Call_graph.local_names fd)
+        | None -> false) in
+  (* a primitive is a leaf of the graph: it allocates, or it does not *)
+  let primitive g =
+    not (Hashtbl.mem bodies g)
+    && not (List.mem g Stdlib_runtime.non_allocating_primitives)
+    && (Hashtbl.mem given g || Stdlib_runtime.lookup_stdlib_signature g <> None) in
+  let succ n = match Hashtbl.find_opt calls n with
+    | None -> []
+    | Some cs -> List.concat_map (fun g -> if value_call n g then values else [g]) cs in
+  let nodes = Hashtbl.fold (fun n cs acc -> n :: cs @ acc) calls [] |> List.sort_uniq compare in
+  (* a name that is no fun of the program, no primitive and no value of the
+     caller is not known here: it is taken to allocate *)
+  let own g =
+    if Hashtbl.mem bodies g then Hashtbl.find_opt reason g
+    else if primitive g then Some ""
+    else if List.mem g Stdlib_runtime.non_allocating_primitives then None
+    else Some "?" in
+  let through g r =
+    if r = "" then Printf.sprintf "calls %s, a primitive that allocates" (shown g)
+    else if r = "?" then Printf.sprintf "calls %s, a function whose body is not known here" (shown g)
+    else Printf.sprintf "calls %s, which %s" (shown g) r in
+  let found = Call_graph.first nodes succ own through in
+  Hashtbl.iter (fun n r -> if Hashtbl.mem bodies n then Hashtbl.replace reason n r) found;
   Hashtbl.fold (fun n fd acc ->
     match fd.fn_home with
     | Some h when List.mem h houses ->
@@ -9475,51 +9691,33 @@ let infer_fun_signatures (p : program) : (program, type_error) result =
     | other -> other) p in
   Ok p'
 
+(* The effects a fun visits: its own, and those of every fun it calls. One pass
+   over the condensation of the calls (Call_graph.reach), with no bound on the
+   rounds. A call through a function value adds nothing here: the effect of a
+   function value belongs to its arrow type. *)
 let infer_effects (env : Tyenv.env) (p : program) : Tyenv.env =
-  (* Collect, for each function, the set of called function names. *)
-  let call_graph =
-    List.filter_map
-      (function
-        | TopFun fn ->
-            Some (fn.fn_name, collect_calls_in_stmts fn.fn_body)
-        | _ -> None)
-      p
-  in
-  (* Initial visits: declared values from env (we'll iterate). *)
-  let visits_table = Hashtbl.create 17 in
-  List.iter (fun (name, fs) ->
-    Hashtbl.replace visits_table name fs.Tyenv.fs_visits)
-    env.Tyenv.funs;
-  (* Fixpoint: visits(f) ← visits(f) ∪ ⋃_{g in calls(f)} visits(g) *)
-  let changed = ref true in
-  let iterations = ref 0 in
-  while !changed && !iterations < 100 do
-    incr iterations;
-    changed := false;
-    List.iter (fun (f_name, callees) ->
-      let cur = try Hashtbl.find visits_table f_name with Not_found -> [] in
-      let added = List.fold_left
-        (fun acc g ->
-           let g_visits =
-             try Hashtbl.find visits_table g with Not_found -> []
-           in
-           List.fold_left
-             (fun acc' w -> if List.mem w acc' then acc' else w :: acc')
-             acc g_visits)
-        cur callees
-      in
-      if List.length added > List.length cur then
-        (changed := true;
-         Hashtbl.replace visits_table f_name added))
-      call_graph
-  done;
-  (* Patch the env: for each function whose visits grew, update fs_visits. *)
+  let calls = Hashtbl.create 64 and locals = Hashtbl.create 64 in
+  List.iter (function
+    | TopFun fn ->
+        Hashtbl.replace calls fn.fn_name (collect_calls_in_stmts fn.fn_body);
+        Hashtbl.replace locals fn.fn_name (Call_graph.local_names fn)
+    | _ -> ()) p;
+  let succ f =
+    match Hashtbl.find_opt calls f with
+    | None -> []
+    | Some cs ->
+        let own = Option.value (Hashtbl.find_opt locals f) ~default:[] in
+        List.filter (fun g -> not (List.mem g own && not (Hashtbl.mem calls g))) cs in
+  let nodes = List.filter_map (function TopFun fn -> Some fn.fn_name | _ -> None) p in
+  let seed n = match List.assoc_opt n env.Tyenv.funs with
+    | Some fs -> fs.Tyenv.fs_visits
+    | None -> [] in
+  let fact = Call_graph.reach nodes succ seed in
   let updated_funs = List.map
     (fun (name, fs) ->
-       let inferred =
-         try Hashtbl.find visits_table name with Not_found -> fs.Tyenv.fs_visits
-       in
-       (name, { fs with Tyenv.fs_visits = inferred }))
+       match Hashtbl.find_opt fact name with
+       | Some v -> (name, { fs with Tyenv.fs_visits = v })
+       | None -> (name, fs))
     env.Tyenv.funs
   in
   { env with Tyenv.funs = updated_funs }
@@ -9638,11 +9836,6 @@ let elaborate_id_sugar (p : program) : program =
         | None -> fd in
     List.map (function TopFun fd -> TopFun (resolve_fun (inferred fd)) | d -> d) p
 
-(* A function the parser lifted out of an inline lambda. *)
-let is_lifted_lambda (name : string) : bool =
-  String.starts_with ~prefix:"__blk_inline_p_" name
-  || String.starts_with ~prefix:"__by_inline_p_" name
-
 let check_program (p : program) : check_result =
   mob_facts := [];
   pending_text_concat := [];
@@ -9664,7 +9857,7 @@ let check_program (p : program) : check_result =
       { cr_env = Tyenv.with_builtins Tyenv.empty;
         cr_errors = [e] }
   | Ok p ->
-  match library_name_collisions p @ given_outside_prelude p
+  match library_name_collisions p @ reserved_names p @ positivity_errors p @ given_outside_prelude p
         @ arm_name_clashes p with
   | _ :: _ as errs ->
       { cr_env = Tyenv.with_builtins Tyenv.empty; cr_errors = errs }
@@ -9690,6 +9883,7 @@ let check_program (p : program) : check_result =
   Hashtbl.reset Surface_ast.wire_types;
   Hashtbl.reset Surface_ast.wire_subs;
   Hashtbl.reset Surface_ast.rpc_sigs;
+  Hashtbl.reset Surface_ast.rpc_names;
   Hashtbl.reset Surface_ast.rpc_returns;
   Hashtbl.reset Surface_ast.op_sigs;
   Hashtbl.reset Surface_ast.cross_calls;
@@ -9755,20 +9949,10 @@ let check_program (p : program) : check_result =
   let env_with_sigs = List.fold_left register_decl env0 p in
   let env_with_sigs = resolve_arm_injections env_with_sigs p in
   let env_with_sigs = register_deltas env_with_sigs p in
-  (* Register the 3 builtin functions of the pullback. They are synthesized by
-   * the desugar (only when the program uses them), but the type checker must
-   * always recognize them to accept expressions like `__pullback_pi1(p)`. *)
+  (* Register the builtin functions the desugar synthesizes. *)
   let env_with_sigs =
     let num = TyPrim "number" in
-    let pack_sig : Tyenv.fun_sig = {
-      fs_params = [("fa", num); ("gb", num); ("a", num); ("b", num)];
-      fs_return = num; fs_visits = []} in
-    let pi_sig : Tyenv.fun_sig = {
-      fs_params = [("p", num)];
-      fs_return = num; fs_visits = []} in
-    let env = Tyenv.add_fun env_with_sigs "__pullback_pack" pack_sig in
-    let env = Tyenv.add_fun env "__pullback_pi1" pi_sig in
-    let env = Tyenv.add_fun env "__pullback_pi2" pi_sig in
+    let env = env_with_sigs in
     (* standard ops *)
     let env = Tyenv.add_fun env "floor"
       { fs_params = [("x", num)]; fs_return = num;
@@ -10209,6 +10393,7 @@ let check_program (p : program) : check_result =
            | Error e -> e :: errs)
     [] p
   in
+  mob_escaping := Call_graph.escaping p;
   let errors = List.rev_append (mob_flow_errors ()) errors in
   (* the verdict on what the whole program left open *)
   let errors =

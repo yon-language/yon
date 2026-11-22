@@ -26,14 +26,11 @@ place Int64 carried by i64 uses algebra Additive, Multiplicative {
   fun abs(n: Int64): Int64    { return if n < 0 then 0 - n else n }
   fun signum(n: Int64): Int64 { return if n > 0 then 1 else if n < 0 then 0 - 1 else 0 }
 
-  /* The endomorphism declared as such: it carries true laws.
-   * The others stay `fun` — floor/max/gcd preserve no interesting
-   * algebraic structure, and calling them morph would be noise.
-   * The seven arrow forms are encouraged, not mandatory. */
+  /* Negate declares no law: on Int64 it is neither involutive (the negation
+   * of the minimum overflows) nor additive (the sum past the maximum
+   * overflows). Its laws hold on Word64, the ring that wraps. */
   morph Negate from Int64 to Int64 {
     on object(n: Int64): Int64 { return 0 - n }
-    law involutive          /* negate(negate(n)) == n                     */
-    law additive            /* negate(a + b) == negate(a) + negate(b)     */
   }
 
   /* ─── Comparison ─────────────────────────────────────────── [T] ─── */

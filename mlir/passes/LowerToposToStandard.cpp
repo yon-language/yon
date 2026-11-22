@@ -568,7 +568,7 @@ struct LowerHeytOrOp : public OpConversionPattern<HeytOrOp> {
   }
 };
 
-// NOT(a): T->F, F->T, U->U.
+// NOT(a): T->F, F->T, U->F (the pseudo-complement a -> bot of G3; not involutive).
 struct LowerHeytNotOp : public OpConversionPattern<HeytNotOp> {
   using OpConversionPattern<HeytNotOp>::OpConversionPattern;
   LogicalResult matchAndRewrite(HeytNotOp op, OpAdaptor adaptor,
@@ -1747,7 +1747,7 @@ struct LowerToposToStandardPass
     // ReduceOp is materialised in func.func by MaterializeReduceOp,
     // NOT erased.
     module.walk<WalkOrder::PostOrder>([](Operation *op) {
-      if (llvm::isa<PlaceOp, WorldOp, PullbackOp, PushoutOp,
+      if (llvm::isa<PlaceOp, WorldOp,
                     TopologyOp, ViewOp>(op)) {
         op->erase();
       }

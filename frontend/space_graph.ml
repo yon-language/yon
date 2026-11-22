@@ -55,7 +55,6 @@ let rec wires_expr (e : S.expr) : (string * S.location) list =
       wires_expr a @ wires_expr b
   | S.EIfThenElse (a, b, c, _) | S.EJ (a, b, c, _) | S.EElMatch (a, b, c, _) ->
       wires_expr a @ wires_expr b @ wires_expr c
-  | S.EPullbackVal (_, _, a, b, _) -> wires_expr a @ wires_expr b
   | S.EQuote (S.TyTermExpr t, a, _) -> wires_expr t @ wires_expr a
   | S.EHITElim (e0, branches, x, _) ->
       wires_expr e0
@@ -68,7 +67,6 @@ let rec wires_expr (e : S.expr) : (string * S.location) list =
   | S.ENew (_, fas, _) | S.ENewIn (_, _, fas, _) ->
       List.concat_map (fun fa -> wires_expr fa.S.fa_value) fas
   | S.EAll (_, c, _) -> wires_cond c
-  | S.EPullback _ | S.EPushout _ -> []
 
 and wires_stmt (s : S.stmt) : (string * S.location) list =
   match s with

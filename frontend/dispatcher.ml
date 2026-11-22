@@ -39,10 +39,10 @@ let cubical_stdlib_types = [
   "Path"; "Identity"; "Eq";
   "Glue";
   "Quotient";
-  "S1"; "S2"; "Sphere";
-  "Suspension"; "Susp";
+  "S1"; "S2";
+  "Suspension";
   "PropTrunc"; "SetTrunc";
-  "Pushout"; "Coeq";
+  "Pushout";
 ]
 
 let is_cubical_name (n : string) : bool =
@@ -116,7 +116,6 @@ let rec classify_expr (e : expr) : fragment =
   | EAll _ -> FragCATT
   | EIn (inner, _, _) -> classify_expr inner
   | ERefl _ | EPair _ | EFst _ | ESnd _ | EJ _ -> FragCubical
-  | EPullback _ | EPushout _ | EPullbackVal _ -> FragCATT
   | ENot _ -> FragCATT
   | EIfThenElse _ -> FragCATT
   | ELam _ -> FragCATT  (* lambda funzionale, base *)
@@ -319,12 +318,17 @@ let resolve_points (env : Tyenv.env) (e : expr) : expr =
          | _ -> e)
     e (List.sort_uniq compare (Desugar.free_vars_in_expr [] e))
 
-(* The ring laws hold where the carrier is a ring: Int64 is Z/2^64. Number
-   (f64) is not a ring — (x * 3) / 3 is not x, and addition does not
-   associate — so between Numbers only definitional equality holds. *)
+(* The ring laws hold where the carrier is a ring: the machine word i64 is
+   Z/2^64, and so is a place carried by it. Int64 is not a ring: its sum and
+   product are arrows into Int64 + Overflow, so (x + 1) - 1 is not x where
+   x + 1 overflows; its laws are those of Z on the domain. Number (f64) is not
+   a ring either — (x * 3) / 3 is not x, and addition does not associate — so
+   between Int64 values, and between Numbers, only definitional equality
+   holds. *)
 let is_ring_carrier (t : ty) : bool =
   match t with
-  | TyUser "Int64" | TyPrim "i64" -> true
+  | TyUser "Int64" -> false
+  | TyPrim "i64" -> true
   (* a place carried by i64 computes in the ring of its carrier *)
   | TyUser u -> Hashtbl.find_opt Surface_ast.fusion_places u = Some "i64"
                 || Hashtbl.find_opt Surface_ast.internal_faces u = Some "i64"
@@ -545,7 +549,8 @@ let rec type_equal
    * expected). type_equal is strict equality; the directional promotions
    * live in `subtype` below and are applied only at value-flow sites
    * (argument passing, return, assignment, field store). *)
-  (* Structural equality on TyArrow. *)
+  (* Two arrows are the same type when their domains and their codomains are;
+     the variance of an arrow is a flow, in subtype (S-Arrow). *)
   | TyArrow (a1, b1), TyArrow (a2, b2) ->
       type_equal env ctx a1 a2 && type_equal env ctx b1 b2
   | TyMoveHandle (w1a, w2a), TyMoveHandle (w1b, w2b) ->
@@ -622,23 +627,19 @@ let rec type_equal
         Cubical.decidable_equal_cubical c1 c2
         || Catt_r_yon.decidable_equal env ctx t1 t2
   in
-  (* Try basic equality first. If that fails, place substitution follows only
-   * the declared [subcontains] chain; structural field coincidence does not
-   * create an implicit inclusion. *)
-  if base_equal () then true
-  else
-    match t1, t2 with
-    | TyUser p_super, TyUser p_sub ->
-        (* Expected = t1, actual = t2: actual must declare inclusion in expected. *)
-        Tyenv.place_subcontains env p_sub p_super
-        || Tyenv.place_transportable env p_sub p_super
-    | _ -> false
+  (* An equality: symmetric. Two places a registered transport joins are the
+     same type (an equivalence, by univalence); the inclusion of a place in
+     another is a flow, in subtype. *)
+  base_equal ()
+  || (match t1, t2 with
+      | TyUser a, TyUser b -> Tyenv.place_transportable env b a
+      | _ -> false)
 
 (* ─── Directional subtyping  sub <: super ──────────────────────────────
  * `subtype ~sub ~super` holds when a value of type [sub] may be used where a
- * value of type [super] is expected. It is EQUALITY (via type_equal, whose
- * place arm is already directional with t1=super, t2=sub — hence the argument
- * order below) OR a sound one-way PROMOTION:
+ * value of type [super] is expected. It is EQUALITY (type_equal, symmetric),
+ * the declared inclusion of a place in another, the arrow (S-Arrow, below)
+ * OR a sound one-way PROMOTION:
  *     number      <: heyt_int<N>   (mask=0: every bit certain; coerced at emit)
  *     heyt_int<N> <: proposition   (bit-by-bit lowered to scalar PROP at emit)
  *     number      <: proposition   (by transitivity)
@@ -654,7 +655,7 @@ let rec type_equal
  * expected). Routing them through this directional relation, used only at
  * value-flow sites, keeps the legitimate coercions and only those.
  * CATT/HoTT conversion (type_equal's dispatch) is untouched. *)
-let subtype (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : bool =
+let rec subtype (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : bool =
   let flows =
     let mark = !lambda_unknown_trail and was = !solving_lambda_unknowns in
     solving_lambda_unknowns := true;
@@ -667,8 +668,20 @@ let subtype (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : boo
       | TyPrim "number", TyHeytInt _ -> true
       | TyHeytInt _, (TyPrim "proposition" | TyUser "proposition") -> true
       | TyPrim "number", (TyPrim "proposition" | TyUser "proposition") -> true
-      | TyPrim "boolean", (TyPrim "proposition" | TyUser "proposition") -> true
+      (* the canonical injection Boolean -> Omega: true to present, false to
+         absent; no arrow goes back *)
+      | (TyPrim "boolean" | TyUser "Boolean"),
+        (TyPrim "proposition" | TyUser "proposition" | TyUser "Omega") -> true
       | TyId _, (TyUser "Path" | TyPrim "Path") -> true
+      (* a place flows into the place it declares itself included in;
+         structural field coincidence makes no inclusion *)
+      | TyUser p_sub, TyUser p_super -> Tyenv.place_subcontains env p_sub p_super
+      (* the arrow (S-Arrow; Pierce ch. 15): contravariant in the domain,
+         covariant in the codomain. A fun given where A1 -> B1 is wanted takes
+         every A1, so A1 flows into its domain A2, and its result B2 flows into
+         B1: Hom(-, B) is contravariant in its first argument. *)
+      | TyArrow (a2, b2), TyArrow (a1, b1) ->
+          subtype env ctx ~sub:a1 ~super:a2 && subtype env ctx ~sub:b2 ~super:b1
       | _ -> false)
 
 (* ─── Term equality dispatcher ─────────────────────────────────────── *)

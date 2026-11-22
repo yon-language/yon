@@ -1,0 +1,4 @@
+place Entry {
+  fun ii(q: 0 = 1): back (back q) = q { return clear }
+  fun main: Number { return 7 }
+}

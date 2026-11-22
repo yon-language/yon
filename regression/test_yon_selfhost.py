@@ -31,6 +31,7 @@ from pathlib import Path
 import pytest
 
 import compiling_corpus as cc
+from migrations import SUCC_PRED_ON_INT64
 
 ROOT = Path(__file__).resolve().parent.parent
 FE = ROOT / "frontend"
@@ -75,7 +76,10 @@ def _built():
         pytest.skip(f"toolchain not built: {miss[0]}")
 
 
-@pytest.mark.parametrize("src", PROVE, ids=[Path(p).stem for p in PROVE])
+@pytest.mark.parametrize("src", [
+    pytest.param(p, id=Path(p).stem,
+                 marks=[SUCC_PRED_ON_INT64] if Path(p).stem == "transport_ua_succ" else [])
+    for p in PROVE])
 def test_proof_in_yon(src):
     """A Yon proof of a definitional equality must type-check (emit exit 0)."""
     r = subprocess.run([str(EMIT), src], capture_output=True, timeout=60)

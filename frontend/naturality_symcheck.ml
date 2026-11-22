@@ -107,7 +107,7 @@ let try_inline_fun (fun_idx : (string * S.fun_decl) list)
  *   e - 0 -> e
  *   e * 1 -> e
  *   1 * e -> e
- * Iterated to a fixed point (max 100 iters for safety). *)
+ * Iterated to a fixed point (normalize, below). *)
 let rec normalize_step (e : S.expr) : S.expr =
   match e with
   | S.EBinop (op, l, r, loc) ->
@@ -225,17 +225,30 @@ let rec inline_calls (fun_idx : (string * S.fun_decl) list) (e : S.expr) : S.exp
   | S.EParen (inner, _) -> inline_calls fun_idx inner
   | _ -> e
 
+(* The funs that may be unfolded: those outside every recursive component of
+ * the graph of their calls (Call_graph). Unfolding along the arcs of a
+ * condensation, which has no cycle, ends: each unfolding replaces a call by a
+ * body whose calls are to funs strictly below it. A recursive fun stays a call,
+ * opaque. So the iteration reaches its fixed point with no bound on the rounds:
+ * the folding and the sorting of the operands never grow the term. *)
+let unfoldable (fun_idx : (string * S.fun_decl) list) : (string * S.fun_decl) list =
+  let names = List.map fst fun_idx in
+  let succ n = match List.assoc_opt n fun_idx with
+    | Some fd -> List.filter (fun g -> List.mem g names) (Call_graph.called_names fd)
+    | None -> [] in
+  let recursive = List.concat (List.filter (Call_graph.recursive succ)
+                                 (Call_graph.condensation names succ)) in
+  List.filter (fun (n, _) -> not (List.mem n recursive)) fun_idx
+
 let normalize (fun_idx : (string * S.fun_decl) list) (e : S.expr) : S.expr =
-  let rec loop e n =
-    if n <= 0 then e
-    else
-      let e' = inline_calls fun_idx e in
-      let e'' = normalize_step e' in
-      let e''' = canonicalize e'' in
-      if expr_equal e e''' then e'''
-      else loop e''' (n - 1)
+  let fun_idx = unfoldable fun_idx in
+  let rec loop e =
+    let e' = inline_calls fun_idx e in
+    let e'' = normalize_step e' in
+    let e''' = canonicalize e'' in
+    if expr_equal e e''' then e''' else loop e'''
   in
-  loop e 50
+  loop e
 
 (* ─── Ring solver: decide equality in a free commutative ring ───────────
  *

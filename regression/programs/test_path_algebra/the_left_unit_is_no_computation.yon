@@ -1,0 +1,4 @@
+place Entry {
+  fun lu(q: 0 = 1): concat(refl(0), q) = q { return clear }
+  fun main: Number { return 7 }
+}

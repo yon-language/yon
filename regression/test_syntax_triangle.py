@@ -39,6 +39,7 @@ import pytest
 
 import compiling_corpus as cc
 from yon_programs import program
+from migrations import SUCC_PRED_ON_INT64
 
 def _stable_id(text: str) -> str:
     """A node id stable across processes: Python's hash() of a str is salted
@@ -523,8 +524,10 @@ EXTERNAL_BLOCKS = ["05-functions-and-effects", "16-projects-and-packages", "18-t
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 @pytest.mark.parametrize(
-    "blk", [b for b in fenced_yon_blocks() if b[1] and b[1].startswith("exit")],
-    ids=lambda b: f"{b[0]}:{_stable_id(b[2])}")
+    "blk", [pytest.param(b, id=f"{b[0]}:{_stable_id(b[2])}",
+                         marks=[SUCC_PRED_ON_INT64]
+                         if f"{b[0]}:{_stable_id(b[2])}" == "09-hott-types:43ac" else [])
+            for b in fenced_yon_blocks() if b[1] and b[1].startswith("exit")])
 def test_leg4_exit_marked_block_runs(blk, tmp_path):
     chapter, marker, content = blk
     want = int(marker.split()[1])

@@ -575,48 +575,29 @@ let rec try_reduce_builtin (t : term) : term option =
       let arg' = match try_reduce_builtin arg with Some v -> v | None -> arg in
       Some arg'
   | App (App (Var "concat", p1), p2) ->
-      (* Path concatenation with the groupoid UNIT laws as definitional
-       * reductions (concat : Path A x y -> Path A y z -> Path A x z):
+      (* concat is path induction on the second path (J), with the first as
+       * its value at refl: concat : Id A x y -> Id A y z -> Id A x z, and
+       * its one computation is J's:
        *
-       *   concat(refl_a, p) ≡ p        (left  unit)
-       *   concat(p, refl_a) ≡ p        (right unit)
+       *   concat(p, refl_y) ≡ p
        *
-       * Refl-ness is read off the ORIGINAL sub-paths (as_refl), so a
-       * standalone `refl(a)` sub-path is recognized before the refl arm
-       * would collapse it. When both are refl, left-unit fires first and
-       * yields p2 (itself a refl); the two refls are only ever composable
-       * when their shared basepoint agrees, so this is the canonical refl.
-       *
-       * `concat(inv(p), p)` / `concat(p, inv(p))` are NOT reduced here: the
-       * result is refl at p's endpoint, but that endpoint is not recoverable
-       * from p without the type/interval model (this untyped runtime does not
-       * track path endpoints). We leave those a stuck neutral — honest — and
-       * return None so the whole application stays intact rather than emitting
-       * a bogus witness. *)
-      (match as_refl p1 with
-       | Some _ ->
-           (* left unit: normalize the surviving path for the caller. *)
-           Some (match try_reduce_builtin p2 with Some v -> v | None -> p2)
-       | None ->
-           match as_refl p2 with
-           | Some _ ->
-               (* right unit *)
-               Some (match try_reduce_builtin p1 with Some v -> v | None -> p1)
-           | None -> None   (* no unit law applies: stay a neutral, no witness *))
+       * concat(refl_x, q) = q, the associativity and the inverse laws are
+       * paths between paths, proved by J, not computations of the kernel:
+       * a concat whose second path is not refl stays a neutral. *)
+      (match as_refl p2 with
+       | Some _ -> Some (match try_reduce_builtin p1 with Some v -> v | None -> p1)
+       | None -> None)
   | App (Var "inv", path) ->
-      (* Path inversion with the groupoid laws (inv : Path A x y -> Path A y x):
+      (* inv is path induction with refl as its value at refl (J):
+       * inv : Id A x y -> Id A y x, and its one computation is J's:
        *
-       *   inv(refl_a)   ≡ refl_a       (inverse of refl is refl)
-       *   inv(inv(p))   ≡ p            (involution)
+       *   inv(refl_a) ≡ refl_a
        *
-       * inv on a general (non-refl, non-inv) path has no runtime witness to
-       * expose, so it stays a neutral (None) rather than an inert placeholder. *)
+       * inv(inv(p)) = p is a path proved by J, not a computation: inv of a
+       * path that is not refl stays a neutral. *)
       (match as_refl path with
-       | Some a -> Some (Refl a)                 (* inv(refl_a) = refl_a *)
-       | None ->
-           match path with
-           | App (Var "inv", q) -> Some q        (* inv(inv(p)) = p (involution) *)
-           | _ -> None                           (* stuck neutral: no witness *))
+       | Some a -> Some (Refl a)
+       | None -> None)
   | App (App (Var "ap", f), p) ->
       (* Action on paths, functorial on refl
        * (ap : (A -> B) -> Path A x y -> Path B (f x) (f y)):
@@ -861,20 +842,33 @@ let head_has_body (ctx : Reduce.ctx) (t : term) : bool =
   | App _ -> (match head t with Some n -> Reduce.find_delta ctx.Reduce.deltas n <> None | None -> false)
   | _ -> false
 
-let rec reduce_with_builtins ?(fuel = 1000) (ctx : Reduce.ctx) (t : term) : term =
-  if fuel <= 0 then t
+(* The reducer has a bound on its steps. Where its answer decides (a conversion,
+   the code an El computes to: ~strict), a term that can still step past the
+   bound has no normal form the compiler knows: that is a refusal with its code
+   (E2022, Bound.Unfinished), never the last term taken for a normal one. Where
+   it only computes ahead of the run time (the emitter, the evaluator), a term
+   that still steps is the same value, not yet computed: it is kept. *)
+
+let rec reduce_with_builtins ?(fuel = 1000) ?(strict = false) (ctx : Reduce.ctx) (t : term) : term =
+  if fuel <= 0 then begin
+    let steps =
+      (if head_has_body ctx t then None else try_reduce_builtin t) <> None
+      || Reduce.step ctx t <> None || try_cubical t <> None
+      || deep_reduce_pure t <> t in
+    if steps && strict then raise (Bound.Unfinished (Pretty.pp_term t)) else t
+  end
   else
     (* Try builtin reductions first (arithmetic, conditionals, Output). *)
     match (if head_has_body ctx t then None else try_reduce_builtin t) with
-    | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ctx t'
+    | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ~strict ctx t'
     | None ->
         (* Try standard reduction (R_Yon kernel). *)
         match Reduce.step ctx t with
-        | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ctx t'
+        | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ~strict ctx t'
         | None ->
             (* Path/transport: reduce via the cubical engine bridge. *)
             match try_cubical t with
-            | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ctx t'
+            | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ~strict ctx t'
             | None ->
             (* No more reductions possible at the head. Try ONE pass of
              * pure (non-side-effectful) deep builtin reduction, then stop.
@@ -883,7 +877,7 @@ let rec reduce_with_builtins ?(fuel = 1000) (ctx : Reduce.ctx) (t : term) : term
              * sequence, never in arbitrary subterm positions. *)
             let t' = deep_reduce_pure t in
             if t' = t then t  (* truly stuck *)
-            else reduce_with_builtins ~fuel:(fuel - 1) ctx t'
+            else reduce_with_builtins ~fuel:(fuel - 1) ~strict ctx t'
 
 (* Like deep_reduce_builtin but skips side-effectful operations. *)
 and deep_reduce_pure (t : term) : term =

@@ -57,6 +57,7 @@ type code =
   | Reduction_unfinished
   | Value_discarded
   | Abstract_holds_state
+  | Name_reserved
   | Law_refuted
   | Law_uncertified
   (* E3xxx Space semantics *)
@@ -64,6 +65,7 @@ type code =
   | Drop_still_live
   | Drop_unknown_space
   | Wire_boundary
+  | Selector_collision
   (* E4xxx project / layout *)
   | Topos_layout
   | Entrypoint
@@ -104,12 +106,14 @@ let id : code -> string = function
   | Reduction_unfinished -> "E2022"
   | Value_discarded     -> "E2023"
   | Abstract_holds_state -> "E2024"
+  | Name_reserved       -> "E2025"
   | Law_refuted         -> "E2101"
   | Law_uncertified     -> "E2102"
   | Union_arms_cross_space -> "E3003"
   | Drop_still_live     -> "E3001"
   | Drop_unknown_space  -> "E3002"
   | Wire_boundary       -> "E3010"
+  | Selector_collision  -> "E3011"
   | Topos_layout        -> "E4001"
   | Entrypoint          -> "E4002"
   | File_layout         -> "E4003"
@@ -125,7 +129,7 @@ let severity : code -> severity = function
   | Stream_read_twice
   | Name_rebound | Constraint_refuted | Law_outside_algebra | Algebra_carried
   | Writing_refused | Place_not_positive | Index_impure | Reduction_unfinished
-  | Value_discarded | Abstract_holds_state
+  | Value_discarded | Abstract_holds_state | Name_reserved
   | Arm_coproduct_unnamed | Arm_name_clash | Library_name_taken
   | Given_outside_prelude | Write_to_value | Heap_allocates | Proof_rule
   | Error_undeclared
@@ -134,7 +138,7 @@ let severity : code -> severity = function
   | Law_refuted
   | Law_uncertified
   | Union_arms_cross_space
-  | Drop_still_live | Drop_unknown_space | Wire_boundary
+  | Drop_still_live | Drop_unknown_space | Wire_boundary | Selector_collision
   | Topos_layout | Entrypoint | File_layout | Manifest -> Error
   | Lint_dead_function | Lint_unused_binding | Lint_unused_param
   | Lint_unused_import -> Warning
@@ -146,7 +150,7 @@ let cli_prefix : code -> string = function
   | Stream_read_twice
   | Name_rebound | Constraint_refuted | Law_outside_algebra | Algebra_carried
   | Writing_refused | Place_not_positive | Index_impure | Reduction_unfinished
-  | Value_discarded | Abstract_holds_state -> "TYPE ERROR"
+  | Value_discarded | Abstract_holds_state | Name_reserved -> "TYPE ERROR"
   | Type_check                   -> "TYPE ERROR"
   | Return_not_in_tail           -> "TYPE ERROR"
   | Effect_unhandled             -> "TYPE ERROR"
@@ -157,6 +161,7 @@ let cli_prefix : code -> string = function
   | Union_arms_cross_space -> "TYPE ERROR"
   | Drop_still_live | Drop_unknown_space -> "DROP ERROR"
   | Wire_boundary                -> "WORLD BOUNDARY ERROR"
+  | Selector_collision           -> "WIRE ERROR"
   | Topos_layout                 -> "TOPOS LAYOUT ERROR"
   | Entrypoint                   -> "ENTRYPOINT ERROR"
   | File_layout                  -> "FILE ERROR"
@@ -180,6 +185,7 @@ let title : code -> string = function
   | Reduction_unfinished -> "a reduction of the kernel does not reach its normal form within the bound"
   | Value_discarded     -> "a value computed or indicated and thrown away"
   | Abstract_holds_state -> "an abstract Space holds state (a wire end, an initialization that outlives a call): the state belongs to the concrete Space that imports it"
+  | Name_reserved -> "a name of the program is one the compiler or the runtime makes: it begins with __ or yon_rt_, or it is the qualified name of a fun of a house"
   | Type_check          -> "type error"
   | Return_not_in_tail  -> "a return stands at the end of its body"
   | Effect_unhandled    -> "an operation is called that no reduction handles"
@@ -199,6 +205,7 @@ let title : code -> string = function
   | Drop_still_live     -> "cannot drop a Space still used downstream"
   | Drop_unknown_space  -> "drop of an unknown Space"
   | Wire_boundary       -> "wire crosses a world boundary"
+  | Selector_collision  -> "two operations of a Space have one selector on the wire"
   | Topos_layout        -> "topos layout violation"
   | Entrypoint          -> "entrypoint violation"
   | File_layout         -> "file layout violation"
@@ -243,7 +250,7 @@ let all : code list =
     Error_undeclared; Escape_missing; Escape_needless; Stream_read_twice;
     Name_rebound; Constraint_refuted; Law_outside_algebra; Algebra_carried;
     Writing_refused; Place_not_positive; Index_impure; Reduction_unfinished;
-    Value_discarded; Abstract_holds_state;
+    Value_discarded; Abstract_holds_state; Name_reserved;
     Law_refuted;
     Law_uncertified;
     Union_arms_cross_space; Drop_still_live; Drop_unknown_space; Wire_boundary;

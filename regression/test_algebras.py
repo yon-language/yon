@@ -107,7 +107,7 @@ def test_an_operation_that_names_an_unknown_algebra_is_refused(tmp_path):
 
 PRELUDE_ALGEBRAS = ["Magma", "Semigroup", "Monoid", "Group",
                     "Additive", "Multiplicative", "BooleanOr", "BooleanAnd",
-                    "TropicalMax", "TropicalMin", "Gcd"]
+                    "TropicalMax", "TropicalMin", "Gcd", "Heyting"]
 
 
 @pytest.mark.parametrize("algebra", PRELUDE_ALGEBRAS)

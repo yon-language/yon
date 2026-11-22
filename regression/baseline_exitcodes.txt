@@ -1,3 +1,6 @@
+EMITFAIL cx_carry
+EMITFAIL cx_univalence_named
+EMITFAIL cx_univalence_succ
 EMITFAIL false_coherence
 EMITFAIL union_cross_space_reject
 EMITFAIL union_cross_world_reject
@@ -15,15 +18,12 @@ RAN closure_capture exit=42
 RAN cluster_a_ast_commutative exit=81
 RAN collections_ext exit=42
 RAN comprehension_carrier exit=0
-RAN cx_carry exit=11
 RAN cx_face_system exit=5
 RAN cx_hit_suspension exit=5
 RAN cx_move_law exit=212
 RAN cx_path_algebra exit=22
 RAN cx_transport_refl exit=5
 RAN cx_univalence_distinct exit=1
-RAN cx_univalence_named exit=11
-RAN cx_univalence_succ exit=11
 RAN decidable_ok exit=42
 RAN decidable_unknown exit=2
 RAN directed_transport exit=0

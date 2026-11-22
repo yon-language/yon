@@ -115,22 +115,25 @@ let () =
   let refl_core = Refl a in
   let refl_var  = App (Var "refl", a) in
 
-  (* concat left unit: concat(refl_a, p) = p *)
-  reduces_to "concat(refl_a, p) = p          (left unit, Refl)" (concat refl_core p) p;
-  reduces_to "concat(refl_a, p) = p          (left unit, refl-var)" (concat refl_var p) p;
+  (* concat is J on its second path: the left unit concat(refl_a, p) = p is a
+     path proved by J, not a computation *)
+  stays_neutral "concat(refl_a, p)              (left unit, Refl)" (concat refl_core p);
+  stays_neutral "concat(refl_a, p)              (left unit, refl-var)" (concat refl_var p);
   (* concat right unit: concat(p, refl_a) = p *)
   reduces_to "concat(p, refl_a) = p          (right unit, Refl)" (concat p refl_core) p;
   reduces_to "concat(p, refl_a) = p          (right unit, refl-var)" (concat p refl_var) p;
-  (* concat(refl_a, refl_b): left unit fires first -> refl_b (canonical refl) *)
-  reduces_to "concat(refl_a, refl_b) = refl_b (both refl)" (concat refl_core (Refl b)) (Refl b);
+  (* concat(refl_a, refl_b): J at refl gives the first path, refl_a (the two
+     compose only when a and b are one point) *)
+  reduces_to "concat(refl_a, refl_b) = refl_a (both refl)" (concat refl_core (Refl b)) (Refl a);
   (* concat of two general paths: no unit law -> neutral *)
   stays_neutral "concat(p, q)" (concat p (Var "q"));
 
   (* inv of refl: inv(refl_a) = refl_a *)
   reduces_to "inv(refl_a) = refl_a           (inverse of refl, Refl)" (inv refl_core) (Refl a);
   reduces_to "inv(refl_a) = refl_a           (inverse of refl, refl-var)" (inv refl_var) (Refl a);
-  (* inv involution: inv(inv(p)) = p *)
-  reduces_to "inv(inv(p)) = p                 (involution)" (inv (inv p)) p;
+  (* inv is J with refl at refl: the involution inv(inv(p)) = p is a path
+     proved by J, not a computation *)
+  stays_neutral "inv(inv(p))                    (involution)" (inv (inv p));
   (* inv of a general path: neutral *)
   stays_neutral "inv(p)" (inv p);
   (* concat(inv(p), p): endpoint not recoverable untyped -> neutral (documented) *)
@@ -163,6 +166,24 @@ let () =
           | _ -> true)
        [ concat refl_core p; concat p refl_core; inv refl_core; inv (inv p);
          ap f refl_core; path_app refl_core (Var "__num_0") ]);
+
+  (* The bound of the reducer. Where its answer decides (~strict), a term that
+     still reduces past the bound is refused (Bound.Unfinished, E2022); where it
+     only computes ahead of the run time, the term reached is kept, the same value
+     not yet computed. A normal form within the bound is an answer either way. *)
+  let rec chain n = if n = 0 then a else App (Lam ("x", TyPlace "number", Var "x"), chain (n - 1)) in
+  check "strict: a reduction past its bound is refused"
+    (match Builtins.reduce_with_builtins ~fuel:3 ~strict:true Reduce.empty_ctx (chain 10) with
+     | _ -> false
+     | exception Bound.Unfinished _ -> true);
+  check "strict: a reduction within its bound is its normal form"
+    (match Builtins.reduce_with_builtins ~strict:true Reduce.empty_ctx (chain 10) with
+     | t -> term_equal t a
+     | exception Bound.Unfinished _ -> false);
+  check "not strict: past the bound the term reached is kept"
+    (match Builtins.reduce_with_builtins ~fuel:3 Reduce.empty_ctx (chain 10) with
+     | t -> not (term_equal t a)
+     | exception Bound.Unfinished _ -> false);
 
   Printf.printf "\n%d passed, %d failed\n" !pass !fails;
   if !fails = 0 then exit 0 else exit 1

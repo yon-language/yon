@@ -21,6 +21,8 @@ import sys
 import zlib
 from yon_programs import program
 
+from migrations import RING_LAW_ON_INT64, SUCC_PRED_ON_INT64
+
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
 FRONTEND = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
@@ -1260,18 +1262,22 @@ def test_transport_along_an_inline_univalence_path_lands_in_the_target(tmp_path)
 
 # --- the ring laws hold where the carrier is a ring --------------------------
 
-# Int64 is Z/2^64: distributivity holds, and so does a law true only modulo
-# 2^64 (2^62 * 4 is 0). Number is f64, not a ring: distributivity is not an
-# identity there, and refl does not prove it.
+# Int64 is no ring: its sum and product go into Int64 + Overflow. A law true only
+# modulo 2^64 (2^62 * 4 is 0) is false on Int64 and refused; distributivity holds
+# in Z on the domain of Int64, and waits for the normalizer in Z (lot N). Number is
+# f64, not a ring: distributivity is not an identity there, and refl does not
+# prove it.
 _RING_LAWS = {
     "distributivity_on_int64": ("x: Int64", "x * (x + 1), x * x + x", True),
-    "wrapping_on_int64": ("x: Int64", "x * 4611686018427387904 * 4, 0", True),
+    "wrapping_on_int64": ("x: Int64", "x * 4611686018427387904 * 4, 0", False),
     "a_false_int64_identity": ("x: Int64", "x * 2, x + x + 1", False),
     "distributivity_on_numbers": ("x: Number", "x * (x + 1), x * x + x", False),
 }
 
 
-@pytest.mark.parametrize("law", sorted(_RING_LAWS))
+@pytest.mark.parametrize("law", [
+    pytest.param(k, marks=[RING_LAW_ON_INT64] if k == "distributivity_on_int64" else [])
+    for k in sorted(_RING_LAWS)])
 def test_refl_proves_exactly_the_ring_laws_of_the_carrier(tmp_path, law):
     param, sides, holds = _RING_LAWS[law]
     endpoints = " = ".join(sides.split(", "))
@@ -1380,7 +1386,7 @@ def test_a_decision_is_left_only_by_answering_unknown(tmp_path):
 @pytest.mark.parametrize("form,reason", [
     ("to_bool(p)", "unknown function or operation: to_bool"),
     ("to_bool_dec(decide(p))", "unknown function or operation: to_bool_dec"),
-    ("p", "expected Boolean, got proposition")])
+    ("p", "expected Boolean, got Omega")])
 def test_there_is_no_arrow_from_proposition_to_boolean(tmp_path, form, reason):
     entry = ("place Entry {}\nfun main: Number {\n  p := unknown\n"
              f"  return if {form} then 1 else 2\n}}\n")
@@ -1389,8 +1395,8 @@ def test_there_is_no_arrow_from_proposition_to_boolean(tmp_path, form, reason):
 
 
 def test_a_boolean_flows_into_a_proposition(tmp_path):
-    """Boolean <: proposition: a comparison returned where a proposition is
-    expected is accepted, whichever way the proposition type is written."""
+    """Boolean -> Omega, the canonical injection: a comparison returned where an Omega is
+    expected is accepted."""
     entry = (program("test_audit_probes/test_a_boolean_flows_into_a_proposition_1.yon"))
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert rc == 0, out
@@ -1400,7 +1406,7 @@ def test_a_boolean_flows_into_a_proposition(tmp_path):
 def test_a_proposition_is_not_a_boolean(tmp_path):
     entry = (program("test_audit_probes/test_a_proposition_is_not_a_boolean_1.yon"))
     rc, out = _build_kernel(tmp_path, entry)
-    _verdict(_clean_rejection(rc, out, 'E2001', 'expects Boolean, got proposition'),
+    _verdict(_clean_rejection(rc, out, 'E2001', 'expects Boolean, got Omega'),
              f"the checker accepted a proposition as a boolean (rc={rc}, "
              f"refused downstream: {'stage0.topos.mlir' in out})")
 
@@ -1509,8 +1515,6 @@ def test_drop_before_a_direct_call_into_the_space_is_refused(tmp_path):
     assert refused, out
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a function reaches a Space through mutual recursion whatever the names of the functions in the cycle")
 def test_drop_before_a_mutually_recursive_call_into_the_space_is_refused(tmp_path):
     entry = (program("test_audit_probes/test_drop_before_a_mutually_recursive_call_into_the_space_is_refused_1.yon"))
     refused, rc, out = _drop_refused_frontend(tmp_path, entry)
@@ -1842,6 +1846,7 @@ def test_the_sphere_base_point_eliminates(tmp_path):
 _TRANSPORT_PARAM_frontend = program("test_audit_probes/module_28.yon")
 
 
+@SUCC_PRED_ON_INT64
 def test_transport_along_an_inline_univalence_path_applies_the_equivalence(tmp_path):
     proj = _project(tmp_path,
         program("test_audit_probes/test_transport_along_an_inline_univalence_path_applies_the_equivalence_1.yon"))

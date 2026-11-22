@@ -236,6 +236,18 @@ for f in $DIRTY; do
     selfhost/*)
       add regression/test_yon_selfhost.py; add regression/test_selfhost_differential.py
       add regression/test_selfhost_fixpoint.py ;;
+    frontend/core_check.ml|frontend/core_wf.ml|frontend/ty_subst.ml|frontend/catt_r_yon.ml|frontend/sct.ml|frontend/cubical_bindings.ml|frontend/call_graph.ml|frontend/naturality_symcheck.ml|frontend/tyenv.ml|frontend/module_prefix.ml|frontend/main.ml|frontend/test_*.ml)
+      # the certifiers and the checks of the kernel: their oracles (frontend/test_*.ml),
+      # the self-tests of main.exe, and the corpus they certify
+      add regression/test_oracle_checks.py; add regression/test_main_selftest.py
+      add regression/test_projects.py ;;
+    frontend/space_liveness.ml)
+      add regression/test_drop_check.py; add regression/test_projects.py ;;
+    frontend/algebra_check.ml|frontend/law_check.ml)
+      add regression/test_algebras.py; add regression/test_alg_hierarchy.py
+      add regression/test_heyting_algebra.py; add regression/test_projects.py ;;
+    mlir/*)
+      add regression/test_mlir_passes.py; add regression/test_projects.py ;;
     runtime/*)
       add regression/test_runtime_units.py ;;
     prelude/*)

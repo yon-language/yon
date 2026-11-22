@@ -32,7 +32,7 @@ let normalize_result (deltas : (string * term) list)
   let dctx = { Reduce.empty_ctx with Reduce.deltas } in
   (* reduce ONE El code to its Δ-normal form. Everything else in the type/term is
    * only traversed structurally; no term is otherwise evaluated. *)
-  let reduce_code (c : term) : term = Builtins.reduce_with_builtins dctx c in
+  let reduce_code (c : term) : term = Builtins.reduce_with_builtins ~strict:true dctx c in
   let rec nt (ty : ty) : ty =
     match ty with
     | TyEl c -> TyEl (reduce_code c)

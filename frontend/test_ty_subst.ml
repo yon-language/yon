@@ -88,6 +88,19 @@ let () =
   test "unify alpha0 with list of alpha0 -> occur check error"
     (match try_unify (TyMetaVar 0) (TyApp ("List", [TyMetaVar 0])) with
      | Error (UOccurCheck (0, _)) -> true | _ -> false);
+  (* the refusal says why, in its words: the type would be infinite *)
+  test "unify alpha0 with list of alpha0 -> refused with the words of the occur check"
+    (match try_unify (TyMetaVar 0) (TyApp ("List", [TyMetaVar 0])) with
+     | Error e ->
+         let m = unify_error_to_string e in
+         let has w = try ignore (Str.search_forward (Str.regexp_string w) m 0); true
+                     with Not_found -> false in
+         has "occur check failed: alpha0 would occur in" && has "(infinite type)"
+     | Ok _ -> false);
+  (* its twin: alpha0 with list of alpha1 has no cycle and unifies *)
+  test "unify alpha0 with list of alpha1 -> unified"
+    (match try_unify (TyMetaVar 0) (TyApp ("List", [TyMetaVar 1])) with
+     | Ok _ -> true | Error _ -> false);
 
   (* Test 7: compose_subst *)
   Printf.printf "\nTest 7: compose_subst\n";

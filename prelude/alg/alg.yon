@@ -15,7 +15,8 @@
  * name each: Additive, Multiplicative, BooleanOr, BooleanAnd, TropicalMax,
  * TropicalMin, Gcd. An instance declares again the operations of its signature
  * with the same names, `op`, `unit`, `inv`, and its own symbols; they are told
- * apart as `Additive.op` and `Multiplicative.op`.
+ * apart as `Additive.op` and `Multiplicative.op`. Heyting, a root on the carrier
+ * proposition, is the algebra of Omega, written with its connectives.
  *
  * A fun parameter uses a signature, `fun f<T uses Monoid>(xs: List<T>): T`; its
  * instance is a model, and a place with two structures names the algebra at the

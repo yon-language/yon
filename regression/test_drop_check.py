@@ -151,6 +151,33 @@ def test_legal_drop_reclaims_at_runtime(tmp_path):
         f"expected exactly one reclaim (yon_xheap_drops()==1):\n{run_out}")
 
 
+_D_SERVER = ("place Entry {\n  fun d_op(x: Number): Number { return x + 1 }\n"
+             "  fun main: Number { return 0 }\n}\n")
+
+
+@pytest.mark.skipif(not YONC.exists() or not FIXTURE.exists(),
+                    reason="yonc or drop_check fixture missing")
+def test_the_fixture_calls_its_space_and_then_drops_it(tmp_path):
+    """The fixture itself, with its server: D_srv is built as regression/cross_space/run.sh builds
+    a server, the call d_op(5) is answered (6, the exit of main, which returns it), and the drop
+    after it reclaims (xheap_drops=1). A call that fails cannot pass for a success."""
+    (tmp_path / "d_srv.yon").write_text(_D_SERVER)
+    s = subprocess.run([str(YONC), "d_srv.yon", "-o", "D_srv"], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=300)
+    assert s.returncode == 0, s.stdout + s.stderr
+    proj = tmp_path / "proj"
+    shutil.copytree(FIXTURE, proj)
+    c = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "client")],
+                       capture_output=True, text=True, timeout=300)
+    assert c.returncode == 0, c.stdout + c.stderr
+    r = subprocess.run(["./client"], cwd=tmp_path, capture_output=True, text=True, timeout=60,
+                       env=_DEBUG_ENV)
+    run_out = r.stdout + r.stderr
+    assert "did not answer" not in run_out, run_out
+    assert r.returncode == 6, (r.returncode, run_out)
+    assert "xheap_drops=1" in run_out, run_out
+
+
 @pytest.mark.skipif(not YONC.exists() or not FIXTURE.exists(),
                     reason="yonc or drop_check fixture missing")
 def test_automatic_reclaim_without_explicit_drop(tmp_path):

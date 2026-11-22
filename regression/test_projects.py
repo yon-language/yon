@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 import compiling_corpus as cc
+from migrations import SUCC_PRED_ON_INT64
 
 ROOT = cc.ROOT
 EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
@@ -36,7 +37,13 @@ def _built():
         pytest.skip("frontend not built (cd frontend && dune build)")
 
 
-@pytest.mark.parametrize("proj", PROJECTS, ids=[Path(p).name for p in PROJECTS])
+_SUCC_PRED = {"cx_carry", "cx_univalence_named", "cx_univalence_succ"}
+
+
+@pytest.mark.parametrize("proj", [
+    pytest.param(p, id=Path(p).name,
+                 marks=[SUCC_PRED_ON_INT64] if Path(p).name in _SUCC_PRED else [])
+    for p in PROJECTS])
 def test_project_emits(proj):
     r = subprocess.run([str(EMIT), proj], capture_output=True, text=True, timeout=120)
     out = r.stdout + r.stderr

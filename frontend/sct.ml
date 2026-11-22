@@ -99,16 +99,16 @@ let compose (g : scg) (h : scg) : scg option =
 type denv = (string * rel) SMap.t
 
 (* Classify how an argument term descends from a parameter. Only a bare
- * variable, or a projection of something that descends, counts — Fst/Snd
- * extract a strict subterm. Anything computed (arithmetic, a constructor
+ * variable, or a projection of something that descends, counts. A projection
+ * is no smaller than the pair it reads: strictly smaller holds for the
+ * evaluation of closed values, not for the normalization of open terms, where
+ * `f(p) = g(f(snd p))` on a neutral p unfolds without end; so Fst/Snd keep the
+ * relation of what they read. Anything computed (arithmetic, a constructor
  * application, an opaque call) descends from nothing. *)
 let rec descent_of (de : denv) (t : A.term) : (string * rel) option =
   match t with
   | A.Var x -> SMap.find_opt x de
-  | A.Fst t' | A.Snd t' ->
-      (match descent_of de t' with
-       | Some (p, _) -> Some (p, Strict)   (* a projection is strictly smaller *)
-       | None        -> None)
+  | A.Fst t' | A.Snd t' -> descent_of de t'
   | _ -> None
 
 (* The application spine: peel curried App, returning head and args L→R. *)
@@ -123,7 +123,31 @@ let spine (t : A.term) : A.term * A.term list =
 (* Collect the size-change graphs for every recursive call site in one
  * function body. `known` is the set of user-function names (the call
  * targets that matter). *)
-let collect (known : string list) (f : fundef) : scg list =
+(* The funs named where they are not called: the values a call through a
+ * function value can reach (Call_graph.escaping, read on the Core). *)
+let escaping (known : string list) (fns : fundef list) : string list =
+  let out = ref [] in
+  let note g = if List.mem g known && not (List.mem g !out) then out := g :: !out in
+  let rec go (t : A.term) =
+    match spine t with
+    | A.Var _, (_ :: _ as args) -> List.iter go args
+    | _ ->
+        (match t with
+         | A.Var g -> note g
+         | A.Place _ | A.Reduction _ | A.World _ | A.Unit -> ()
+         | A.Lam (_, _, b) | A.PLam (_, b) | A.Scope (_, b) | A.Emit b | A.Refl b
+         | A.Unglue b | A.Transp (_, b) | A.PApp (b, _) | A.Fst b | A.Snd b -> go b
+         | A.App (a, b) | A.Pair (a, b) | A.StreamCons (a, b) | A.GlueElem (_, a, b) -> go a; go b
+         | A.J (_, _, a, b, c, d) -> go a; go b; go c; go d
+         | A.Comp (_, _, sys, base) | A.HComp (_, _, sys, base) ->
+             List.iter (fun (_, _, tm) -> go tm) sys; go base
+         | A.HITConstr (_, ts) -> List.iter go ts
+         | A.HITElim (branches, scrut) ->
+             go scrut; List.iter (fun (_, _, bt) -> go bt) branches) in
+  List.iter (fun f -> go f.body) fns;
+  List.rev !out
+
+let collect ?(escaping = []) (known : string list) (f : fundef) : scg list =
   let idx = Hashtbl.create 8 in
   List.iteri (fun i p -> Hashtbl.replace idx p i) f.params;
   let pidx name = Hashtbl.find_opt idx name in
@@ -142,11 +166,40 @@ let collect (known : string list) (f : fundef) : scg list =
     mk_scg f.name g edges
   in
 
+  (* the names the body binds itself: a call whose head is one of them is a
+   * call through a function value *)
+  let locals =
+    let out = ref f.params in
+    let rec bind (t : A.term) =
+      match t with
+      | A.Lam (v, _, b) | A.PLam (v, b) -> out := v :: !out; bind b
+      | A.J (v, _, a, b, c, d) -> out := v :: !out; List.iter bind [a; b; c; d]
+      | A.HITElim (branches, scrut) ->
+          bind scrut; List.iter (fun (_, vars, bt) -> out := vars @ !out; bind bt) branches
+      | A.App (a, b) | A.Pair (a, b) | A.StreamCons (a, b) | A.GlueElem (_, a, b) -> bind a; bind b
+      | A.Scope (_, b) | A.Emit b | A.Refl b | A.Unglue b | A.Transp (_, b) | A.PApp (b, _)
+      | A.Fst b | A.Snd b -> bind b
+      | A.Comp (_, _, sys, base) | A.HComp (_, _, sys, base) ->
+          List.iter (fun (v, _, tm) -> out := v :: !out; bind tm) sys; bind base
+      | A.HITConstr (_, ts) -> List.iter bind ts
+      | A.Var _ | A.Place _ | A.Reduction _ | A.World _ | A.Unit -> () in
+    bind f.body; !out in
   let rec go (de : denv) (t : A.term) (acc : scg list) : scg list =
     match spine t with
     | A.Var g, (_ :: _ as args) when List.mem g known ->
         (* a recursive/known call: emit one graph, then recurse into args *)
         let acc = call_scg de g args :: acc in
+        List.fold_left (fun acc a -> go de a acc) acc args
+    | head, (_ :: _ as args) when escaping <> []
+                                  && (match head with
+                                      | A.Var x -> List.mem x locals
+                                      | A.Fst _ | A.Snd _ | A.HITElim _ -> true
+                                      | _ -> false) ->
+        (* a call through a function value (Lee, Jones, Ben-Amram, Def. 4):
+         * it can be any fun named as a value, and what it is given descends
+         * from nothing the graph can see: an empty graph to each of them *)
+        let acc = List.map (fun g -> mk_scg f.name g []) escaping @ acc in
+        let acc = match head with A.Var _ -> acc | h -> go de h acc in
         List.fold_left (fun acc a -> go de a acc) acc args
     | _ ->
         (* not a known-call spine: ordinary structural recursion *)
@@ -254,7 +307,8 @@ let has_strict_self_loop (g : scg) : bool =
 (* Public entry point: the set of certified function names. *)
 let certify (fns : fundef list) : string list =
   let known = List.map (fun fd -> fd.name) fns in
-  let base = List.concat (List.map (collect known) fns) in
+  let escaping = escaping known fns in
+  let base = List.concat (List.map (collect ~escaping known) fns) in
   let clo = closure base in
   List.fold_left
     (fun acc fd ->

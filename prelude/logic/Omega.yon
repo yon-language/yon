@@ -1,0 +1,11 @@
+/* Omega — the subobject classifier: what can be said of a proposition, three
+ * values (Heyting G3), present, absent and unknown. Not a coproduct: its
+ * three values are points of the carrier, not arms, and no match leaves it;
+ * the one way out is `decide`, which lands in Decision, the coproduct of the
+ * three answers. Its algebra is Heyting (prelude/alg/Heyting.yon), written
+ * &&?, ||?, !?, =>?, with the laws of a Heyting algebra; the excluded middle
+ * is no law of it (unknown ||? !? unknown is unknown).
+ * Boolean, two points, enters it by the canonical injection, true to
+ * present and false to absent; no arrow goes back. */
+place Omega carried by proposition uses algebra Heyting {
+}

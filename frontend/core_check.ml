@@ -48,10 +48,11 @@ let cctx_of_deltas (deltas : (string * term) list) : cctx =
  * certified user definitions, cubical computation (transport / Glue / hcomp)
  * and builtin arithmetic, not only beta/eta/J. reduce_with_builtins is a strict
  * superset of Reduce.reduce (it falls back to Reduce.step), so the non-cubical,
- * delta-free fragment — Yoneda/J/eta witnesses — is unchanged; the fuel bound
- * gives conservative incompleteness, never unsoundness. *)
+ * delta-free fragment — Yoneda/J/eta witnesses — is unchanged. Its answer
+ * decides, so past its bound it raises Bound.Unfinished: the gates below take
+ * that as "not decided" (a skip with its reason), never as a normal form. *)
 let reduce_full (cc : cctx) (t : term) : term =
-  Builtins.reduce_with_builtins cc.rctx t
+  Builtins.reduce_with_builtins ~strict:true cc.rctx t
 
 let rec norm_ty (cc : cctx) (t : ty) : ty =
   match t with
@@ -281,6 +282,7 @@ let certify_ty ?(cc = empty_cctx) (g : tctx) (t : ty)
   with
   | Check_error m -> `Type_error m
   | Unsupported m -> `Skipped m
+  | Bound.Unfinished _ -> `Skipped "the reduction did not finish within its bound"
 
 (* The safe gate primitive for a TERM: kernel-CHECK [tm] against its declared
    type [expected], in a context [g], with delta-aware conversion [cc]. The
@@ -321,6 +323,7 @@ let certify_term ?(cc = empty_cctx) (g : tctx) (tm : term) (expected : ty)
   with
   | Unsupported m -> `Skipped m
   | Check_error m -> `Skipped ("checker artifact: " ^ m)
+  | Bound.Unfinished _ -> `Skipped "the reduction did not finish within its bound"
   (* The reducer is PARTIAL on real bodies: normalizing a body that performs a
      guarded/effectful operation (`decide` on an undecidable proposition, a partial
      builtin, a runtime primitive) legitimately raises — e.g. Failure "decide:

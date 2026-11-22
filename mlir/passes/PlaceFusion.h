@@ -16,9 +16,7 @@
 //     (in topos.op_apply: instance type;
 //      in topos.move: source_place/target_place;
 //      in topos.reduce: of_place;
-//      in topos.topology: of_place;
-//      in topos.pullback/pushout: f, g — if they reference a place, but these
-//      normally reference moves, not places.)
+//      in topos.topology: of_place.)
 //
 // The duplicate PlaceOps are erased at the end.
 //

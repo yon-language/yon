@@ -302,7 +302,7 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
   | S.EPair (a, b, _) ->
       free_vars_in_expr bound a @ free_vars_in_expr bound b
   | S.EFst (sub, _) | S.ESnd (sub, _) -> free_vars_in_expr bound sub
-  | S.EWireTo _ | S.EAll _ | S.EPullback _ | S.EPushout _ -> []
+  | S.EWireTo _ | S.EAll _ -> []
   | S.EPathApp (p, _, _) | S.EQuote (_, p, _) -> free_vars_in_expr bound p
   | S.EPathAbs (i, body, _) -> free_vars_in_expr (i :: bound) body
   | S.EHITConstr (c, args, _) ->
@@ -318,7 +318,6 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
           free_vars_in_expr (binders @ bound) b) branches
   | S.EJ (a, b, c, _) | S.EElMatch (a, b, c, _) ->
       free_vars_in_expr bound a @ free_vars_in_expr bound b @ free_vars_in_expr bound c
-  | S.EPullbackVal (_, _, a, b, _) -> free_vars_in_expr bound a @ free_vars_in_expr bound b
   | S.ESpawn (Some e, _, _) -> free_vars_in_expr bound e
   (* the statements of a block are not walked here: a block is a value of its
      own, and its names are its own *)
@@ -573,10 +572,6 @@ and lift_children (e : S.expr) : hoisted * S.expr =
   | S.ENewIn (n, sp, fas, l) ->
       let (p, vs) = lift_list (List.map (fun fa -> fa.S.fa_value) fas) in
       (p, S.ENewIn (n, sp, List.map2 (fun fa v -> { fa with S.fa_value = v }) fas vs, l))
-  | S.EPullbackVal (f, g, a, b, l) ->
-      let (pa, a') = lift a in
-      let (pb, b') = lift b in
-      (pa @ pb, S.EPullbackVal (f, g, a', b', l))
   | S.EIfThenElse (c, a, b, l) ->
       let (pc, c') = lift c in
       if expr_has_bind a || expr_has_bind b then
@@ -1565,17 +1560,6 @@ and desugar_expr (e0 : S.expr) : C.term =
       C.J ("_motive_x", C.TyType 0,
            desugar_expr c, desugar_expr d,
            p_core, basepoint)
-  | S.EPullback (_f, _g, _loc) ->
-      Builtins.encode_number 0.0
-  | S.EPullbackVal (_f, _g, _a, _b, _loc) ->
-      (* The runtime universal pullback.
-       * The real lowering happens by expanding to an ECall of a synthetic
-       * function `__pullback_<f>_<g>` (see desugar_program). Here we default
-       * to Unit because the expansion must be done at program level (to
-       * generate the synth function separately). *)
-      Builtins.encode_number 0.0
-  | S.EPushout (_f, _g, _loc) ->
-      Builtins.encode_number 0.0
   | S.ENot (e, _loc) ->
       (* Unary not. Lowered to ECall("__bool_not", [e]), a primitive that
        * emit_mlir recognizes as an arith.xori with the constant true. *)
@@ -3188,7 +3172,7 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
          || Hashtbl.mem S.bind_sites (S.span_of loc)
       then S.ECall ("__cell_get", [S.EVar (x, loc)], loc)
       else v1_call "__cell_get" [S.EVar (x, loc)]
-  | S.EVar _ | S.ELit _ | S.EPullback _ | S.EPushout _ -> e
+  | S.EVar _ | S.ELit _ -> e
   | S.EField (o, f, loc) -> S.EField (r o, f, loc)
   | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
   | S.EApp (f, args, loc) -> S.EApp (r f, List.map r args, loc)
@@ -3214,7 +3198,6 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   | S.EFst (x, loc) -> S.EFst (r x, loc)
   | S.ESnd (x, loc) -> S.ESnd (r x, loc)
   | S.EJ (a, b, c, loc) -> S.EJ (r a, r b, r c, loc)
-  | S.EPullbackVal (f, g, a, b, loc) -> S.EPullbackVal (f, g, r a, r b, loc)
   | S.ENot (x, loc) -> S.ENot (r x, loc)
   | S.EEscape (x, loc) -> S.EEscape (r x, loc)
   | S.EIfThenElse (c, t, el, loc) -> S.EIfThenElse (r c, r t, r el, loc)
@@ -3816,19 +3799,6 @@ let rec rewrite_expr (m : (string * string) list) (e : S.expr) : S.expr =
       S.EJ (rewrite_expr m a, rewrite_expr m b, rewrite_expr m c, loc)
   | S.ERefl (e, loc) -> S.ERefl (rewrite_expr m e, loc)
   | S.EIn (e, ctx, loc) -> S.EIn (rewrite_expr m e, ctx, loc)
-  | S.EPullbackVal (f, g, a, b, loc) ->
-      (* Rewrite EPullbackVal to a call to `__pullback_pack` (a builtin fun
-       * synthesized in desugar_program).
-       *   pullback(f, g, a, b) -> __pullback_pack(f(a), g(b), a, b)
-       * The body of __pullback_pack checks fa==gb and encodes (a,b) as
-       * a*1048576 + b (20-bit packing). *)
-      let a' = rewrite_expr m a in
-      let b' = rewrite_expr m b in
-      S.ECall ("__pullback_pack",
-        [S.ECall (f, [a'], loc);
-         S.ECall (g, [b'], loc);
-         a'; b'],
-        loc)
   | _ -> e  (* literals, EVar, EAll, ecc.: pass-through *)
 
 (* Rewrite a condition for the tp_at_space propagation. Conditions contain
@@ -4552,9 +4522,6 @@ let desugar_program ?(env : Tyenv.env option = None)
     ) res res.nat_transforms
   in
   let res = res_with_pbt in
-  (* The runtime universal pullback. Detection: scan the original surface
-   * program (pre-desugar) for EPullbackVal. If present, synthesize
-   * __pullback_pack, _pi1, _pi2. *)
   (* Exhaustive traversal over expr/stmt: true if `pred` holds on any
    * subexpression, anywhere — inside loops, when, lambdas, produce, spawn,
    * scope, conditions. It replaces the two partial walkers that skipped
@@ -4567,7 +4534,7 @@ let desugar_program ?(env : Tyenv.env option = None)
     pred e ||
     (let go = expr_any pred in
      match e with
-     | S.ELit _ | S.EVar _ | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> false
+     | S.ELit _ | S.EVar _ | S.EWireTo _ -> false
      | S.EField (e,_,_) | S.EParen (e,_) | S.ENot (e,_) | S.EEscape (e,_) | S.ERefl (e,_)
      | S.EFst (e,_) | S.ESnd (e,_) | S.EPathAbs (_,e,_) | S.EPathApp (e,_,_)
      | S.EIn (e,_,_) | S.EQuote (_,e,_) | S.ELam (_,e,_)
@@ -4576,8 +4543,7 @@ let desugar_program ?(env : Tyenv.env option = None)
      | S.EViewLam (_,e,_,_) -> go e
      | S.ECall (_,args,_) | S.EHITConstr (_,args,_) -> List.exists go args
      | S.EApp (h,args,_) -> go h || List.exists go args
-     | S.EBinop (_,a,b,_) | S.EPair (a,b,_) | S.EComposeWith (a,b,_)
-     | S.EPullbackVal (_,_,a,b,_) -> go a || go b
+     | S.EBinop (_,a,b,_) | S.EPair (a,b,_) | S.EComposeWith (a,b,_) -> go a || go b
      | S.EJ (a,b,c,_) | S.EElMatch (a,b,c,_) | S.EIfThenElse (a,b,c,_) ->
          go a || go b || go c
      | S.EHITElim (scrut, branches, last, _) ->
@@ -4619,14 +4585,6 @@ let desugar_program ?(env : Tyenv.env option = None)
   let fn_body_any (pred : S.expr -> bool) (fd : S.fun_decl) : bool =
     stmts_any pred fd.S.fn_body
   in
-  let pred_pb = function
-    | S.EPullbackVal _ -> true
-    | S.ECall ("__pullback_pack", _, _) -> true
-    | _ -> false
-  in
-  let needs_pullback_builtins =
-    List.exists (function S.TopFun fd -> fn_body_any pred_pb fd | _ -> false) p
-  in
   (* Detection of the shift/floor/pow2 builtins: looks for calls to
    * `floor`/`__shl`/`__shr`/`__pow2` anywhere in the body (loops, when and
    * lambdas included). *)
@@ -4639,93 +4597,8 @@ let desugar_program ?(env : Tyenv.env option = None)
   let needs_shr = prog_uses_name "__shr" in
   (* Dipendenze transitive:
    *   __shl ⊃ __pow2
-   *   __shr ⊃ __pow2, floor
-   *   pullback (via __pullback_pi1) ⊃ floor *)
+   *   __shr ⊃ __pow2, floor *)
   let needs_pow2 = needs_pow2 || needs_shl || needs_shr in
-  let res =
-    if not needs_pullback_builtins then res
-    else
-      let loc = S.dummy_loc in
-      let num x = S.ELit (S.LitNumber x, loc) in
-      let var n = S.EVar (n, loc) in
-      let eq a b = S.CondExpr (S.EBinop (S.OpEq, a, b, loc)) in
-      let mk_param n = {S.param_name = n; param_ty = S.TyPrim "number"} in
-      (* The pullback packing, encoded with decimal slots.
-       *
-       * The full universal property of a pullback (a compatible pair plus the
-       * projections pi1, pi2 and the factoring map) would need runtime struct
-       * allocation. Instead we encode a pair of small non-negative integers
-       * into one number, which is enough for the constraint check and the
-       * projections:
-       *   __pullback_pack(fa, gb, a, b):
-       *     if fa == gb: return a * 1000 + b   (decimal packing)
-       *     else:        return -1             (a sentinel: the square does
-       *                                         not commute)
-       *   __pullback_pi1(p): return floor(p / 1000)
-       *   __pullback_pi2(p): return p % 1000
-       *
-       * Honest limit: each slot holds [0, 1000), so a and b must be
-       * non-negative integers below 1000. A wider range needs a larger base
-       * (10^6, say); f64's exact mantissa caps the total around 10^15. *)
-      let pack_body = [
-        S.SWhen (
-          eq (var "fa") (var "gb"),
-          [S.SReturn (
-            S.EBinop (S.OpAdd,
-              S.EBinop (S.OpMul, var "a", num 1000.0, loc),
-              var "b", loc),
-            loc)],
-          [],
-          Some [S.SReturn (
-            S.EBinop (S.OpSub, num 0.0, num 1.0, loc),
-            loc)],
-          loc)
-      ] in
-      let pack_fd : S.fun_decl = {
-        S.fn_name = "__pullback_pack";
-        fn_type_params = [];
-        fn_params = [mk_param "fa"; mk_param "gb"; mk_param "a"; mk_param "b"];
-        fn_return = Some (S.TyPrim "number");
-        fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
-        fn_body = pack_body;
-        fn_loc = loc;
-      } in
-      (* __pullback_pi1(p): return floor(p / 1000) *)
-      let pi1_body = [
-        S.SReturn (
-          S.ECall ("Number__floor",
-            [S.EBinop (S.OpDiv, var "p", num 1000.0, loc)],
-            loc),
-          loc)
-      ] in
-      let pi1_fd : S.fun_decl = {
-        S.fn_name = "__pullback_pi1";
-        fn_type_params = [];
-        fn_params = [mk_param "p"];
-        fn_return = Some (S.TyPrim "number");
-        fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
-        fn_body = pi1_body;
-        fn_loc = loc;
-      } in
-      (* __pullback_pi2(p): return p % 1000 *)
-      let pi2_body = [
-        S.SReturn (
-          S.EBinop (S.OpMod, var "p", num 1000.0, loc),
-          loc)
-      ] in
-      let pi2_fd : S.fun_decl = {
-        S.fn_name = "__pullback_pi2";
-        fn_type_params = [];
-        fn_params = [mk_param "p"];
-        fn_return = Some (S.TyPrim "number");
-        fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
-        fn_body = pi2_body;
-        fn_loc = loc;
-      } in
-      let res = process_top_decl res (S.TopFun pack_fd) in
-      let res = process_top_decl res (S.TopFun pi1_fd) in
-      process_top_decl res (S.TopFun pi2_fd)
-  in
   (* Synthesize the builtins __pow2 / __shl / __shr as pure arithmetic
    * funs. Operation: float-based, no bit-level cast. (floor is not
    * synthesized: it is Number.floor, the libm floor.)
@@ -4981,13 +4854,12 @@ let desugar_program ?(env : Tyenv.env option = None)
     && String.sub n 0 19 = "__check_naturality_"
   in
   (* synth_builtins are functions synthesized by the desugar to provide stdlib
-   * operations (floor, __pow2, __shl, __shr, __pullback_pack/pi1/pi2). They
+   * operations (floor, __pow2, __shl, __shr). They
    * must be processed before the user functions that call them. We put them at
    * the tail of the final list, so after List.rev they are at the head and are
    * processed first in the fold. *)
   let is_synth_builtin n =
     n = "__pow2" || n = "__shl" || n = "__shr"
-    || n = "__pullback_pack" || n = "__pullback_pi1" || n = "__pullback_pi2"
   in
   let synth_morph_in_S = List.filter
     (fun (n, _) ->

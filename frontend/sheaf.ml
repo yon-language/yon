@@ -90,8 +90,8 @@ let rec replace_subterm ~(target : C.term) ~(replacement : C.term) (t : C.term) 
 let field_factors_through
       (ctx : Reduce.ctx) ~(canon : C.term) ~(field : C.term) : bool =
   let x = fresh_point in
-  let cx = Builtins.reduce_with_builtins ctx (C.App (canon, C.Var x)) in
-  let fx = Builtins.reduce_with_builtins ctx (C.App (field, C.Var x)) in
+  let cx = Builtins.reduce_with_builtins ~strict:true ctx (C.App (canon, C.Var x)) in
+  let fx = Builtins.reduce_with_builtins ~strict:true ctx (C.App (field, C.Var x)) in
   let abstracted =
     replace_subterm ~target:cx ~replacement:(C.Var fresh_class) fx in
   not (S.mem x (C.free_vars abstracted))

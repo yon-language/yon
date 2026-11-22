@@ -183,5 +183,31 @@ let () =
   check "transport is symmetric: Q == P too"
     (Dispatcher.type_equal env2 ctx (TyUser "Q") (TyUser "P"));
 
+  (* ── equality is symmetric; the inclusion and the arrow are flows ──── *)
+  Printf.printf "-- symmetry of type_equal, S-Arrow in subtype --\n";
+  let place n parent = {
+    pd_name = n; pd_type_params = []; pd_term_params = []; pd_fusion = None; pd_width = None;
+    pd_arms = []; pd_world = "__Builtin"; pd_members = []; pd_laws = [];
+    pd_subcontains = parent; pd_is_error = false; pd_on_error = None; pd_loc = dl } in
+  let env3 = Tyenv.add_place (Tyenv.add_place env (place "B" None)) (place "S" (Some "B")) in
+  let eq3 a b = Dispatcher.type_equal env3 ctx a b in
+  let sub3 a b = Dispatcher.subtype env3 ctx ~sub:a ~super:b in
+  let b_ = TyUser "B" and s_ = TyUser "S" in
+  check "S /= B and B /= S: an inclusion is no equality, both ways"
+    (not (eq3 b_ s_) && not (eq3 s_ b_));
+  check "S <: B (S is declared included in B)" (sub3 s_ b_);
+  check "not B <: S" (not (sub3 b_ s_));
+  check "B -> Number /= S -> Number, both ways"
+    (not (eq3 (TyArrow (b_, num)) (TyArrow (s_, num)))
+     && not (eq3 (TyArrow (s_, num)) (TyArrow (b_, num))));
+  check "B -> Number <: S -> Number (contravariant in the domain)"
+    (sub3 (TyArrow (b_, num)) (TyArrow (s_, num)));
+  check "not S -> Number <: B -> Number"
+    (not (sub3 (TyArrow (s_, num)) (TyArrow (b_, num))));
+  check "Number -> S <: Number -> B (covariant in the codomain)"
+    (sub3 (TyArrow (num, s_)) (TyArrow (num, b_)));
+  check "not Number -> B <: Number -> S"
+    (not (sub3 (TyArrow (num, b_)) (TyArrow (num, s_))));
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fails;
   if !fails = 0 then exit 0 else exit 1

@@ -61,6 +61,11 @@ let wire_subs : (int64 * int64, unit) Hashtbl.t = Hashtbl.create 8
    rpc_sigs: the caller's, by (Space, operation selector); op_sigs: this
    program's operations, by function name. *)
 let rpc_sigs : (string * int, int64 list) Hashtbl.t = Hashtbl.create 8
+(* the bare name of each operation a caller calls, by (Space, selector): with
+   its signature it is the description the session compares *)
+let rpc_names : (string * int, string) Hashtbl.t = Hashtbl.create 8
+(* the names of the funs the parser lifts out of an inline lambda: the compiler's, not the user's *)
+let lifted_lambdas : (string, unit) Hashtbl.t = Hashtbl.create 16
 let op_sigs : (string, int64 list) Hashtbl.t = Hashtbl.create 16
 (* The calls from a function of one Space into a function of another Space of
    the same program: (caller, callee) -> the callee's Space, then the root and
@@ -184,6 +189,7 @@ let prim_of_face (name : string) : string option =
   | "Number" -> Some "number"
   | "Text" -> Some "text"
   | "Boolean" -> Some "boolean"
+  | "Omega" -> Some "proposition"
   | "Unit" -> Some "unit"
   | _ -> None
 (* Integer arithmetic sites: `/` and `%` on INTEGER-carrier operands diverge
@@ -456,26 +462,7 @@ and expr =
   | EJ of expr * expr * expr * location               (* ind_path(C, d, p) *)
   | EQuote of ty_term * expr * location               (* quote(c, a) : El(c), a : carrier(c) — B intro *)
   | EElMatch of expr * expr * expr * location         (* el_match(target, ret, body): B eliminator, binds carrier *)
-  (* pullback / pushout as an expression. Categorically: given f : A -> C and
-   * g : B -> C, pullback(f, g) is the universal limit (A x_C B).
-   * Not at the surface: there are no `pullback(f,g)` / `pushout(f,g)`
-   * expression forms (they would lower to a 0.0 placeholder); the parser
-   * does not produce these constructors, nor any `pullback`/`pushout`
-   * declaration. The runtime pullback is EPullbackVal (the 4-arg form). The
-   * constructors are kept only
-   * so downstream pattern matches stay exhaustive. *)
-  | EPullback of string * string * location            (* retired surface form, no longer produced *)
-  | EPushout of string * string * location             (* retired surface form, no longer produced *)
-  (* The runtime universal pullback. Syntax: pullback(f, g, a, b) builds the
-   * pair (a, b) in A x B, checking the constraint f(a) == g(b) at runtime. If
-   * it holds, return a valid handle (encoded as a tagged number); if not, a
-   * runtime trap or NaN.
-   *
-   * Honest upfront: this is not the FULL universal property (no automatic
-   * factor map). It is the pullback as construction + constraint +
-   * projections. *)
-  | EPullbackVal of string * string * expr * expr * location  (* "pullback(f, g, a, b)" *)
-  (* Unary boolean/Heyting not. Type check: bool -> bool, Heyt -> Heyt.
+    (* Unary boolean/Heyting not. Type check: bool -> bool, Heyt -> Heyt.
    * Lowered to an MLIR xor with true for booleans. *)
   | ENot of expr * location
   (* `escape e`: e is a value of S + E, bound at the site (the bind of the
@@ -641,7 +628,7 @@ let stmt_exprs (s : stmt) : expr list =
    (a producer, a spawn), every form at once. *)
 let sub_exprs (e : expr) : expr list * stmt list list =
   match e with
-  | ELit _ | EVar _ | EWireTo _ | EPullback _ | EPushout _ -> ([], [])
+  | ELit _ | EVar _ | EWireTo _ -> ([], [])
   | EField (a, _, _) | EPathApp (a, _, _) | EPathAbs (_, a, _) | EParen (a, _)
   | EIn (a, _, _) | ERefl (a, _) | EFst (a, _) | ESnd (a, _) | EQuote (_, a, _)
   | ENot (a, _) | EEscape (a, _) | ELam (_, a, _) | EMoveLam (_, a, _, _, _)
@@ -653,8 +640,7 @@ let sub_exprs (e : expr) : expr list * stmt list list =
   | EProduce (b, _) -> ([], [b])
   | ESpawn (n, b, _) -> ((match n with Some n -> [n] | None -> []), [b])
   | ENew (_, fas, _) | ENewIn (_, _, fas, _) -> (List.map (fun fa -> fa.fa_value) fas, [])
-  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _)
-  | EPullbackVal (_, _, a, b, _) -> ([a; b], [])
+  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _) -> ([a; b], [])
   | EAll (_, c, _) -> (cond_exprs c, [])
   | EJ (a, b, c, _) | EElMatch (a, b, c, _) | EIfThenElse (a, b, c, _) -> ([a; b; c], [])
 
@@ -1380,8 +1366,6 @@ let location_of_expr (e : expr) : location =
   | EAll (_, _, l) | EIn (_, _, l)
   | ERefl (_, l) | EPair (_, _, l) | EFst (_, l) | ESnd (_, l)
   | EJ (_, _, _, l)
-  | EPullback (_, _, l) | EPushout (_, _, l) -> l
-  | EPullbackVal (_, _, _, _, l) -> l
   | ENot (_, l) -> l
   | EEscape (_, l) -> l
   | EIfThenElse (_, _, _, l) -> l
@@ -1430,4 +1414,5 @@ let reset_parse_tables () =
   Hashtbl.reset internal_carrier_sites; Hashtbl.reset arrow_written_in;
   Hashtbl.reset carrier_headers; Hashtbl.reset algebra_written; Hashtbl.reset place_algebras;
   Hashtbl.reset proof_funs; Hashtbl.reset arrow_home_sites; Hashtbl.reset carrier_models;
+  Hashtbl.reset lifted_lambdas;
   Hashtbl.reset algebra_places; Hashtbl.reset place_term_params

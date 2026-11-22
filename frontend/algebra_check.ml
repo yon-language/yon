@@ -376,6 +376,62 @@ let decide_machine (m : machine) (st : S.law_statement) (body : S.expr) : Law_ch
                                   (if all_forall then ": " ^ model_of rest else ""))
          | r -> Law_check.Unknown ("z3 answers " ^ r))
 
+(* ─── Omega: the three truth values of Heyting G3 ───────────────────── *)
+
+(* The carrier proposition has three points, absent < unknown < present: the
+   meet is the least, the join the greatest, a =>? b is present where a is at
+   most b and b elsewhere, and !? a is a =>? absent. A connective between two
+   points is the operation of Omega; between two statements it is the
+   connective of the statement, its meet on the two decided points. Every
+   assignment of the three points is read. *)
+let rec g3_term (env : (string * int) list) (e : S.expr) : int =
+  let t = g3_term env in
+  match e with
+  | S.EVar (x, _) -> (match List.assoc_opt x env with Some v -> v | None -> raise (Not_modelled x))
+  | S.EParen (a, _) -> t a
+  | S.ELit (S.LitHeytAbsent, _) -> 0
+  | S.ELit (S.LitHeytUnknown, _) -> 1
+  | S.ELit (S.LitHeytPresent, _) -> 2
+  | S.ECall ("__heyt_and", [a; b], _) -> min (t a) (t b)
+  | S.ECall ("__heyt_or", [a; b], _) -> max (t a) (t b)
+  | S.ECall ("__heyt_imp", [a; b], _) -> let x = t a and y = t b in if x <= y then 2 else y
+  | S.ECall ("__heyt_not", [a], _) -> if t a = 0 then 2 else 0
+  | _ -> raise (Not_modelled "a term outside the truth values of Omega")
+
+and g3_prop (env : (string * int) list) (e : S.expr) : bool =
+  let p = g3_prop env and t = g3_term env in
+  match e with
+  | S.EBinop (S.OpEq, a, b, _) -> t a = t b
+  | S.EBinop (S.OpNeq, a, b, _) -> t a <> t b
+  | S.EBinop (S.OpAnd, a, b, _) | S.ECall ("__heyt_and", [a; b], _) -> p a && p b
+  | S.EBinop (S.OpOr, a, b, _) | S.ECall ("__heyt_or", [a; b], _) -> p a || p b
+  | S.ECall ("__heyt_imp", [a; b], _) -> (not (p a)) || p b
+  | S.ENot (a, _) | S.ECall ("__heyt_not", [a], _) -> not (p a)
+  | S.EParen (a, _) -> p a
+  | _ -> raise (Not_modelled "a statement outside the truth values of Omega")
+
+let g3_name = function 0 -> "absent" | 1 -> "unknown" | _ -> "present"
+
+let decide_g3 (st : S.law_statement) (body : S.expr) : Law_check.verdict =
+  let rec all qs env =
+    match qs with
+    | [] -> if g3_prop env body then None else Some []
+    | (q, x) :: rest ->
+        let at v = all rest ((x, v) :: env) in
+        (match q with
+         | S.Forall ->
+             List.fold_left (fun acc v -> match acc with
+                 | Some _ -> acc
+                 | None -> Option.map (fun w -> (x, v) :: w) (at v)) None [0; 1; 2]
+         | S.Exists ->
+             if List.exists (fun v -> at v = None) [0; 1; 2] then None
+             else Some []) in
+  match all (List.map (fun (q, x, _) -> (q, x)) st.S.ls_quants) [] with
+  | None -> Law_check.Proven "every assignment of the three truth values of Omega"
+  | Some [] -> Law_check.Refuted "the statement is false on the three truth values of Omega"
+  | Some w -> Law_check.Refuted (String.concat ", "
+                (List.map (fun (x, v) -> x ^ " = " ^ g3_name v) w))
+
 (* ─── the models of the program ──────────────────────────────────────── *)
 
 let laws_of (apd : S.place_decl) =
@@ -608,6 +664,10 @@ let check_carriers (ps : (string * S.place_decl) list) (theorems : (string * str
             | None -> None in
           List.map (fun (law, st) ->
             let verdict =
+              if c = "proposition" then
+                (try decide_g3 st (unfold ops resolve st.S.ls_body)
+                 with Not_modelled why -> Law_check.Unknown ("the statement on " ^ c ^ " contains " ^ why))
+              else
               match machine_of_carrier c with
               | None -> Law_check.Unknown (Printf.sprintf "the machine of %s is not modelled (i64, f64 are)" c)
               | Some m ->

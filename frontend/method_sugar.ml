@@ -107,7 +107,7 @@ let rec map_expr (f : S.expr -> S.expr option) (e : S.expr) : S.expr =
       let r = map_expr f in
       let rs = map_stmt f in
       match e with
-      | S.ELit _ | S.EVar _ | S.EWireTo _ | S.EAll _ | S.EPullback _ | S.EPushout _ -> e
+      | S.ELit _ | S.EVar _ | S.EWireTo _ | S.EAll _ -> e
       | S.EField (o, n, l) -> S.EField (r o, n, l)
       | S.ECall (n, a, l) -> S.ECall (n, List.map r a, l)
       | S.EApp (g, a, l) -> S.EApp (r g, List.map r a, l)
@@ -132,7 +132,6 @@ let rec map_expr (f : S.expr -> S.expr option) (e : S.expr) : S.expr =
       | S.EJ (a, b, c, l) -> S.EJ (r a, r b, r c, l)
       | S.EQuote (c, x, l) -> S.EQuote (c, r x, l)
       | S.EElMatch (a, b, c, l) -> S.EElMatch (r a, r b, r c, l)
-      | S.EPullbackVal (g, h, a, b, l) -> S.EPullbackVal (g, h, r a, r b, l)
       | S.ENot (x, l) -> S.ENot (r x, l)
       | S.EEscape (x, l) -> S.EEscape (r x, l)
       | S.EIfThenElse (a, b, c, l) -> S.EIfThenElse (r a, r b, r c, l)

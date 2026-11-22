@@ -244,8 +244,6 @@ and fmt_expr (e : expr) : string =
   | EApp (head, args, _) ->
       Printf.sprintf "%s(%s)" (fmt_expr head) (String.concat ", " (List.map fmt_expr args))
   | EIn (e, ctx, _) -> fmt_expr e ^ " in " ^ ctx
-  | EPullbackVal (fn, gn, a, b, _) ->
-      Printf.sprintf "pullback(%s, %s, %s, %s)" fn gn (fmt_expr a) (fmt_expr b)
   | EPathAbs (i, e, _) -> Printf.sprintf "walk %s => %s" i (fmt_expr e)
   | EPathApp (e, d, _) ->
       Printf.sprintf "%s @ %s" (fmt_expr e)

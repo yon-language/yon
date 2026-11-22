@@ -68,5 +68,46 @@ let () =
   check "mutual struct  ping/pong on tails        -> BOTH certified"
     (Sct.certifies grp "ping" && Sct.certifies grp "pong");
 
+  (* A projection is no smaller than the pair it reads, for the normalization
+     of open terms: f(p) = g(f(snd p)) with g opaque unfolds without end on a
+     neutral p, so it is NOT certified; the same recursion on the tail of a
+     list a match binds is (case 2). *)
+  let f_snd = fn "fsnd" ["p"] (App (Var "g", App (Var "fsnd", Snd (Var "p")))) in
+  check "projection     f(p)=g(f(snd p))          -> NOT certified"
+    (not (Sct.certifies [f_snd] "fsnd"));
+  let f_fst = fn "ffst" ["p"] (App (Var "ffst", Fst (Fst (Var "p")))) in
+  check "projection     f(p)=f(fst (fst p))       -> NOT certified"
+    (not (Sct.certifies [f_fst] "ffst"));
+
+  (* 6. A call through a function value (Lee, Jones, Ben-Amram, Def. 4):
+   *    apply(k, y) = k(y) and f(x) = apply(f, x). f is named as a value, so
+   *    the call k(y) can be f: an empty graph from apply to f closes the
+   *    cycle f -> apply -> f with no descent -> neither is certified (before,
+   *    apply had no graph and both were certified, and f does not terminate). *)
+  let f_apply = fn "apply" ["k"; "y"] (App (Var "k", Var "y")) in
+  let f_f = fn "f" ["x"] (App (App (Var "apply", Var "f"), Var "x")) in
+  let grp = [f_apply; f_f] in
+  check "value call     f(x)=apply(f, x)          -> NEITHER certified"
+    (not (Sct.certifies grp "f") && not (Sct.certifies grp "apply"));
+
+  (* 7. The same apply with a fun that is never named as a value: nothing
+   *    escapes, the call k(y) reaches no fun of the group, len stays
+   *    certified and so does apply. *)
+  let grp = [f_apply; f_len] in
+  check "value call     with no fun as a value    -> apply and len certified"
+    (Sct.certifies grp "apply" && Sct.certifies grp "len");
+
+  (* 8. A structural recursion that passes itself as a value only to a
+   *    non-recursive fun: map(xs) = cons(apply(map, ..)...). It now has a
+   *    cycle map -> apply -> map with no descent -> not certified: the
+   *    certificate cannot see that apply calls its argument on a subterm. *)
+  let f_map = fn "map" ["xs"]
+      (HITElim ([ ("nil", [], Unit);
+                  ("cons", ["h"; "t"], App (App (Var "apply", Var "map"), Var "t")) ],
+                Var "xs")) in
+  let grp = [f_apply; f_map] in
+  check "value call     map through apply          -> NOT certified"
+    (not (Sct.certifies grp "map"));
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

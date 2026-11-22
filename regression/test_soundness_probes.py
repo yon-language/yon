@@ -85,27 +85,27 @@ _BAD = program("test_soundness_probes/module_1.yon")
 
 
 def test_checker_terminates_on_negative_place(tmp_path):
-    """The checker never diverges. The place construction `.-> Bad {...}` is
-    opaque to the reducer, so the self-application is never unfolded (a
-    TimeoutExpired would mean it diverged). Terminating is not enough: the
-    program asks `clear` to prove boom(n) = 0, which is false, so the
-    checker must REJECT it, cleanly (a stable [E....] code, no uncaught OCaml
-    exception)."""
+    """The checker never diverges (a TimeoutExpired would mean it did) and decides cleanly (a
+    stable [E....] code, no uncaught OCaml exception). The program builds a self-application on a
+    place that occurs negatively in its own field: the place is not strictly positive, and it is
+    refused first, by E2020 with its reason, before the false `clear` of boom(n) = 0 is read."""
     proj = _project(tmp_path, _BAD, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out", timeout=60)
     assert "Fatal error" not in out, f"the checker crashed instead of deciding:\n{out}"
-    assert _clean_rejection(rc, out, 'E2001', 'expected Id_Number(boom(n), _code), got Id_Number(boom(n), boom(n))'), (
-        f"boom(n) = 0 is false, so `clear` must be rejected with a diagnostic "
-        f"code (rc={rc}):\n{out}")
+    assert _clean_rejection(rc, out, 'E2020', 'a recursive place is not strictly positive',
+                            'Bad appears left of an arrow in the field f of Bad'), (
+        f"the place Bad is not strictly positive, so the program must be rejected with "
+        f"its code and reason (rc={rc}):\n{out}")
 
 
-@pytest.mark.xfail(strict=True, reason="a place that occurs negatively in its own "
-                   "fields, `place Bad { f Bad -> Number }`, is not strictly positive")
 def test_negative_place_rejected(tmp_path):
+    """A place that occurs negatively in its own fields, `place Bad { f Bad -> Number }`, is not
+    strictly positive: refused by the code of the registry, E2020."""
     entry = program("test_soundness_probes/test_negative_place_rejected_1.yon")
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out")
-    assert _clean_rejection(rc, out, 'E2001', 'Bad'), out
+    assert _clean_rejection(rc, out, 'E2020', 'a recursive place is not strictly positive',
+                            'Bad appears left of an arrow in the field f of Bad'), out
 
 
 # --- parametricity of generics ------------------------------------------------
@@ -307,14 +307,16 @@ def test_double_underscore_inside_name_is_exported(tmp_path):
     assert _call_remote(tmp_path, "a__b") == 108
 
 
-@pytest.mark.slow
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a user name is never confused with a "
-                   "generated one: __x and yon_rt_x are exported like any function")
-@pytest.mark.parametrize("fn,expected", [("__conto", 102), ("yon_rt_saldo", 104)])
-def test_reserved_prefix_names_are_exported(tmp_path, fn, expected):
-    rc = _call_remote(tmp_path, fn)
-    _verdict(rc == expected, f"remote {fn}(100) exited {rc}, expected {expected}")
+@pytest.mark.parametrize("fn,why", [("__conto", "it begins with `__`"),
+                                    ("yon_rt_saldo", "it begins with `yon_rt_`")])
+def test_reserved_prefix_names_are_refused(tmp_path, fn, why):
+    """A user name is never confused with a generated one: a fun named like the names the compiler
+    (`__`) or the runtime (`yon_rt_`) makes is refused where it is declared, E2025."""
+    (tmp_path / "ledger.yon").write_text(
+        f"place Entry {{\n  fun {fn}(x: Number): Number {{ return x + 2 }}\n"
+        "  fun main: Number { return 0 }\n}\n")
+    rc, out = _compile(tmp_path / "ledger.yon", tmp_path / "Ledger_srv", cwd=tmp_path)
+    assert _clean_rejection(rc, out, 'E2025', f"the name `{fn}` is reserved", why), out
 
 
 # --- out-of-range access -------------------------------------------------------
@@ -1147,9 +1149,9 @@ def test_mutual_sync_rpc_flagged(tmp_path):
 
 # --- purity of dependent-type indices ------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="a type index is pure: `clear c ++ clear c` "
-                   "with a write to c in between does not compose")
 def test_cell_read_in_type_index(tmp_path):
+    """A type index is pure: `clear c` reads the variable c, which a write changes in between, so
+    it is no index; refused where it is made, by the code of the registry (E2021)."""
     entry = program("test_soundness_probes/test_cell_read_in_type_index_1.yon")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out, 'E2001', 'concat') and "concat" in out, out
+    assert _clean_rejection(rc, out, 'E2021', 'the index of a type reads the variable `c`'), out

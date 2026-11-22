@@ -135,8 +135,6 @@ let rec collect_names (e : expr) : string list =
   | EPair (a, b, _) -> collect_names a @ collect_names b
   | EFst (p, _) | ESnd (p, _) -> collect_names p
   | EJ (c, d, p, _) -> collect_names c @ collect_names d @ collect_names p
-  | EPullback (_, _, _) | EPushout (_, _, _) -> []
-  | EPullbackVal (_, _, a, b, _) -> collect_names a @ collect_names b
   | ENot (e, _) -> collect_names e
   | EEscape (e, _) -> collect_names e
   | EIfThenElse (c, a, b, _) -> collect_names c @ collect_names a @ collect_names b

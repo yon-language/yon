@@ -19,8 +19,6 @@ place Refusal {
     :U BufferNotGrown :U BufferTooLarge
     :U SegmentsExhausted :U HeapPartUnknown :U GestationExhausted
     :U WordOutsideValue :U ValueNotStaged :U LeechNodeUnknown :U NodeOutsideSlot
-    /* the cells */
-    :U CellTableFull :U CellReadNotLive :U CellWriteNotLive
     /* arithmetic */
     :U Int64Overflow :U DivisionByZero
     /* the regions */
@@ -41,6 +39,8 @@ place Refusal {
     :U AlgebraNotInTable
     /* the rings of a call between processes */
     :U CallRingsNotOpened
+    /* the description of a session between processes */
+    :U CallDescriptionsDiffer
 
   fun sentence(r: Refusal): Text {
     return match r {
@@ -68,9 +68,6 @@ place Refusal {
       ValueNotStaged => "heap: a value of {a} bytes is born from {b} staged words",
       LeechNodeUnknown => "leech: the tree over the shell has no node at level {a} over index {b}",
       NodeOutsideSlot => "leech: a node of {a} bytes does not fit a slot of {b} bytes",
-      CellTableFull => "cell: {a} cells are live, the most the cell table holds; a cell lives as long as the block that declares it",
-      CellReadNotLive => "cell: a read of a cell that is not live (handle {a:f}, {b} cells live)",
-      CellWriteNotLive => "cell: a write of a cell that is not live (handle {a:f}, {b} cells live)",
       Int64Overflow => "arithmetic: an Int64 operation leaves [-2^63, 2^63); its result is no Int64 (the ring that wraps is Word64)",
       DivisionByZero => "arithmetic: an integer divided by zero, or its remainder by zero, is no integer",
       WordOutsideRegion => "region: word {a} is outside a region of {b} words",
@@ -96,7 +93,8 @@ place Refusal {
       SpaceHasNoHeap => "space: there is no heap for Space {a}",
       UnknownDecided => "logic: unknown reached a decided condition",
       AlgebraNotInTable => "algebra verifier: {a:f} names no algebra of the table",
-      CallRingsNotOpened => "cross-Space call refused: Space '{a:s}' could not open the rings of the session of operation {b}: {c:e}"
+      CallRingsNotOpened => "cross-Space call refused: Space '{a:s}' could not open the rings of the session of operation {b}: {c:e}",
+      CallDescriptionsDiffer => "cross-Space call refused: Space '{a:s}' describes the operation {b:s} otherwise than its caller (the descriptions of the session differ byte for byte)"
     }
   }
 }

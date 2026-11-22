@@ -1197,7 +1197,7 @@ named_type:
          move as the Text/text normalization in desugar, one layer up). *)
       match Surface_ast.prim_of_face name, name with
       | Some prim, _ -> TyPrim prim
-      | None, ("number" | "text" | "boolean" | "unit") when
+      | None, ("number" | "text" | "boolean" | "unit" | "proposition") when
           not (let f = $startpos.Lexing.pos_fname in
                (* the prelude and the kernel corpus may speak the codes *)
                let has sub =
@@ -1208,7 +1208,7 @@ named_type:
                has "prelude/") ->
           failwith (Printf.sprintf
             "type `%s` is the kernel code: write `%s` (the prelude place)"
-            name (String.capitalize_ascii name))
+            name (if name = "proposition" then "Omega" else String.capitalize_ascii name))
       | None, _ -> TyUser name }
 
 (* An atom of a type: a domain of an arrow is one, but for the product, whose parentheses before an

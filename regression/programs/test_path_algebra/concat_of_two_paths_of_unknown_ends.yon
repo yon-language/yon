@@ -1,0 +1,4 @@
+place Entry {
+  fun j(p: Path, q: Path): Path { return concat(p, q) }
+  fun main: Number { return 7 }
+}

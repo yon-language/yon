@@ -42,6 +42,8 @@ from pathlib import Path
 
 import pytest
 
+from migrations import SUCC_PRED_ON_INT64
+
 ROOT = Path(__file__).resolve().parent.parent
 PARSER = ROOT / "frontend" / "parser.mly"
 YONC = ROOT / "toolchain" / "yonc"
@@ -157,7 +159,10 @@ def _compile_and_run(target: Path, tmp: Path):
 # Job 1 — execution
 # =========================================================================== #
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
-@pytest.mark.parametrize("fx", fixtures(), ids=lambda f: f"{f[0]}/{f[1]}")
+@pytest.mark.parametrize("fx", [
+    pytest.param(f, id=f"{f[0]}/{f[1]}",
+                 marks=[SUCC_PRED_ON_INT64] if f"{f[0]}/{f[1]}" == "hott/equivalence" else [])
+    for f in fixtures()])
 def test_fixture_behaves(fx, tmp_path):
     construct, name, expect_path, target = fx
     assert target.exists(), f"{construct}/{name}.expect has no fixture ({target.name})"

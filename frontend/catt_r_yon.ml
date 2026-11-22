@@ -449,17 +449,11 @@ and ty_structural_eq (t1 : ty) (t2 : ty) : bool =
     | _ -> false
   in
   (* A bare "Path" names the total space of paths, Σ(x y : A). Id(A, x, y):
-   * a path whose endpoints are not recorded. It is equal only to itself. An
-   * Id(A, x, y) flows into it by forgetting its endpoints, a one-way
-   * inclusion that lives in Dispatcher.subtype, never in equality: the
-   * converse would let any path stand for any identity. *)
-  let is_path_alias t =
-    match t with
-    | TyUser "Path" | TyPrim "Path" -> true
-    | _ -> false
-  in
+   * a path whose endpoints are not recorded. It is equal only to itself (the
+   * names below); an Id(A, x, y) flows into it by forgetting its endpoints, a
+   * one-way inclusion that lives in Dispatcher.subtype, never in equality:
+   * the converse would let any path stand for any identity. *)
   if is_unknown t1 || is_unknown t2 then true
-  else if is_path_alias t1 && is_path_alias t2 then true
   else
   match t1, t2 with
   | TyVar a, TyVar b -> a = b
@@ -742,23 +736,124 @@ let test_pd_suspend () =
 
 let pd_comp_2 : pasting_diagram = PPaste (PDisk 1, PDisk 1, 0)
 
+(* ─── pasting schemes and the condition of Finster and Mimram ──────
+ *
+ * A coherence coh_Γ : (u -> v) is a cell of the free ω-groupoid only when Γ
+ * is a pasting scheme (it is contractible) and its source and target are
+ * full (Finster, Mimram, "A type-theoretical definition of weak
+ * ω-categories", 2017):
+ *   - either u and v each use every variable of Γ (an invertible coherence);
+ *   - or u uses every variable of the source ∂⁻Γ and v every variable of the
+ *     target ∂⁺Γ, the boundaries one dimension below Γ (a composite).
+ *
+ * The judgement Γ ⊢ps is read off the list from left to right, with the
+ * stack of the cells still open (the rules (pss), (pse), (psd)): it starts
+ * with one object; a pair (y : A, f : x -> y) extends the open cell x of
+ * type A; a drop closes the top of the stack. *)
+
+let rec cell_dim (c : cell) : int =
+  match c with CellStar -> 0 | CellArr (_, _, a) -> 1 + cell_dim a
+
+let rec term_vars (t : term) : string list =
+  match t with
+  | TmVar x -> [x]
+  | TmCoh (_, _, sub) -> List.concat_map (fun (_, v) -> term_vars v) sub
+  | TmId (t', c) -> term_vars t' @ cell_vars c
+
+and cell_vars (c : cell) : string list =
+  match c with
+  | CellStar -> []
+  | CellArr (s, t, a) -> term_vars s @ term_vars t @ cell_vars a
+
+(* Γ ⊢ps: the stack holds the open cells (name, type), the top first. *)
+let is_pasting_scheme (ps : ps_ctx) : bool =
+  let same a b = alpha_equiv_cell a b [] in
+  let rec go stack = function
+    | [] -> stack <> []
+    | (y, ty) :: (f, CellArr (TmVar x, TmVar y', a)) :: rest when y = y' ->
+        (* extend: y : A and f : x -> y, where x : A is open somewhere on the
+           stack; the cells above it are dropped first *)
+        let rec drop st = match st with
+          | (x', a') :: _ when x' = x && same a' a && same ty a -> Some st
+          | _ :: st' -> drop st'
+          | [] -> None in
+        (match drop stack with
+         | Some st -> go ((f, CellArr (TmVar x, TmVar y, a)) :: (y, ty) :: st) rest
+         | None -> false)
+    | _ -> false
+  in
+  match ps with
+  | (x, CellStar) :: rest -> go [(x, CellStar)] rest
+  | _ -> false
+
+let ps_dim (ps : ps_ctx) : int =
+  List.fold_left (fun m (_, c) -> max m (cell_dim c)) 0 ps
+
+(* The variables of the boundary ∂⁻ (src) or ∂⁺ (tgt) of Γ at dimension
+   dim Γ - 1: every variable of lower dimension, and of that dimension the
+   ones the globular boundary keeps. *)
+let ps_boundary_vars (ps : ps_ctx) (target : bool) : string list =
+  let n = ps_dim ps in
+  let top = List.filter (fun (_, c) -> cell_dim c = n) ps in
+  (* a cell of dimension n-1 is in the source when no top cell ends on it,
+     in the target when no top cell starts from it *)
+  let inner = List.concat_map (fun (_, c) -> match c with
+      | CellArr (s, t, _) -> term_vars (if target then s else t)
+      | CellStar -> []) top in
+  List.filter_map (fun (x, c) ->
+      if cell_dim c < n - 1 then Some x
+      else if cell_dim c = n - 1 && not (List.mem x inner) then Some x
+      else None) ps
+
+let covers (used : string list) (vars : string list) : bool =
+  List.for_all (fun v -> List.mem v used) vars
+
+(* The condition of Finster and Mimram on coh_Γ : A. *)
+let fm_valid (ps : ps_ctx) (a : cell) : bool =
+  is_pasting_scheme ps
+  && (match a with
+      | CellStar -> false
+      | CellArr (u, v, base) ->
+          let all = List.map fst ps in
+          let b = cell_vars base in
+          let full_u = covers (term_vars u @ b) and full_v = covers (term_vars v @ b) in
+          (full_u all && full_v all)
+          || (full_u (ps_boundary_vars ps false) && full_v (ps_boundary_vars ps true)
+              && cell_dim a <= ps_dim ps))
+
+(* The composite of two 1-cells, the coherence of x -> y -> z. *)
+let comp_ps : ps_ctx =
+  [ ("x", CellStar); ("y", CellStar); ("f", CellArr (TmVar "x", TmVar "y", CellStar));
+    ("z", CellStar); ("g", CellArr (TmVar "y", TmVar "z", CellStar)) ]
+
+let comp_cell : cell = CellArr (TmVar "x", TmVar "z", CellStar)
+
+(* g ∘ f for f : a -> b and g : b -> c. *)
+let compose (a : term) (b : term) (c : term) (f : term) (g : term) : term =
+  TmCoh (comp_ps, comp_cell, [("x", a); ("y", b); ("f", f); ("z", c); ("g", g)])
+
 (* ─── universal cells for limit/colimit ──────
  *
- * A universal cell in an omega-category is one that encodes
- * a universal property — e.g., the projection from a limit object,
- * or the inclusion into a colimit. Given a diagram D : J -> C and
- * a cone (X, f), a universal cell at the limit (L, π) gives the
- * UNIQUE factorization X --> L making the triangles commute.
+ * A limit of a diagram D : J -> C represents the functor of cones:
+ * Hom(X, L) ≅ Cone(X, D), naturally in X. A cone over D with apex X is a leg
+ * X -> d for every object d of J, and for every arrow f : d -> d' of J a
+ * square, a cell from f ∘ leg_d to leg_d'. The factor of the cone through L
+ * is the arrow X -> L the cone corresponds to; it is computed from the legs,
+ * and it is a factor only if, for every object d, the projection after it is
+ * the leg: π_d ∘ ⟨legs⟩ = leg_d (Munson, Volić, Prop. 7.4.3). The certificate
+ * is those triangles, and the squares of the cone checked arrow by arrow; a
+ * composite in a square is a coherence, and it passes the condition of
+ * Finster and Mimram. A colimit is the dual: the legs go d -> X, the square
+ * of f : d -> d' goes from leg_d' ∘ f to leg_d.
  *
- * We represent this constructively:
- *   - universal_limit_cell builds a TmCoh marked as universal at the
- *     limit of a diagram (the diagram given as ps_ctx).
- *   - factor_through(univ, cone) produces the unique TmCoh witnessing
- *     the factorization, or None if the cone doesn't commute with the
- *     universal structure. *)
+ * The diagram is the pasting context of the universal cell: an object is a
+ * name of sort *, an arrow a name of sort d -> d'. *)
 
-(* A universal cell is a tagged TmCoh. We add the tag inline by using
- * a distinguished name in the ps_ctx (prefixed with "__UNIV_"). *)
+type cone = {
+  apex : term;
+  legs : (string * term * cell) list;           (* object, leg, the cell it was checked at *)
+  squares : (string * term * cell) list;        (* arrow, witness, the cell it was checked at *)
+}
 
 let mark_universal (ps : ps_ctx) : ps_ctx =
   ("__UNIV_marker", CellStar) :: ps
@@ -769,75 +864,144 @@ let is_universal_cell (t : term) : bool =
       List.exists (fun (name, _) -> name = "__UNIV_marker") ps
   | _ -> false
 
-(* Build the universal cell for a limit over a diagram given by a
- * pasting context (the shape of J). The limit L has projections to
- * each apex of the diagram; the universal cell is the projection
- * cone, witnessed as a TmCoh with the universal marker. *)
-let universal_limit_cell (diagram_ps : ps_ctx) (apex : term) : term =
-  let marked_ps = mark_universal diagram_ps in
-  (* The result cell: a "projection cone" from the limit to the apex.
-   * For simplicity we represent it as a 1-cell from L to apex. *)
-  let result_cell = CellArr (TmVar "L_limit", apex, CellStar) in
-  let sub = List.map (fun (n, _) -> (n, TmVar n)) marked_ps in
-  TmCoh (marked_ps, result_cell, sub)
+let diagram_of (t : term) : ps_ctx =
+  match t with
+  | TmCoh (ps, _, _) -> List.filter (fun (n, _) -> n <> "__UNIV_marker") ps
+  | _ -> []
 
-(* Build the universal cell for a colimit (dual): the inclusion cone
- * from apex into the colimit. *)
-let universal_colimit_cell (diagram_ps : ps_ctx) (apex : term) : term =
-  let marked_ps = mark_universal diagram_ps in
-  let result_cell = CellArr (apex, TmVar "L_colimit", CellStar) in
-  let sub = List.map (fun (n, _) -> (n, TmVar n)) marked_ps in
-  TmCoh (marked_ps, result_cell, sub)
+let diagram_objects (d : ps_ctx) : string list =
+  List.filter_map (fun (n, c) -> if c = CellStar then Some n else None) d
 
-(* Factor a cone through a universal cell. Given:
- *   - univ : the universal cell (TmCoh marked universal)
- *   - cone_apex : the apex of the cone being factored
- *   - cone_term : the cone morphism we want to factor
- * produce the unique mediating morphism cone_apex -> L. *)
-let factor_through (univ : term) (cone_apex : term) (cone_term : term)
-    : term option =
-  if not (is_universal_cell univ) then None
-  else
-    match univ with
-    | TmCoh (ps, _, _) ->
-        (* The factorization is itself a TmCoh in the same context,
-         * with substitution carrying the cone data. *)
-        let factored_cell =
-          CellArr (cone_apex, TmVar "L_limit", CellStar) in
-        Some (TmCoh (ps, factored_cell,
-                     [("__cone_apex", cone_apex);
-                      ("__cone_morphism", cone_term)]))
-    | _ -> None
+let diagram_arrows (d : ps_ctx) : (string * string * string) list =
+  List.filter_map (fun (n, c) -> match c with
+      | CellArr (TmVar s, TmVar t, CellStar) -> Some (n, s, t)
+      | _ -> None) d
+
+(* The universal cell of the limit L of a diagram: its projections, the
+   cell L -> d for each object d. *)
+let universal_limit_cell (diagram_ps : ps_ctx) (lim : term) : term =
+  let marked_ps = mark_universal diagram_ps in
+  let sub = List.map (fun (n, _) -> (n, TmVar n)) marked_ps in
+  TmCoh (marked_ps, CellArr (lim, lim, CellStar), sub)
+
+let universal_colimit_cell (diagram_ps : ps_ctx) (colim : term) : term =
+  universal_limit_cell diagram_ps colim
+
+let universal_apex (t : term) : term option =
+  match t with TmCoh (_, CellArr (l, _, _), _) -> Some l | _ -> None
+
+let same_term a b = alpha_equiv_term a b []
+let same_cell a b = alpha_equiv_cell a b []
+
+(* The factor of a cone through a universal cell, and its certificate: the
+   factor, when every object has one leg X -> d (a colimit: d -> X), every
+   arrow its square from the composite to the leg it must equal, every
+   composite a valid coherence, and every triangle π_d ∘ factor = leg_d. *)
+let factor_with (dual : bool) (univ : term) (cone : cone) : term option =
+  match universal_apex univ with
+  | None -> None
+  | Some lim when is_universal_cell univ ->
+      let d = diagram_of univ in
+      let obj = diagram_objects d and arr = diagram_arrows d in
+      let leg o = List.filter (fun (o', _, _) -> o' = o) cone.legs in
+      let leg_ok o = match leg o with
+        | [(_, _, CellArr (s, t, CellStar))] ->
+            if dual then same_term s (TmVar o) && same_term t cone.apex
+            else same_term s cone.apex && same_term t (TmVar o)
+        | _ -> false in
+      let leg_term o = match leg o with [(_, l, _)] -> l | _ -> TmVar "" in
+      let square_ok (f, s, t) =
+        (* limit: f ∘ leg_s -> leg_t; colimit: leg_t ∘ f -> leg_s *)
+        let composite =
+          if dual then compose (TmVar s) (TmVar t) cone.apex (TmVar f) (leg_term t)
+          else compose cone.apex (TmVar s) (TmVar t) (leg_term s) (TmVar f) in
+        let other = leg_term (if dual then s else t) in
+        let base = if dual then CellArr (TmVar s, cone.apex, CellStar)
+                   else CellArr (cone.apex, TmVar t, CellStar) in
+        fm_valid comp_ps comp_cell
+        && (match List.filter (fun (f', _, _) -> f' = f) cone.squares with
+            | [(_, _, c)] -> same_cell c (CellArr (composite, other, base))
+            | _ -> false) in
+      let no_stray =
+        List.for_all (fun (o, _, _) -> List.mem o obj) cone.legs
+        && List.for_all (fun (f, _, _) -> List.exists (fun (f', _, _) -> f' = f) arr) cone.squares in
+      if not (no_stray && List.for_all leg_ok obj && List.for_all square_ok arr) then None
+      else
+        let factor = TmCoh (mark_universal d,
+                            (if dual then CellArr (lim, cone.apex, CellStar)
+                             else CellArr (cone.apex, lim, CellStar)),
+                            List.map (fun (o, l, _) -> (o, l)) cone.legs
+                            @ List.map (fun (f, w, _) -> (f, w)) cone.squares) in
+        (* the triangles: the projection of the factor at d is its leg *)
+        let project o = match factor with
+          | TmCoh (_, _, sub) -> List.assoc_opt o sub
+          | _ -> None in
+        if List.for_all (fun o -> match project o with
+            | Some l -> same_term l (leg_term o) | None -> false) obj
+        then Some factor else None
+  | Some _ -> None
+
+let factor_through (univ : term) (cone : cone) : term option = factor_with false univ cone
+let factor_from (univ : term) (cocone : cone) : term option = factor_with true univ cocone
+
+(* The diagram a -> b and its limit. *)
+let arrow_diagram : ps_ctx =
+  [ ("a", CellStar); ("b", CellStar); ("f", CellArr (TmVar "a", TmVar "b", CellStar)) ]
 
 let test_universal_limit () =
-  let small_diagram : ps_ctx = [
-    ("a", CellStar);
-    ("b", CellStar);
-    ("f", CellArr (TmVar "a", TmVar "b", CellStar));
-  ] in
-  let univ = universal_limit_cell small_diagram (TmVar "a") in
-  is_universal_cell univ
+  is_universal_cell (universal_limit_cell arrow_diagram (TmVar "L"))
+
+(* A cone (X, k_a, k_b) over a -> b whose square says f ∘ k_a = k_b factors;
+   the factor projects to its legs. *)
+let commuting_cone : cone =
+  let x = TmVar "X" in
+  { apex = x;
+    legs = [ ("a", TmVar "k_a", CellArr (x, TmVar "a", CellStar));
+             ("b", TmVar "k_b", CellArr (x, TmVar "b", CellStar)) ];
+    squares = [ ("f", TmVar "s_f",
+                 CellArr (compose x (TmVar "a") (TmVar "b") (TmVar "k_a") (TmVar "f"),
+                          TmVar "k_b", CellArr (x, TmVar "b", CellStar))) ] }
 
 let test_factorization () =
-  let small_diagram : ps_ctx = [
-    ("a", CellStar);
-    ("b", CellStar);
-    ("f", CellArr (TmVar "a", TmVar "b", CellStar));
-  ] in
-  let univ = universal_limit_cell small_diagram (TmVar "a") in
-  let cone_apex = TmVar "X" in
-  let cone_morph = TmVar "k" in
-  match factor_through univ cone_apex cone_morph with
-  | Some _ -> true
-  | None -> false
+  let univ = universal_limit_cell arrow_diagram (TmVar "L") in
+  match factor_through univ commuting_cone with
+  | Some (TmCoh (_, CellArr (TmVar "X", TmVar "L", CellStar), sub)) ->
+      List.assoc_opt "a" sub = Some (TmVar "k_a") && List.assoc_opt "b" sub = Some (TmVar "k_b")
+  | _ -> false
+
+(* The same legs with a square from f ∘ k_a to another arrow, not k_b: the
+   cone does not commute and does not factor; nor does a cone with a leg
+   missing, nor a leg that leaves another apex. *)
+let test_non_commuting_cone_does_not_factor () =
+  let univ = universal_limit_cell arrow_diagram (TmVar "L") in
+  let x = TmVar "X" in
+  let wrong_square = { commuting_cone with squares = [ ("f", TmVar "s_f",
+      CellArr (compose x (TmVar "a") (TmVar "b") (TmVar "k_a") (TmVar "f"),
+               TmVar "m", CellArr (x, TmVar "b", CellStar))) ] } in
+  let no_square = { commuting_cone with squares = [] } in
+  let leg_missing = { commuting_cone with legs = List.tl commuting_cone.legs } in
+  let other_apex = { commuting_cone with legs =
+      ("a", TmVar "k_a", CellArr (TmVar "Y", TmVar "a", CellStar)) :: List.tl commuting_cone.legs } in
+  List.for_all (fun c -> factor_through univ c = None)
+    [wrong_square; no_square; leg_missing; other_apex]
 
 let test_non_universal_no_factor () =
   (* A plain (non-marked) TmCoh should not factor. *)
   let plain = TmCoh ([("a", CellStar)],
                      CellArr (TmVar "a", TmVar "a", CellStar),
                      [("a", TmVar "a")]) in
-  factor_through plain (TmVar "X") (TmVar "k") = None
+  factor_through plain commuting_cone = None
 
+(* The condition of Finster and Mimram: the composite of x -> y -> z is a
+   coherence; x -> y over the same scheme is not (its source and target do
+   not use the target z of the scheme); a list that is no pasting scheme
+   (two objects with no arrow) is none. *)
+let test_finster_mimram () =
+  fm_valid comp_ps comp_cell
+  && not (fm_valid comp_ps (CellArr (TmVar "x", TmVar "y", CellStar)))
+  && not (is_pasting_scheme [("a", CellStar); ("b", CellStar)])
+  && is_pasting_scheme [("a", CellStar)]
+  && fm_valid [("a", CellStar)] (CellArr (TmVar "a", TmVar "a", CellStar))
 
 (* ─── Reduction equivalence by beta-η of handlers ───────────── *)
 
@@ -1036,7 +1200,7 @@ let decidable_equal
  * Termination: each step is either a substitution (beta) or a
  * structural reduction (eta) — both strictly decreasing under a
  * well-founded measure (term size + ps_ctx depth). Iterations are
- * capped at 1000; on overrun the last term is returned. *)
+ * bounded at 1000 steps; past the bound, a refusal (E2022). *)
 
 let rec normalize_coherence_step (t : term) : term =
   match t with
@@ -1055,11 +1219,17 @@ let rec normalize_coherence_step (t : term) : term =
           (fun (k, v) -> (k, normalize_coherence_step v)) sub in
         TmCoh (ps, ty, sub_normalized)
 
-(* Iterate to a fixpoint, at most 1000 steps; on overrun the
- * last term is returned as is. *)
+(* Iterate to a fixpoint, at most 1000 steps. A term that still changes after
+ * the last step has no normal form the compiler knows: the equality of two
+ * cells is then not decided, and that is a refusal (E2022, Bound.Unfinished),
+ * never the last term taken for a normal one. *)
 let normalize_coherence (t : term) : term =
   let rec loop fuel cur =
-    if fuel = 0 then cur
+    if fuel = 0 then begin
+      let next = normalize_coherence_step cur in
+      if alpha_equiv_term next cur [] then cur
+      else raise (Bound.Unfinished (serialize_term cur))
+    end
     else
       let next = normalize_coherence_step cur in
       if alpha_equiv_term next cur [] then cur

@@ -2,7 +2,8 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* cubical.ml — Cubical Type Theory fragment for Yon.
  *
- * The (∞,1)-decidable layer of the federation, modelled on
+ * The invertible core of the kernel, (∞,0): the paths in every dimension,
+ * where every box fills (the Kan condition); modelled on
  * Cohen-Coquand-Huber-Mörtberg 2016 "Cubical Type Theory: a
  * constructive interpretation of the univalence axiom." The
  * composition/transport/glue rules below handle the basic

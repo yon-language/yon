@@ -1,4 +1,4 @@
 status: reject_clean
 exit: 1
-code: E1002
-match: a name of the program does not begin with `__`
+code: E2025
+match: the name `__band` is reserved: it begins with `__`, as the names the compiler makes

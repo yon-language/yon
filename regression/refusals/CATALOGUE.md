@@ -2231,7 +2231,6 @@ error[E4002]: ENTRYPOINT ERROR
 
 - book: book 06-worlds-and-places, «A place is its structure»; PROPOSAL: no page of the book says it (strict positivity)
 - draft: `regression/refusals/drafts/place/dev_not_positive`
-- state: the code is registered and no step produces it yet
 
 ```
 error[E2020]: Bad appears left of an arrow in its own field
@@ -2247,7 +2246,6 @@ error[E2020]: Bad appears left of an arrow in its own field
 
 - book: book 14-values-cells-lifetime, «Lifetime»; PROPOSAL: no page of the book says it (the purity of an index)
 - draft: `regression/refusals/drafts/hott/dev_cell_in_index`
-- state: the code is registered and no step produces it yet
 
 ```
 error[E2021]: the index of a type reads the variable `c`
@@ -2271,18 +2269,18 @@ error[E2022]: the computation does not finish in 1000 steps
    = write: (unfold only funs proven to terminate)
 ```
 
-### NO-126 `reserved-prefix` · E1002 · grammar
+### NO-126 `reserved-prefix` · E2025 · checker
 
 - book: PROPOSAL: no page of the book says it (the reserved prefix)
 - draft: `regression/refusals/drafts/function/dev_reserved_prefix`
 
 ```
-error[E1002]: a name of the program does not begin with `__`
+error[E2025]: the name `__band` is reserved: it begins with `__`, as the names the compiler makes
   --> Entry.yon:2:7
    |
  2 |   fun __band(a: Number, b: Number): Number { return a }
    |       ^^^^^^
-   = why: `__` begins the names the compiler makes
+   = why: `__` begins the names the compiler makes, `yon_rt_` those of the runtime, `House__f` the funs of a house
    = write: fun band_two(a: Number, b: Number): Number
 ```
 
@@ -2886,7 +2884,7 @@ Read from `frontend/error_codes.ml`.
 | code | variant | title | entries |
 |---|---|---|---|
 | E1001 | `Parse_syntax` | syntax error | 3 |
-| E1002 | `Lex_bad_token` | lexical error | 3 |
+| E1002 | `Lex_bad_token` | lexical error | 2 |
 | E1003 | `Form_gone` | a form of the language that is gone: the message writes the new one | 85 |
 | E1004 | `Head_refused` | a modifier or a clause that the declaration does not take (`is given` on a proof fun, a constraint fun, a law, a carrier; `internal constraint`; `proof constraint`) | 7 |
 | E2001 | `Type_check` | type error | 27 |
@@ -2905,6 +2903,7 @@ Read from `frontend/error_codes.ml`.
 | E2022 | `Reduction_unfinished` | a reduction of the kernel does not reach its normal form within the bound | 1 |
 | E2023 | `Value_discarded` | a value computed or indicated and thrown away | 2 |
 | E2024 | `Abstract_holds_state` | an abstract Space holds state (a wire end, an initialization that outlives a call): the state belongs to the concrete Space that imports it | 1 |
+| E2025 | `Name_reserved` | a name of the program is one the compiler or the runtime makes: it begins with __ or yon_rt_, or it is the qualified name of a fun of a house | 1 |
 | E4001 | `Topos_layout` | topos layout violation | 3 |
 | E4002 | `Entrypoint` | entrypoint violation | 2 |
 | E4003 | `File_layout` | file layout violation | 1 |

@@ -1,0 +1,4 @@
+place Entry {
+  fun j: 4 = 4 { return concat(refl(4), back refl(4)) }
+  fun main: Number { q := j  return (q @ I0) * 10 + (q @ I1) }
+}

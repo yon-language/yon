@@ -298,7 +298,8 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Vec__set",   (["f64"; "f64"; "f64"], "f64");
   "Vec__size",  (["f64"], "f64");
 
-  (* Space: a mutable cell kept in a static BSS registry, its id passed as f64. *)
+  (* A variable: a slot of the frame of its fun, its address passed as an f64
+     (emit_term lowers __cell_make, __cell_get, __cell_set in place). *)
   "__cell_make", (["f64"], "f64");
   "__cell_set",  (["f64"; "f64"], "f64");
   "__cell_get",  (["f64"], "f64");
@@ -1925,10 +1926,60 @@ let emit_zero_arg_call (e : emitter) (f : string) (ret : string) : string * stri
   emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s" v f ret);
   if is_ind_section ret then (coerce_to_param e v ret "f64", "f64") else (v, ret)
 
-(* A block makes a cell when its body names the cell constructor. *)
-let block_makes_cell (body : C.term) : bool =
-  let fv = term_free_vars body in
-  SS.mem "__cell_make" fv || SS.mem "__cell_make" fv
+(* A variable lives in the frame of the fun that declares it: one slot of the
+   activation for each `mut` the body makes, allocated at the entry of the fun
+   (so a variable made in a loop takes its one slot again at each turn, and the
+   stack does not grow with the turns), and gone with the activation, which no
+   variable outlives (a closure over one stays in its block: the mobility
+   judgment). The handle a closure carries is the address of the slot. The slots
+   are inserted at the entry once the body is emitted: [cell_frame] holds the
+   position of the entry in the buffer, the slots made, and the indentation. *)
+let cell_frame : (int * string list ref * int) option ref = ref None
+
+(* A frame begins at the entry of a fun, and of a region isolated from above
+   (a scope), which sees no slot of the fun around it: frames nest. *)
+let begin_cell_frame (e : emitter) =
+  let outer = !cell_frame in
+  cell_frame := Some (Buffer.length e.buf, ref [], e.indent);
+  outer
+
+let end_cell_frame (e : emitter) outer =
+  (match !cell_frame with
+   | Some (pos, slots, ind) when !slots <> [] ->
+       let pad = String.make (ind * 2) ' ' in
+       let one = Printf.sprintf "%%cell_one_%d" pos in
+       let lines =
+         pad ^ one ^ " = llvm.mlir.constant(1 : i64) : i64\n"
+         ^ String.concat "" (List.rev_map (fun sl ->
+               Printf.sprintf "%s%s = llvm.alloca %s x f64 : (i64) -> !llvm.ptr\n" pad sl one) !slots) in
+       let all = Buffer.contents e.buf in
+       Buffer.clear e.buf;
+       Buffer.add_string e.buf (String.sub all 0 pos);
+       Buffer.add_string e.buf lines;
+       Buffer.add_string e.buf (String.sub all pos (String.length all - pos))
+   | _ -> ());
+  cell_frame := outer
+
+(* The slot of a new variable in the frame, and its handle as the f64 a value is. *)
+let cell_slot (e : emitter) : string =
+  match !cell_frame with
+  | Some (_, slots, _) ->
+      let sl = Printf.sprintf "%%cell_slot_%d" e.ssa_counter in
+      e.ssa_counter <- e.ssa_counter + 1;
+      slots := sl :: !slots; sl
+  | None -> failwith "a variable outside the frame of a fun"
+
+let cell_handle (e : emitter) (slot : string) : string =
+  let i = fresh_ssa e and h = fresh_ssa e in
+  emit_line e (Printf.sprintf "%s = llvm.ptrtoint %s : !llvm.ptr to i64" i slot);
+  emit_line e (Printf.sprintf "%s = arith.bitcast %s : i64 to f64" h i);
+  h
+
+let cell_address (e : emitter) (h : string) : string =
+  let i = fresh_ssa e and p = fresh_ssa e in
+  emit_line e (Printf.sprintf "%s = arith.bitcast %s : f64 to i64" i h);
+  emit_line e (Printf.sprintf "%s = llvm.inttoptr %s : i64 to !llvm.ptr" p i);
+  p
 
 (* An integer quotient or remainder, on i64 operands, with no undefined
    case: a divisor of zero is the refusal DivisionByZero; the one quotient
@@ -2036,6 +2087,53 @@ let rec emit_term (e : emitter)
            (b, "i1"))
   | C.App (C.Var ("FnvHeap__value_of" | "LeechHeap__value_of"), a) ->
       (emit_i64 e env funcs a, "i64")
+  | t when (match wired_call t with
+             | Some ((_, ("yon_rt_region_read" | "yon_rt_region_write" | "yon_rt_region_cas"), _, _), _) -> true
+             | _ -> false) ->
+      (* A word of a region, read, written or swapped in place: the region is the
+         address of its header, whose word 0 is the number of its words; the
+         index is checked (WordOutsideRegion, the one call, on the bad branch
+         only), then the word is an atomic of the LLVM dialect, with the orders
+         of the runtime it replaces: a read acquires, a write releases, a
+         compare-and-swap is sequentially consistent. *)
+      let ((_, sym, _, _), args) = Option.get (wired_call t) in
+      let vs = List.map (emit_i64 e env funcs) args in
+      let r, at, rest = match vs with r :: at :: rest -> r, at, rest | _ -> assert false in
+      let hdr = fresh_ssa e and n = fresh_ssa e and z = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = llvm.inttoptr %s : i64 to !llvm.ptr" hdr r);
+      emit_line e (Printf.sprintf "%s = llvm.load %s : !llvm.ptr -> i64" n hdr);
+      emit_line e (Printf.sprintf "%s = arith.constant 0 : i64" z);
+      let neg = fresh_ssa e and past = fresh_ssa e and bad = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.cmpi slt, %s, %s : i64" neg at z);
+      emit_line e (Printf.sprintf "%s = arith.cmpi sge, %s, %s : i64" past at n);
+      emit_line e (Printf.sprintf "%s = arith.ori %s, %s : i1" bad neg past);
+      refer_symbol e "yon_rt_region_word_outside"
+        "func.func private @yon_rt_region_word_outside(i64, i64) -> ()";
+      emit_line e (Printf.sprintf "scf.if %s {" bad);
+      push_indent e;
+      emit_line e (Printf.sprintf "func.call @yon_rt_region_word_outside(%s, %s) : (i64, i64) -> ()" at n);
+      pop_indent e;
+      emit_line e "}";
+      let one = fresh_ssa e and idx = fresh_ssa e and w = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant 1 : i64" one);
+      emit_line e (Printf.sprintf "%s = arith.addi %s, %s : i64" idx at one);
+      emit_line e (Printf.sprintf "%s = llvm.getelementptr %s[%s] : (!llvm.ptr, i64) -> !llvm.ptr, i64" w hdr idx);
+      (match sym, rest with
+       | "yon_rt_region_read", [] ->
+           let v = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = llvm.load %s atomic acquire {alignment = 8 : i64} : !llvm.ptr -> i64" v w);
+           (v, "i64")
+       | "yon_rt_region_write", [x] ->
+           emit_line e (Printf.sprintf "llvm.store %s, %s atomic release {alignment = 8 : i64} : i64, !llvm.ptr" x w);
+           let v = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v);
+           (v, "f64")
+       | "yon_rt_region_cas", [ex; de] ->
+           let pair = fresh_ssa e and v = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = llvm.cmpxchg %s, %s, %s seq_cst seq_cst : !llvm.ptr, i64" pair w ex de);
+           emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[0] : !llvm.struct<(i64, i1)>" v pair);
+           (v, "i64")
+       | _ -> assert false)
   | t when wired_call t <> None ->
       let ((_, sym, ps, ret), args) = Option.get (wired_call t) in
       let vs = List.map2 (fun p a ->
@@ -2856,9 +2954,28 @@ let rec emit_term (e : emitter)
       let sec_ty = Hashtbl.find g_cell_elem p in
       let (v_cell, _) = emit_term e env funcs cellvar in
       let vf = fresh_ssa e in
-      emit_line e (Printf.sprintf
-                     "%s = func.call @yon_rt_space_get(%s) : (f64) -> f64" vf v_cell);
+      emit_line e (Printf.sprintf "%s = llvm.load %s : !llvm.ptr -> f64" vf (cell_address e v_cell));
       (coerce_to_param e vf "f64" sec_ty, sec_ty)
+  | C.App (C.Var "__cell_make", e0) ->
+      (* a new variable: its slot in the frame, its first value stored *)
+      let (v0, t0) = emit_term e env funcs e0 in
+      let vf = coerce_to_param e v0 t0 "f64" in
+      let slot = cell_slot e in
+      emit_line e (Printf.sprintf "llvm.store %s, %s : f64, !llvm.ptr" vf slot);
+      (cell_handle e slot, "f64")
+  | C.App (C.Var "__cell_get", cellvar) ->
+      let (v_cell, t_cell) = emit_term e env funcs cellvar in
+      let addr = cell_address e (coerce_to_param e v_cell t_cell "f64") in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = llvm.load %s : !llvm.ptr -> f64" v addr);
+      (v, "f64")
+  | C.App (C.App (C.Var "__cell_set", cellvar), value) ->
+      let (v_cell, t_cell) = emit_term e env funcs cellvar in
+      let hc = coerce_to_param e v_cell t_cell "f64" in
+      let (vv, tv) = emit_term e env funcs value in
+      let vf = coerce_to_param e vv tv "f64" in
+      emit_line e (Printf.sprintf "llvm.store %s, %s : f64, !llvm.ptr" vf (cell_address e hc));
+      (hc, "f64")
   | C.App (C.Var fvar, obj) when extract_field_name fvar <> None ->
       let fname = (match extract_field_name fvar with
                    | Some s -> s | None -> assert false) in
@@ -4284,7 +4401,10 @@ let rec emit_term (e : emitter)
         List.fold_left2
           (fun acc a (x, _, ty) -> Env.add x (a, ty) acc)
           env arg_names caps in
+      (* the region is isolated from above: its variables are slots of its own frame *)
+      let outer_frame = begin_cell_frame e in
       let (bv, bty) = emit_term e inner_env funcs body in
+      end_cell_frame e outer_frame;
       emit_line e (Printf.sprintf "topos.scope_yield %s : %s" bv bty);
       pop_indent e;
       emit_line e "}";
@@ -5332,22 +5452,11 @@ and emit_i64 (e : emitter) (env : (string * string) Env.t)
   let (v, ty) = emit_term e env funcs t in
   coerce_to_param e v ty "i64"
 
-(* A cell lives as long as the block that declares it: a block that makes a
-   cell takes the mark of the cell table on entry and gives the cells made
-   since back on exit, after its value is computed (a value, never a cell,
-   leaves a block). A block that makes no cell has none to give back. *)
+(* A variable lives as long as the block that declares it, in the frame of its
+   fun: a block gives back nothing at its exit (the slot is the frame's). *)
 and emit_block (e : emitter) (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (body : C.term) : string * string =
-  if not (block_makes_cell body) then emit_term e env funcs body
-  else begin
-    let mark = fresh_ssa e in
-    emit_line e (Printf.sprintf "%s = func.call @yon_rt_space_mark() : () -> f64" mark);
-    let r = emit_term e env funcs body in
-    let back = fresh_ssa e in
-    emit_line e (Printf.sprintf
-      "%s = func.call @yon_rt_space_reset(%s) : (f64) -> f64" back mark);
-    r
-  end
+  emit_term e env funcs body
 
 let emit_place (e : emitter) (world : string) (pd : C.place_decl) : unit =
   emit_indent e;
@@ -5621,9 +5730,12 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
   ) fs.fn_params in
   let ret_ty = fs.fn_ret_mlir in
   emit_indent e;
-  emit_str e (Printf.sprintf "func.func @%s(%s) -> %s {\n"
+  (* a fun of the program is no symbol of the executable: internal linkage, so
+     a name like strlen or malloc takes nothing from the system or the runtime *)
+  emit_str e (Printf.sprintf "func.func @%s(%s) -> %s attributes {llvm.linkage = #llvm.linkage<internal>} {\n"
                 fs.fn_name (String.concat ", " param_strs) ret_ty);
   push_indent e;
+  let outer_frame = begin_cell_frame e in
   (* A named inductive param arrives as its section handle `!topos.section<ind_...>`
      (its visible content-addressed identity), but the body works on the MerkleTree
      f64 handle. Unpack it to f64 at entry, so the section lives ONLY at the
@@ -5645,23 +5757,10 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
      fires automatically when a relevant morphism is declared. *)
   (match extract_morph_in_space fs.fn_name with
    | None ->
-       (* Reclaim this call's mutable-local cells on return. The high-water mark
-          is captured before the body allocates any cell; once the return value is
-          materialized (an f64, read out of any cell), resetting to the mark frees
-          every cell this activation made, so the slots recycle. A `return` reads
-          a value, never a cell handle — but a lambda that mentions a cell DOES
-          capture its handle, so the LIFO discipline is sound only because
-          tycheck stops every closure over a cell at the activation boundary
-          (the mobility judgment: ty_mobile / mob_carrying). It also stops
-          a reassigning helper called many times from exhausting the registry. *)
-       let mark = fresh_ssa e in
-       emit_line e (Printf.sprintf
-         "%s = func.call @yon_rt_space_mark() : () -> f64" mark);
+       (* The variables of this activation are slots of its frame: they go with
+          it, and nothing is given back on return. *)
        let (v, v_ty) = emit_term e env funcs fs.fn_body in
        let v = coerce_return e v v_ty ret_ty in
-       let rreset = fresh_ssa e in
-       emit_line e (Printf.sprintf
-         "%s = func.call @yon_rt_space_reset(%s) : (f64) -> f64" rreset mark);
        emit_line e (Printf.sprintf "return %s : %s" v ret_ty)
    | Some (space_name_raw, morph_name) ->
        (* space_name_raw may be:
@@ -5772,6 +5871,7 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
                       "func.call @yon_rt_end_cross_space_op(%s) : (i32) -> ()" v_tok);
        let v = coerce_return e v v_ty ret_ty in
        emit_line e (Printf.sprintf "return %s : %s" v ret_ty));
+  end_cell_frame e outer_frame;
   pop_indent e;
   emit_line e "}"
 
@@ -5997,6 +6097,50 @@ let collect_target_spaces (t : C.term) : string list =
   walk t;
   !acc
 
+(* The bare name of an operation on the wire: a house (Home__f) is local to its
+   Space, and the other side awaits the bare name. *)
+let wire_bare_name (e : emitter) (name : string) : string =
+  match String.index_opt name '_' with
+  | Some i when i + 1 < String.length name && name.[i+1] = '_' ->
+      let pfx = String.sub name 0 i in
+      let known_place =
+        List.exists (fun (n, _) -> n = pfx) e.places_table
+        || List.exists (fun (pd : C.place_decl) -> pd.p_name = pfx)
+             e.places_decls in
+      if known_place then
+        String.sub name (i + 2) (String.length name - i - 2)
+      else name
+  | _ -> name
+
+(* A text as a module global of bytes, ending with a zero. *)
+let emit_text_global (e : emitter) (sym : string) (text : string) : unit =
+  let n = String.length text in
+  let chars = String.concat ", " (
+    List.init n (fun i -> Printf.sprintf "%d" (Char.code text.[i])) @ ["0"]) in
+  emit_line e (Printf.sprintf
+                 "llvm.mlir.global internal constant @%s(dense<[%s]> : tensor<%d x i8>) : !llvm.array<%d x i8>"
+                 sym chars (n + 1) (n + 1))
+
+(* The operations of this program a call from another process can reach, in
+   the order main registers them, and the bare name of each: with its
+   signature, the description a session compares byte for byte. *)
+let served_ops () : (string * int64 list) list =
+  List.sort compare (Hashtbl.fold (fun k v acc -> (k, v) :: acc) Surface_ast.op_sigs [])
+
+(* A text as exact numbers, six bytes each (a double holds 2^53 exactly), the
+   last one with the zero that ends it: the registrations of main pass numbers
+   only. *)
+let text_parts (text : string) : float list =
+  let b = text ^ "\000" in
+  let n = (String.length b + 5) / 6 in
+  List.init n (fun k ->
+    let v = ref 0. in
+    for j = 5 downto 0 do
+      let i = 6 * k + j in
+      v := !v *. 256. +. (if i < String.length b then float_of_int (Char.code b.[i]) else 0.)
+    done;
+    !v)
+
 (* Globals for the conventional server-binary paths of imported Spaces:
  * `import f from Measures` -> "./Measures_srv". Registered in main so the
  * runtime can fork/exec the server on first cross-Space call (step 3). *)
@@ -6029,8 +6173,15 @@ let emit_srv_path_globals (e : emitter) (space_imports : string list) : unit =
     emit_line e (Printf.sprintf
                    "llvm.mlir.global internal constant @yon_rpc_sig_%s_%d(dense<[%s]> : tensor<%d x i64>) : !llvm.array<%d x i64>"
                    sp sel (String.concat ", " (List.map Int64.to_string words)) n n)) sigs;
-  if sigs <> [] then
-    emit_line e "func.func private @yon_rt_rpc2_invoke_typed(!llvm.ptr, f64, !llvm.ptr, f64, f64, f64, f64) -> f64"
+  (* and the name of each, the rest of its description *)
+  List.iter (fun ((sp, sel), _) ->
+    match Hashtbl.find_opt Surface_ast.rpc_names (sp, sel) with
+    | Some name -> emit_text_global e (Printf.sprintf "yon_rpc_name_%s_%d" sp sel) name
+    | None -> ()) sigs;
+  if sigs <> [] then begin
+    emit_line e "func.func private @yon_rt_rpc2_invoke_typed(!llvm.ptr, f64, !llvm.ptr, f64, f64, f64, f64) -> f64";
+    emit_line e "func.func private @yon_rt_register_import(!llvm.ptr, f64, !llvm.ptr, !llvm.ptr) -> ()"
+  end
 
 let emit_main (e : emitter) (funcs : (string * func_sig) list)
     (spaces : Surface_ast.space_decl list)
@@ -6045,6 +6196,7 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     emit_line e "func.func private @yon_rt_rpc2_register_space_binary(!llvm.ptr, !llvm.ptr) -> ()";
   emit_line e "func.func @main() -> i32 {";
   push_indent e;
+  let outer_frame = begin_cell_frame e in
   (* Register the conventional server-binary path of each imported Space
    * (./<Space>_srv, dir overridable via YON_SRV_DIR) so the runtime can
    * fork/exec it on first call (step 3). This MUST precede maybe_serve: a
@@ -6072,18 +6224,7 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
      the bare name. Strip a KNOWN-PLACE prefix before hashing; two homes
      exporting the same bare in one space collide loudly below (the wire
      namespace is the space). *)
-  let wire_bare (name : string) : string =
-    match String.index_opt name '_' with
-    | Some i when i + 1 < String.length name && name.[i+1] = '_' ->
-        let pfx = String.sub name 0 i in
-        let known_place =
-          List.exists (fun (n, _) -> n = pfx) e.places_table
-          || List.exists (fun (pd : C.place_decl) -> pd.p_name = pfx)
-               e.places_decls in
-        if known_place then
-          String.sub name (i + 2) (String.length name - i - 2)
-        else name
-    | _ -> name in
+  let wire_bare = wire_bare_name e in
   let op_sel name = (fnv1a (wire_bare name)) land 0x7fffff in
   emit_space_bootstrap e spaces reductions;
   (* The producers: each one's selector and the type root of its element, so
@@ -6129,11 +6270,31 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     (wire_types_sorted ());
   List.iter (fun (sup, sb) -> call "yon_rt_wire_sub" (halves sup @ halves sb))
     (List.sort compare (Hashtbl.fold (fun k () acc -> k :: acc) Surface_ast.wire_subs []));
+  let addr sym =
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @%s : !llvm.ptr" v sym);
+    v in
   List.iter (fun (name, words) ->
     List.iteri (fun i w ->
       call "yon_rt_register_op_word" ([float_of_int (op_sel name); float_of_int i] @ halves w))
-      words)
-    (List.sort compare (Hashtbl.fold (fun k v acc -> (k, v) :: acc) Surface_ast.op_sigs []));
+      words;
+    List.iteri (fun i part ->
+      call "yon_rt_register_op_name" [float_of_int (op_sel name); float_of_int i; part])
+      (text_parts (wire_bare name)))
+    (served_ops ());
+  (* the operations this program calls in another Space, each with its
+     description, which the session sends once when it opens *)
+  List.iter (fun ((sp, sel), _) ->
+    if Hashtbl.mem Surface_ast.rpc_names (sp, sel) then begin
+      let v_sp = addr ("yon_space_name_" ^ sp) in
+      let s = num (float_of_int sel) in
+      let v_n = addr (Printf.sprintf "yon_rpc_name_%s_%d" sp sel) in
+      let v_g = addr (Printf.sprintf "yon_rpc_sig_%s_%d" sp sel) in
+      emit_line e (Printf.sprintf
+        "func.call @yon_rt_register_import(%s, %s, %s, %s) : (!llvm.ptr, f64, !llvm.ptr, !llvm.ptr) -> ()"
+        v_sp s v_n v_g)
+    end)
+    (List.sort compare (Hashtbl.fold (fun k v acc -> (k, v) :: acc) Surface_ast.rpc_sigs []));
   (* Register the declared geometric morphisms so the later
      begin_cross_space_op finds them and uses the categorical derivation. *)
   emit_geom_morphism_bootstrap e geom_morphisms spaces;
@@ -6241,6 +6402,7 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
                   ty)
   in
   emit_line e (Printf.sprintf "return %s : i32" v_i32);
+  end_cell_frame e outer_frame;
   pop_indent e;
   emit_line e "}";
   (* ── __yon_dispatch(selector, arg) -> result ──────────────────────────
@@ -6301,10 +6463,12 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     let s = op_sel name in
     match Hashtbl.find_opt seen s with
     | Some other when other <> name ->
-        Printf.eprintf
-          "error: operation selector collision — '%s' and '%s' hash to the \
-           same cross-Space selector; rename one of them\n" other name;
-        exit 8
+        prerr_endline (Error_codes.to_cli (Error_codes.make Error_codes.Selector_collision
+          (Printf.sprintf
+             "the operations '%s' and '%s' have the same selector on the wire (%d): a call \
+              from another Space could not tell them apart; rename one of them"
+             (wire_bare other) (wire_bare name) s)));
+        exit 3
     | _ -> Hashtbl.replace seen s name) dispatchable;
   emit_line e "func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {";
   push_indent e;
@@ -6642,10 +6806,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
       "to_bool_dec",  `RT ("yon_rt_to_bool_dec",  `PropToBool);
       "text_to_prop", `RT ("yon_rt_text_to_prop", `PtrToProp);
       (* Immutable list over the content-addressed xheap *)
-      (* Mutable space cell (a static BSS registry) *)
-      "__cell_make",  `RT ("yon_rt_space_make",   `F64ToF64);
-      "__cell_set",   `RT ("yon_rt_space_set",    `F64F64ToF64);
-      "__cell_get",   `RT ("yon_rt_space_get",    `F64ToF64);
     ] in
     List.iter (fun name ->
       let (params, ret) = List.assoc name stdlib_registry in
@@ -6786,16 +6946,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
     emit_line e "func.func private @yon_rt_to_prop(i8) -> i8";
     emit_line e "func.func private @yon_rt_to_bool_dec(i8) -> i8";
     emit_line e "func.func private @yon_rt_text_to_prop(f64) -> i8";
-    emit_line e "func.func private @yon_rt_space_make(f64) -> f64";
-    emit_line e "func.func private @yon_rt_space_set(f64, f64) -> f64";
-    emit_line e "func.func private @yon_rt_space_get(f64) -> f64";
     emit_blank e
   end;
-  (* Mutable-cell reclaim (space_mark/reset) is emitted in EVERY function body
-     (emit_function), including pure functions with no cells, so its declarations
-     must NOT depend on used_list. Declared unconditionally here. *)
-  emit_line e "func.func private @yon_rt_space_mark() -> f64";
-  emit_line e "func.func private @yon_rt_space_reset(f64) -> f64";
   (* Declarations always emitted for Map/Set/Dag. They use the
      content-addressed yon_xheap in the runtime. The cost is negligible (a
      handful of private declarations) and the benefit is that any program can
@@ -7021,6 +7173,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_wire_type_part(f64, f64, f64, f64, f64) -> ()";
   emit_line e "func.func private @yon_rt_wire_sub(f64, f64, f64, f64) -> ()";
   emit_line e "func.func private @yon_rt_register_op_word(f64, f64, f64, f64) -> ()";
+  emit_line e "func.func private @yon_rt_register_op_name(f64, f64, f64) -> ()";
   (* Always emitted, regardless of the stdlib, because the __section_X
      constructors and the field_load pre-walk of the lowering need them. *)
   if places <> [] then begin

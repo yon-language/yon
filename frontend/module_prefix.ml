@@ -54,7 +54,6 @@ let rec rw_expr (rename : string -> string) (e : S.expr) : S.expr =
   | S.EFunctorLam (ps, b, w1, w2, laws, l) -> S.EFunctorLam (ps, r b, w1, w2, laws, l)
   | S.EViewLam (ps, b, pl, l) -> S.EViewLam (ps, r b, pl, l)
   | S.EComposeWith (a, b, l) -> S.EComposeWith (r a, r b, l)
-  | S.EPullbackVal (f, g, a, b, l) -> S.EPullbackVal (f, g, r a, r b, l)
   (* Every constructor is rewritten: a call inside any of these (esp. a
    * produce/spawn EXPRESSION block or a categorical-lambda body in an imported
    * module) left un-namespaced would bind the wrong target on collision, or
@@ -74,7 +73,7 @@ let rec rw_expr (rename : string -> string) (e : S.expr) : S.expr =
                 List.map (rw_stmt rename) body, l)
   (* Leaves / names resolved elsewhere: wire handle, pullback/pushout
    * scaffolding. (EAll is handled above.) *)
-  | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> e
+  | S.EWireTo _ -> e
 
 and rw_fas rename fas =
   List.map (fun (fa : S.field_assignment) ->
@@ -144,7 +143,6 @@ let rec refs_in_expr (e : S.expr) : string list =
   | S.EBinop (_, a, b, _) | S.EPair (a, b, _) | S.EComposeWith (a, b, _) -> r a @ r b
   | S.EJ (a, b, c, _) | S.EIfThenElse (a, b, c, _)
   | S.EElMatch (a, b, c, _) -> r a @ r b @ r c
-  | S.EPullbackVal (_, _, a, b, _) -> r a @ r b
   | S.EHITElim (scrut, branches, ret, _) ->
       r scrut @ List.concat_map (fun (_, _, b) -> r b) branches @ r ret
   | S.EHITConstr (_, args, _) -> List.concat_map r args
@@ -154,7 +152,7 @@ let rec refs_in_expr (e : S.expr) : string list =
   | S.ESpawn (count, body, _) ->
       (match count with Some c -> r c | None -> []) @ List.concat_map refs_in_stmt body
   | S.EAll (_, c, _) -> refs_in_cond c
-  | S.ELit _ | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> []
+  | S.ELit _ | S.EWireTo _ -> []
 
 and refs_in_cond (c : S.condition) : string list =
   match c with

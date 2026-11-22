@@ -1,12 +1,13 @@
 // coverage: the `drop X` construct. Space D is declared in the world; d_op is
 // imported from D. `drop D` is legal here because it comes after the last use of
 // D (the d_op call), so no arc toward D is reachable downstream. The unknown-Space
-// and still-live rejections are pinned by regression/test_drop_check.py.
+// and still-live rejections are pinned by regression/test_drop_check.py. main returns the
+// answer of D (6): a call that fails would not pass for a success.
 import svc::d_op from D
 place Entry {
   fun main(): Number {
     r := d_op(5)
     drop D
-    return r - r
+    return r
   }
 }

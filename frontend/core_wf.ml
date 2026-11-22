@@ -129,6 +129,7 @@ let certify_program (dr : Desugar.desugar_result) : (report, string) result =
   let cc = Core_check.cctx_of_deltas (certified_deltas dr) in
   let certn = ref 0 and skipn = ref 0 and errs = ref [] in
   let bchk = ref 0 and bskip = ref 0 and bwarn = ref [] in
+  let pwarn = ref [] and pskip = ref [] in
   let certify g ty =
     match Core_check.certify_ty ~cc g ty with
     | `Ok -> incr certn
@@ -262,8 +263,8 @@ let certify_program (dr : Desugar.desugar_result) : (report, string) result =
        | Some body, Some decl_ty ->
            (match Core_check.certify_term ~cc g0 body decl_ty with
             | `Ok -> incr bchk
-            | `Skipped _ -> incr bskip
-            | `Type_error m -> incr bskip; bwarn := (name, m) :: !bwarn))
+            | `Skipped why -> incr bskip; pskip := (name, why) :: !pskip
+            | `Type_error m -> incr bskip; bwarn := (name, m) :: !bwarn; pwarn := (name, m) :: !pwarn))
     dr.Desugar.proofs;
 
   (* Report the term-checking counts under the same YON_CORE_WF flag the emitter
@@ -283,7 +284,14 @@ let certify_program (dr : Desugar.desugar_result) : (report, string) result =
         (String.concat ", " (List.rev !proofs_ok));
     if !proofs_skip <> [] then
       Printf.eprintf "[core-wf] proof types skipped (out of fragment): %s\n"
-        (String.concat ", " (List.rev_map (fun (n, w) -> n ^ " (" ^ w ^ ")") !proofs_skip))
+        (String.concat ", " (List.rev_map (fun (n, w) -> n ^ " (" ^ w ^ ")") !proofs_skip));
+    let one l = String.map (fun c -> if c = '\n' then ' ' else c) l in
+    if !pwarn <> [] then
+      Printf.eprintf "[core-wf] proof bodies with a type error (advisory): %s\n"
+        (String.concat ", " (List.rev_map fst !pwarn));
+    if !pskip <> [] then
+      Printf.eprintf "[core-wf] proof bodies skipped: %s\n"
+        (String.concat ", " (List.rev_map (fun (n, w) -> n ^ " (" ^ one w ^ ")") !pskip))
   end;
 
   if !errs = [] then

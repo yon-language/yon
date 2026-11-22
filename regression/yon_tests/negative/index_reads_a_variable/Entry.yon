@@ -1,0 +1,8 @@
+place Entry {
+  fun main: Number {
+    mut c := 5
+    p := clear c
+    c <- 6
+    return p @ I0
+  }
+}

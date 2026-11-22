@@ -1,0 +1,27 @@
+/* Heyting — the algebra of Omega, Heyting G3, on the carrier proposition: the
+ * meet &&?, the join ||?, the implication =>? (a =>? b is the greatest c whose
+ * meet with a is below b), the negation !? (a =>? absent), the top present and
+ * the bottom absent. Its laws are those of a Heyting algebra, certified on the
+ * three truth values; the excluded middle is not one of them (unknown ||?
+ * !? unknown is unknown). */
+place Heyting carried by proposition is algebra {
+  operation meet(a: Heyting, b: Heyting): Heyting as "&&?"
+  operation join(a: Heyting, b: Heyting): Heyting as "||?"
+  operation imp(a: Heyting, b: Heyting): Heyting as "=>?"
+  operation neg(a: Heyting): Heyting as "!?"
+  operation top: Heyting as "present"
+  operation bottom: Heyting as "absent"
+  law meet_commutative ∀a : Heyting ∀b : Heyting, (a &&? b) = (b &&? a)
+  law join_commutative ∀a : Heyting ∀b : Heyting, (a ||? b) = (b ||? a)
+  law meet_associative ∀a : Heyting ∀b : Heyting ∀c : Heyting, ((a &&? b) &&? c) = (a &&? (b &&? c))
+  law join_associative ∀a : Heyting ∀b : Heyting ∀c : Heyting, ((a ||? b) ||? c) = (a ||? (b ||? c))
+  law meet_absorbs ∀a : Heyting ∀b : Heyting, (a &&? (a ||? b)) = a
+  law join_absorbs ∀a : Heyting ∀b : Heyting, (a ||? (a &&? b)) = a
+  law top_is_the_unit_of_meet ∀a : Heyting, (a &&? top) = a
+  law bottom_is_the_unit_of_join ∀a : Heyting, (a ||? bottom) = a
+  law implication_of_itself ∀a : Heyting, (a =>? a) = top
+  law implication_and_meet ∀a : Heyting ∀b : Heyting, (a &&? (a =>? b)) = (a &&? b)
+  law implication_below ∀a : Heyting ∀b : Heyting, (b &&? (a =>? b)) = b
+  law implication_distributes ∀a : Heyting ∀b : Heyting ∀c : Heyting, (a =>? (b &&? c)) = ((a =>? b) &&? (a =>? c))
+  law negation ∀a : Heyting, (!? a) = (a =>? bottom)
+}

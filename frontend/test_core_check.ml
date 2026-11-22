@@ -221,6 +221,25 @@ let () =
      | `Type_error _ -> true
      | `Ok | `Skipped _ -> false);
 
+  (* The refusals say why, in their words. certify_term on the ill-typed body:
+     check_strict answers false, and the gate says the body does not check. *)
+  check "(c') check_strict is false on the ill-typed body"
+    (not (Core_check.check_strict Core_check.empty_cctx [] ill_body ill_ty));
+  check "(c'') certify_term refuses it with the words of the gate"
+    (match Core_check.certify_term [] ill_body ill_ty with
+     | `Type_error m -> m = "body does not check against its declared type"
+     | `Ok | `Skipped _ -> false);
+  (* certify_ty refuses an identity whose endpoint is not of its carrier: Id over
+     number between a number and a function is ill-formed, with the words of sort_of;
+     its twin, Id over number between two numbers, is well-formed. *)
+  check "certify_ty refuses Id(number, 1, fun x -> x) with its words"
+    (match Core_check.certify_ty []
+             (TyId (TyPlace "number", Var "__num_1", Lam ("x", TyPlace "number", Var "x"))) with
+     | `Type_error m -> m = "Id endpoints not of the carrier type"
+     | `Ok | `Skipped _ -> false);
+  check "certify_ty certifies Id(number, 1, 2)"
+    (Core_check.certify_ty [] (TyId (TyPlace "number", Var "__num_1", Var "__num_2")) = `Ok);
+
   (* An out-of-fragment body (an unseeded runtime name) must SKIP, never reject:
      the SOUND-over-COMPLETE bias the gate depends on. *)
   check "certify_term SKIPS a body that mentions an unseeded name"

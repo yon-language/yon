@@ -1976,14 +1976,14 @@ let test_reduce_visibility_table () =
 
 (* ─── proposition type integration ──────────────────────────────────── *)
 
-(* Test 91: `proposition` type is recognized as a primitive. *)
+(* Test 91: the type Omega is recognized: the place of the classifier, carried by proposition. *)
 let test_proposition_type () =
   let src = {|
-    fun is_positive(x: Number): proposition {
+    fun is_positive(x: Number): Omega {
       return x > 0
     }
   |} in
-  Printf.printf "\n=== Test 91: `proposition` is a recognized primitive type ===\n";
+  Printf.printf "\n=== Test 91: `Omega` is a recognized type ===\n";
   match tc_program src with
   | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
   | Ok cr ->
@@ -2002,12 +2002,12 @@ let test_boolean_proposition_alias () =
     fun returns_bool(x: Number): Boolean {
       return x > 0
     }
-    fun uses_prop(x: Number): proposition {
+    fun uses_prop(x: Number): Omega {
       return returns_bool(x)
     }
   |} in
   let src_out_of_omega = {|
-    fun returns_prop(x: Number): proposition {
+    fun returns_prop(x: Number): Omega {
       return x > 0
     }
     fun uses_bool(x: Number): Boolean {
@@ -2106,7 +2106,7 @@ let test_space_world_indexed () =
  * present/absent/unknown via `is` patterns, returns the right branch. *)
 let test_heyt_surface_branch_present () =
   let src = {|
-    fun classify(x: proposition): Text {
+    fun classify(x: Omega): Text {
       when x is present { return "yes" }
       when x is absent { return "no" }
       when x is unknown { return "indeterminate" }
@@ -2130,7 +2130,7 @@ let test_heyt_surface_branch_present () =
 
 let test_heyt_surface_branch_unknown () =
   let src = {|
-    fun classify(x: proposition): Text {
+    fun classify(x: Omega): Text {
       when x is present { return "yes" }
       when x is absent { return "no" }
       when x is unknown { return "indeterminate" }
@@ -2198,7 +2198,7 @@ let test_hit_reduce_comp () =
  * to Refl-wrapping the underlying Heyting value. *)
 let test_coherence_refl_canonical () =
   let src = {|
-    fun main: proposition {
+    fun main: Omega {
       return refl(present)
     }
   |} in
@@ -2690,7 +2690,23 @@ let test_universal_limit () =
 let test_factorization () =
   Printf.printf "\n=== Test 140: factorization through universal ===\n";
   if Catt_r_yon.test_factorization () then
-    (Printf.printf "  cone (X, k) factors uniquely through universal limit\n";
+    (Printf.printf "  a cone over a -> b whose square commutes factors through the limit\n";
+     Printf.printf "  and the factor projects to its legs\n";
+     Printf.printf "Status: PASS\n"; true)
+  else (Printf.printf "FAIL\n"; false)
+
+let test_non_commuting_cone_does_not_factor () =
+  Printf.printf "\n=== Test 140b: a cone that does not commute does not factor ===\n";
+  if Catt_r_yon.test_non_commuting_cone_does_not_factor () then
+    (Printf.printf "  a wrong square, a missing square, a missing leg, another apex: no factor\n";
+     Printf.printf "Status: PASS\n"; true)
+  else (Printf.printf "FAIL\n"; false)
+
+let test_finster_mimram () =
+  Printf.printf "\n=== Test 140c: the condition of Finster and Mimram ===\n";
+  if Catt_r_yon.test_finster_mimram () then
+    (Printf.printf "  the composite of x -> y -> z is a coherence; x -> y on it is not;\n";
+     Printf.printf "  two objects with no arrow are no pasting scheme\n";
      Printf.printf "Status: PASS\n"; true)
   else (Printf.printf "FAIL\n"; false)
 
@@ -3669,6 +3685,8 @@ let () =
     test_pd_suspend;
     test_universal_limit;
     test_factorization;
+    test_non_commuting_cone_does_not_factor;
+    test_finster_mimram;
     test_non_universal_no_factor;
     test_functoriality_add;
     test_functoriality_to_prop;

@@ -1,0 +1,8 @@
+place Entry {
+  fun only_syntax(e: SyntaxError): Number { return e.line }
+  fun apply(f: Error -> Number, e: Error): Number { return f(e) }
+  fun main: Number {
+    e := .-> Error { message "plain" }
+    return apply(only_syntax, e)
+  }
+}

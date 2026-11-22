@@ -1,0 +1,4 @@
+place Entry {
+  fun yon_rt_section(c: Number): Number { return c }
+  fun main: Number { return 7 }
+}

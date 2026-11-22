@@ -415,6 +415,12 @@ let subst_hit_payloads body vars args =
  *)
 let rec step ctx t =
   match t with
+  (* concat and inv are path induction (J) with refl at refl: concat on its
+   * second path with the first as the value, inv with refl as the value.
+   * Their only computations are J's at refl; the unit, inverse and
+   * associativity laws are paths, not reductions. *)
+  | App (App (Var "concat", p), Refl _) -> Some p
+  | App (Var "inv", Refl a) -> Some (Refl a)
   (* Computational reductions on the term head. *)
   | App _ ->
       (* Presheaf functoriality: the head-level conversion rules

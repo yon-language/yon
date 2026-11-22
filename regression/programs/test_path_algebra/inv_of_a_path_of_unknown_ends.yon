@@ -1,0 +1,4 @@
+place Entry {
+  fun j(q: Path): Path { return back q }
+  fun main: Number { return 7 }
+}

@@ -241,26 +241,25 @@ let infer_ap (arg_tys : ty list) : infer_result =
  *)
 let infer_concat (arg_tys : ty list) : infer_result =
   match arg_tys with
-  (* Precise: two structured identity types compose iff they share a
-   * carrier and the end of the first equals the start of the second.
-   *   concat : Id A x y -> Id A y z -> Id A x z.
-   * A mismatch (different carrier, or first-end != second-start) is a
-   * clean type error. *)
+  (* concat is path induction on its second path, with the first as the value
+   * at refl (J): concat : Id A x y -> Id A y z -> Id A x z. It exists only
+   * where the end of the first is the start of the second, in one carrier;
+   * any other pair of arguments has no composite. *)
   | [TyId (a1, x, y1); TyId (a2, y2, z)] ->
       if ty_carrier_eq a1 a2 && tyterm_eq y1 y2 then ok_ty (TyId (a1, x, z))
       else
         fail_ty (TyId (a1, x, z))
           "concat: the paths do not compose — the endpoint of the first must \
            equal the start of the second, in the same type"
-  (* Loose fallback for opaque paths (endpoints not tracked at the surface). *)
-  | [TyUser "Path"; TyUser "Path"] -> ok_ty (TyUser "Path")
-  (* A concrete scalar is not a path — reject cleanly (fuzzer robustness). *)
   | [TyPrim n; _] | [_; TyPrim n] ->
       fail_ty (TyUser "Path")
         (Printf.sprintf "concat: the arguments must be paths, got %s" n)
-  | [_; _] -> ok_ty (TyUser "Path")
-    (* Permissive: accept any two args, return Path. A strict mode
-     * would reject non-Path inputs. *)
+  | [p; q] ->
+      fail_ty (TyUser "Path")
+        (Printf.sprintf "concat: the paths do not compose — the end of the first and the \
+                         start of the second must be known and equal, and %s · %s does not \
+                         say them"
+           (Tyenv.ty_to_string p) (Tyenv.ty_to_string q))
   | _ -> fail_ty (TyUser "Path")
            (Printf.sprintf "concat expects 2 paths, got %d arguments"
               (List.length arg_tys))
@@ -270,14 +269,15 @@ let infer_concat (arg_tys : ty list) : infer_result =
  *)
 let infer_inv (arg_tys : ty list) : infer_result =
   match arg_tys with
-  (* Precise: inversion swaps the endpoints.  inv : Id A x y -> Id A y x. *)
+  (* inv is path induction with refl as the value at refl (J):
+   * inv : Id A x y -> Id A y x. A path whose ends are not known has no
+   * inverse to type. *)
   | [TyId (a, x, y)] -> ok_ty (TyId (a, y, x))
-  | [TyUser "Path"] -> ok_ty (TyUser "Path")
-  (* A concrete scalar is not a path — reject cleanly at the type level so it
-     never reaches codegen as a stuck path-algebra op (found by the fuzzer). *)
   | [TyPrim n] -> fail_ty (TyUser "Path")
                     (Printf.sprintf "inv: the argument must be a path, got %s" n)
-  | [_] -> ok_ty (TyUser "Path")
+  | [p] -> fail_ty (TyUser "Path")
+             (Printf.sprintf "inv: the ends of the path must be known, and %s does not say them"
+                (Tyenv.ty_to_string p))
   | _ -> fail_ty (TyUser "Path")
            (Printf.sprintf "inv expects 1 argument, got %d"
               (List.length arg_tys))

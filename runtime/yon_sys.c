@@ -490,6 +490,12 @@ static int64_t *yon_sys_word(int64_t r, int64_t at) {
     return h + 1 + at;
 }
 
+/* A word outside its region: the refusal of the words the lowered code reads
+   and writes in place (the check is inline; only the refusal is a call). */
+void yon_rt_region_word_outside(int64_t at, int64_t words) {
+    yon_rt_refuse_with(YON_REFUSAL_WordOutsideRegion, at, words, 0);
+}
+
 int64_t yon_rt_region_read(int64_t r, int64_t at) {
     return __atomic_load_n(yon_sys_word(r, at), __ATOMIC_ACQUIRE);
 }

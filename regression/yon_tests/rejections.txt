@@ -61,6 +61,10 @@ regression/yon_tests/negative/law_of_an_algebra_not_held | E2101 | law neutral o
 regression/yon_tests/negative/operation_of_an_unknown_algebra | E2102 | BooleanOrr is no algebra
 regression/yon_tests/negative/drop_before_a_use | E3001 | cannot drop Space D at 4:2: an arc toward it is still reachable downstream
 regression/yon_tests/negative/drop_of_an_unknown_space | E3002 | unknown Space Zeta at 4:2
+regression/yon_tests/negative/index_reads_a_variable | E2021 | the index of a type reads the variable `c`
+regression/yon_tests/negative/name_of_the_runtime | E2025 | the name `yon_rt_section` is reserved
+regression/yon_tests/negative/operations_with_one_selector | E3011 | the operations 'op_qzx' and 'op_danb' have the same selector on the wire
+regression/yon_tests/negative/place_not_positive | E2020 | Bad appears left of an arrow in the field f of Bad
 regression/yon_tests/negative/import_across_worlds | E3010 | wire crosses a world boundary
 regression/yon_tests/negative/topos_layout | E4001 | space 'A' declares 2 topos files
 regression/yon_tests/negative/manifest_unterminated_string | E4004 | unterminated string

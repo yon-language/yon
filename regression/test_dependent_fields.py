@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from yon_programs import program
+from migrations import SUCC_PRED_ON_INT64
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
@@ -43,6 +44,7 @@ _USE = ("  e := .-> Iso { forth succ left pred left_law eta }\n"
         "  return if (41 ↦ f) == 42 then 42 else 1")
 
 
+@SUCC_PRED_ON_INT64
 def test_a_point_whose_proof_speaks_of_its_fields_is_built(tmp_path):
     # left_law is checked as Πx : Int64, pred(succ(x)) = x: the values of
     # forth and left in place of their names
@@ -58,6 +60,7 @@ def test_a_proof_of_another_statement_is_refused(tmp_path):
     assert "expected Pi(x : Int64). Id_Int64(succ(succ(x)), x), got Pi(x : Int64). Id_Int64(pred(succ(x)), x)" in out, out
 
 
+@SUCC_PRED_ON_INT64
 def test_the_parameters_of_a_generic_place_are_read_from_its_fields(tmp_path):
     top = program("test_dependent_fields/test_the_parameters_of_a_generic_place_are_read_from_its_fields_1.yon")
     body = _USE.replace(".-> Iso { forth succ left pred left_law eta }",
@@ -82,6 +85,7 @@ def test_a_field_that_names_a_field_after_it_is_refused(tmp_path):
 _ROUND = (program("test_dependent_fields/module_4.yon"))
 
 
+@SUCC_PRED_ON_INT64
 def test_a_proof_read_off_a_field_proves_the_statement_of_that_field(tmp_path):
     # x ↦ e.left_law has type (x ↦ e.forth ↦ e.left) = x: the field's type
     # with its earlier fields read off e, at the argument x; in the code the
@@ -112,6 +116,7 @@ def test_the_fields_before_are_read_all_at_once(tmp_path):
             "got Pi(x : Int64). Id_Int64(forth(forth(x)), x)") in out, out
 
 
+@SUCC_PRED_ON_INT64
 def test_a_point_named_like_a_field_reads_its_own_fields(tmp_path):
     top = _INT + _ROUND.replace("e: Iso", "left: Iso").replace("e.", "left.")
     body = ("  e := .-> Iso { forth succ left pred left_law eta }\n"

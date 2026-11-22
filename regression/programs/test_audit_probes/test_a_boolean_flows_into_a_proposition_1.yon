@@ -1,3 +1,3 @@
 place Entry {}
-fun f(x: Number): proposition { return x > 0 }
+fun f(x: Number): Omega { return x > 0 }
 fun main: Number { return match decide(f(1)) { Present => 42, Absent => 0, Unknown => 1 } }

@@ -885,30 +885,6 @@ double yon_rt_vec_push(double vec_id, double value);
 double yon_rt_vec_set(double vec_id, double idx, double value);
 
 /* ============================================================== */
-/* Mutable space cell (a static BSS registry)                       */
-/* ============================================================== */
-/*
- * Yon semantics: Space.make(v0) allocates a mutable cell initialized to v0;
- * Space.set(s, v) overwrites the current value; Space.get(s) reads the current
- * value.
- *
- * Model: a static registry g_space_cells[MAX] in BSS — no malloc, no
- * content-addressing (mutation is incompatible with the content-addressed
- * xheap allocator). Each Space.make returns the progressive cell id.
- *
- * Limit: process-local. A cross-process Space (cross-fork) would require SHM
- * mapping, out of scope here.
- */
-
-#define YON_RT_MAX_SPACE_CELLS 1024
-
-double yon_rt_space_make(double initial);
-double yon_rt_space_set(double space_id, double new_value);
-double yon_rt_space_get(double space_id);
-double yon_rt_space_mark(void);
-double yon_rt_space_reset(double mark);
-
-/* ============================================================== */
 /* S7 — LockedRing: capability tokens via the Co_0 group            */
 /* ============================================================== */
 /*

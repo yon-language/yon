@@ -1,0 +1,5 @@
+place Entry {
+  fun op_qzx(x: Number): Number { return x + 2 }
+  fun op_danb(x: Number): Number { return x + 50 }
+  fun main: Number { return 0 }
+}

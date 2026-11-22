@@ -70,7 +70,7 @@ and cond acc (c : S.condition) : unit =
 and expr (acc : S.location list ref) (e : S.expr) : unit =
   let ex = expr acc in
   match e with
-  | S.ELit _ | S.EVar _ | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> ()
+  | S.ELit _ | S.EVar _ | S.EWireTo _ -> ()
   | S.EField (x, _, _) | S.EPathApp (x, _, _) | S.EPathAbs (_, x, _)
   | S.EParen (x, _) | S.EIn (x, _, _) | S.ERefl (x, _) | S.EFst (x, _)
   | S.ESnd (x, _) | S.ENot (x, _) | S.EEscape (x, _) | S.EQuote (_, x, _) -> ex x
@@ -85,7 +85,6 @@ and expr (acc : S.location list ref) (e : S.expr) : unit =
   | S.EAll (_, c, _) -> cond acc c
   | S.EJ (a, b, c, _) | S.EElMatch (a, b, c, _) | S.EIfThenElse (a, b, c, _) ->
       ex a; ex b; ex c
-  | S.EPullbackVal (_, _, a, b, _) -> ex a; ex b
   | S.ELam (_, b, _) | S.EMoveLam (_, b, _, _, _) | S.EReductionLam (_, b, _, _)
   | S.EMorphLam (_, b, _, _, _) | S.EFunctorLam (_, b, _, _, _, _)
   | S.EViewLam (_, b, _, _) -> ex b

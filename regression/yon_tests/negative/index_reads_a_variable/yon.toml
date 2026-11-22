@@ -1,0 +1,5 @@
+[package]
+name = "index_reads_a_variable"
+
+[runtime]
+backend = "memory"

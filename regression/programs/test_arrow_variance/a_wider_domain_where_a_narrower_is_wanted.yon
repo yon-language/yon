@@ -1,0 +1,8 @@
+place Entry {
+  fun any_error(e: Error): Number { return Text.length(e.message) }
+  fun apply(f: SyntaxError -> Number, e: SyntaxError): Number { return f(e) }
+  fun main: Number {
+    e := .-> SyntaxError { message "unexpected" line 30 }
+    return apply(any_error, e)
+  }
+}

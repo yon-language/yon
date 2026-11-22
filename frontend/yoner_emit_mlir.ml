@@ -16,7 +16,7 @@
  *   ./yoner_emit_mlir bank.yon | topos-opt
  *)
 
-let () =
+let main () =
   let argv = Sys.argv in
   if Array.length argv < 2 then begin
     Printf.eprintf "Usage: %s <file.yon | directory>\n" argv.(0);
@@ -721,3 +721,13 @@ let () =
       exit 3
   in
   print_string mlir_output
+
+let () =
+  try main ()
+  with Bound.Unfinished term ->
+    let shown = if String.length term > 300 then String.sub term 0 300 ^ " ..." else term in
+    Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Reduction_unfinished
+      (Printf.sprintf
+         "the reduction did not finish within its bound: %s still reduces after the last \
+          step the compiler takes, and a term that is not in normal form is no answer" shown)));
+    exit 3

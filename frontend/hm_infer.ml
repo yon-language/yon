@@ -230,7 +230,7 @@ let rec infer_expr (env : env) (cs : constraint_set) (e : expr) : ty =
                      * informative message. *)
                     fresh_metavar ()))
   | _ ->
-      (* All the other constructs (ENew, EField, EAll, EPullbackPack, ...) are
+      (* All the other constructs (ENew, EField, EAll, ...) are
        * not handled by full HM. Return a fresh meta-variable as a graceful
        * fallback; the downstream tycheck verifies them. *)
       fresh_metavar ()
@@ -364,36 +364,10 @@ let walk_body (env : env) (cs : constraint_set) (fn : fun_decl) (sch : scheme) :
     add_var env p.param_name t) env fn.fn_params param_tys in
   ignore (infer_stmts local_env cs ret_ty fn.fn_body)
 
-(* The groups of mutually recursive funs, the ones a group calls first (Tarjan). *)
+(* The groups of mutually recursive funs, the ones a group calls first: the
+   condensation of the calls, the one engine of the checker (Call_graph). *)
 let recursive_groups (funs : string list) (calls : string -> string list) : string list list =
-  let index = Hashtbl.create 16 and low = Hashtbl.create 16 in
-  let on_stack = Hashtbl.create 16 in
-  let stack = ref [] and next = ref 0 and groups = ref [] in
-  let rec visit v =
-    Hashtbl.replace index v !next;
-    Hashtbl.replace low v !next;
-    incr next;
-    stack := v :: !stack;
-    Hashtbl.replace on_stack v ();
-    List.iter (fun w ->
-      if not (Hashtbl.mem index w) then begin
-        visit w;
-        Hashtbl.replace low v (min (Hashtbl.find low v) (Hashtbl.find low w))
-      end else if Hashtbl.mem on_stack w then
-        Hashtbl.replace low v (min (Hashtbl.find low v) (Hashtbl.find index w)))
-      (calls v);
-    if Hashtbl.find low v = Hashtbl.find index v then begin
-      let rec pop acc =
-        match !stack with
-        | [] -> acc
-        | w :: rest ->
-            stack := rest;
-            Hashtbl.remove on_stack w;
-            if w = v then w :: acc else pop (w :: acc) in
-      groups := pop [] :: !groups
-    end in
-  List.iter (fun v -> if not (Hashtbl.mem index v) then visit v) funs;
-  List.rev !groups
+  Call_graph.condensation funs calls
 
 (* Generalization, for a fun of a group already solved: each unknown still free
  * in its parameters is a type parameter, exactly as if the fun were written with
